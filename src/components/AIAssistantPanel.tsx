@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, ExternalLink, Copy, ThumbsUp, ThumbsDown, Download, RefreshCw, MoreHorizontal, Tag as TagIcon, Check, X } from 'lucide-react';
+import { Send, Sparkles, ExternalLink, Copy, ThumbsUp, ThumbsDown, Download, RefreshCw, MoreHorizontal, Tag as TagIcon, Check, X, AlertCircle, LogIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Tag, mockTags, Insight } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
 import { TagSelector } from './TagSelector';
 import { CreateInsightCard } from './CreateInsightCard';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { copyToClipboard } from '../utils/clipboard';
+import { useAuth } from '../hooks/useAuth';
 
 interface Message {
   id: string;
@@ -55,6 +56,7 @@ interface AIAssistantPanelProps {
  */
 
 export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null }: AIAssistantPanelProps) {
+  const { user, isLoading: isAuthLoading, isAuthenticated } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -70,6 +72,7 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Tagging state
@@ -100,6 +103,11 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
     e.preventDefault();
     if (!input.trim()) return;
 
+    if (!isAuthenticated) {
+      toast.error('Please log in to use the AI assistant.');
+      return;
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -107,47 +115,66 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
       timestamp: new Date(),
     };
 
-    setMessages([...messages, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInput('');
     setIsThinking(true);
+    setAiError(null);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const chatHistory = updatedMessages
+        .filter(m => m.id !== '1')
+        .map(m => ({ role: m.role, content: m.content }));
+
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          messages: chatHistory,
+          spaceId: spaceId,
+          useRag: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          throw new Error('Please log in to use the AI assistant.');
+        }
+        if (response.status === 503 || errorData.message?.includes('not configured')) {
+          setAiError('AI service is not configured. Please contact your administrator.');
+          throw new Error('AI service not configured');
+        }
+        throw new Error(errorData.message || 'Failed to get AI response');
+      }
+
+      const data = await response.json();
+
+      const citations: Citation[] = data.citations?.map((c: any) => ({
+        sheetName: c.name || c.entityId,
+        sheetId: c.entityId,
+        rows: [],
+        value: `${c.entityType} (${Math.round(c.relevanceScore * 100)}% match)`,
+      })) || [];
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: generateMockResponse(input),
-        citations: generateMockCitations(input),
+        content: data.response,
+        citations: citations.length > 0 ? citations : undefined,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get AI response';
+      if (!aiError) {
+        toast.error(errorMessage + ' Please try again.');
+      }
+    } finally {
       setIsThinking(false);
-    }, 2000);
-  };
-
-  const generateMockResponse = (query: string): string => {
-    if (query.toLowerCase().includes('cac') || query.toLowerCase().includes('acquisition cost')) {
-      return "Based on your captured data, here's your Customer Acquisition Cost (CAC) trend:\n\n**Last 6 Months:**\n• January 2024: $42.50\n• February 2024: $45.20\n• March 2024: $48.75\n• April 2024: $52.30\n• May 2024: $67.80 ⚠️\n• June 2024: $71.20 ⚠️\n\n**Key Insights:**\n• Your CAC increased by 67% from January to June\n• The sharp increase in May correlates with higher Facebook Ads spend but lower conversion rates\n• Google Ads maintained stable performance while Facebook Ads CAC doubled\n\n**Recommendation:** Review your Facebook Ads targeting and creative strategy. Consider reallocating budget to Google Ads which shows better efficiency.";
-    } else if (query.toLowerCase().includes('revenue') && query.toLowerCase().includes('channel')) {
-      return "Here's your revenue breakdown by marketing channel for Q4 2024:\n\n**Total Revenue: $1,247,000**\n\n• Organic Search: $425,000 (34%)\n• Google Ads: $312,000 (25%)\n• Facebook Ads: $198,000 (16%)\n• Email Marketing: $187,000 (15%)\n• Direct: $125,000 (10%)\n\n**Top Performer:** Organic Search shows the highest ROI at 12:1\n**Underperformer:** Facebook Ads ROI declined to 2.3:1 this quarter";
-    } else if (query.toLowerCase().includes('roi') && query.toLowerCase().includes('google ads')) {
-      return "**Google Ads ROI Analysis**\n\nBased on your Ad Spend and Revenue sheets:\n\n• Total Spend: $45,230\n• Revenue Generated: $312,000\n• ROI: 6.9x (or 589%)\n• Average CPC: $2.45\n• Conversion Rate: 4.8%\n• Cost Per Acquisition: $38.50\n\nYour Google Ads campaigns are performing well above industry benchmarks (average ROI is 2-3x for SaaS).";
     }
-    return "I've analyzed your data across multiple sheets. Based on the information available, I can provide insights from your HubSpot Revenue data, Google Ads Spend data, and Analytics Traffic sheets. What specific metric would you like me to focus on?";
-  };
-
-  const generateMockCitations = (query: string): Citation[] => {
-    if (query.toLowerCase().includes('cac')) {
-      return [
-        { sheetName: 'Ad Spend', sheetId: 'sheet-1', rows: [15, 23, 31, 42], value: 'Monthly ad costs' },
-        { sheetName: 'Conversions', sheetId: 'sheet-2', rows: [12, 18, 25, 33], value: 'New customer counts' },
-      ];
-    } else if (query.toLowerCase().includes('revenue')) {
-      return [
-        { sheetName: 'Revenue Metrics', sheetId: 'sheet-3', rows: [8, 11, 19, 27], value: 'Channel attribution' },
-      ];
-    }
-    return [];
   };
 
   const handleTagChatClick = () => {
@@ -255,6 +282,34 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
 
   return (
     <div className="flex flex-col h-full bg-[#0A0E1A] p-[0px] m-[0px] relative overflow-hidden">
+      {/* Authentication Banner */}
+      {!isAuthLoading && !isAuthenticated && (
+        <div className="mx-[238px] mt-4 p-4 bg-[#1A1F2E] border border-[#2D3B4E] rounded-xl flex items-center gap-3">
+          <LogIn className="w-5 h-5 text-[#FF6B35]" />
+          <div className="flex-1">
+            <p className="text-white text-sm font-medium">Sign in to use AI Assistant</p>
+            <p className="text-[#9CA3AF] text-xs mt-0.5">Log in to start analyzing your data with AI-powered insights.</p>
+          </div>
+        </div>
+      )}
+
+      {/* AI Configuration Error Banner */}
+      {aiError && (
+        <div className="mx-[238px] mt-4 p-4 bg-[#1A1F2E] border border-[#FF6B35]/30 rounded-xl flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-[#FF6B35]" />
+          <div className="flex-1">
+            <p className="text-white text-sm font-medium">AI Service Unavailable</p>
+            <p className="text-[#9CA3AF] text-xs mt-0.5">{aiError}</p>
+          </div>
+          <button
+            onClick={() => setAiError(null)}
+            className="p-1 text-[#6B7280] hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 px-[238px] py-[317px] relative" style={{ paddingBottom: '400px' }}>
         {messages.map((message) => {
@@ -415,9 +470,10 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
                   handleSubmit(e);
                 }
               }}
-              placeholder="Ask anything"
+              placeholder={!isAuthenticated ? "Sign in to use AI Assistant" : "Ask anything"}
+              disabled={!isAuthenticated}
               rows={1}
-              className="flex-1 bg-transparent border-none text-white text-sm outline-none resize-none placeholder:text-[#6B7280]"
+              className="flex-1 bg-transparent border-none text-white text-sm outline-none resize-none placeholder:text-[#6B7280] disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ minHeight: '24px', maxHeight: '120px' }}
             />
             
@@ -445,7 +501,7 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
             {/* Send Button */}
             <button
               type="submit"
-              disabled={!input.trim() || isThinking}
+              disabled={!input.trim() || isThinking || !isAuthenticated}
               className="ml-2 flex-shrink-0 w-9 h-9 bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
               <Send className="w-4 h-4" />

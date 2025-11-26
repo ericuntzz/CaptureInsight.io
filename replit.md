@@ -134,6 +134,37 @@ npm run db:push
 - Defined SpaceDTO, SheetDTO, CaptureDestination types
 - Fixed all TypeScript errors (24 resolved)
 
+## AI Integration (Phase 3 - Complete)
+
+### Hybrid AI Architecture
+CaptureInsight uses a hybrid AI approach for optimal functionality:
+- **Gemini 2.5 Pro/Flash** (via Replit AI Integrations): Screenshot analysis, data analysis, chat conversations
+- **OpenAI** (requires API key): Text embeddings for semantic search (text-embedding-3-small, 1536 dimensions)
+
+### AI Features
+1. **Screenshot Analysis**: Upload screenshots from analytics dashboards, Gemini extracts metrics and insights
+2. **Data Analysis**: Analyze tabular data with expert business analyst prompts
+3. **RAG-Enabled Chat**: AI assistant uses vector search to retrieve relevant context from your data
+4. **Semantic Search**: Find insights and sheets using natural language queries
+
+### AI API Endpoints
+- `GET /api/ai/status` - Check AI service configuration
+- `POST /api/ai/analyze` - Analyze screenshots or data
+- `POST /api/ai/chat` - RAG-enabled AI chat (supports spaceId for context)
+- `POST /api/ai/extract-insights` - Extract actionable insights from content
+- `POST /api/embeddings/index` - Index an entity for semantic search
+- `POST /api/embeddings/reindex-space/:spaceId` - Reindex all content in a space
+- `GET /api/search` - Semantic search across a space
+
+### pgvector Integration
+- Extension enabled with 1536-dimension vectors
+- Uses IVFFlat index with cosine distance for efficient similarity search
+- Automatically embeds insights and sheets for semantic retrieval
+
+### Environment Variables
+- `AI_INTEGRATIONS_GEMINI_API_KEY` - Auto-set by Replit AI Integrations
+- `AI_INTEGRATIONS_GEMINI_BASE_URL` - Auto-set by Replit AI Integrations
+- `OPENAI_API_KEY` - Required for embeddings (user must provide)
+
 ## Future Phases
-- **Phase 3**: OpenAI integration for embeddings/LLM, vector search with pgvector, RAG-based AI assistant
 - **Phase 4**: WebSocket real-time collaboration, notifications and @mentions system

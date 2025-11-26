@@ -182,7 +182,19 @@ export interface RagChatOptions {
   useRag?: boolean;
 }
 
-export async function chat(options: RagChatOptions): Promise<ChatResponse & { retrievedContext?: SimilarityResult[] }> {
+export interface ChatCitation {
+  entityType: string;
+  entityId: string;
+  name: string;
+  relevanceScore: number;
+}
+
+export interface RagChatResponse extends ChatResponse {
+  citations?: ChatCitation[];
+  retrievedContext?: SimilarityResult[];
+}
+
+export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
   const { messages, spaceId, spaceGoals, additionalContext, useRag = true } = options;
   
   if (!isGeminiConfigured()) {
@@ -191,6 +203,7 @@ export async function chat(options: RagChatOptions): Promise<ChatResponse & { re
 
   let ragContext: SimilarityResult[] = [];
   let contextString = additionalContext || "";
+  const citations: ChatCitation[] = [];
 
   if (useRag && spaceId && isOpenAIConfigured() && messages.length > 0) {
     const lastUserMessage = messages.filter(m => m.role === "user").pop();
@@ -199,14 +212,25 @@ export async function chat(options: RagChatOptions): Promise<ChatResponse & { re
         ragContext = await searchSimilar(lastUserMessage.content, spaceId, 5);
         
         if (ragContext.length > 0) {
-          const relevantContent = ragContext
-            .filter(r => r.score > 0.7)
+          const relevantResults = ragContext.filter(r => r.score > 0.7);
+          
+          relevantResults.forEach(r => {
+            const name = r.metadata?.title || r.metadata?.name || r.entityId;
+            citations.push({
+              entityType: r.entityType,
+              entityId: r.entityId,
+              name: typeof name === 'string' ? name : r.entityId,
+              relevanceScore: r.score,
+            });
+          });
+          
+          const relevantContent = relevantResults
             .map(r => {
               const entityLabel = r.entityType === "insight" ? "Insight" : "Data Sheet";
-              const meta = r.metadata ? ` (${JSON.stringify(r.metadata)})` : "";
-              return `[${entityLabel}${meta}]: ${r.content}`;
+              const name = r.metadata?.title || r.metadata?.name || "";
+              return `[${entityLabel}: ${name}]\n${r.content}`;
             })
-            .join("\n\n");
+            .join("\n\n---\n\n");
           
           if (relevantContent) {
             contextString = contextString 
@@ -224,6 +248,7 @@ export async function chat(options: RagChatOptions): Promise<ChatResponse & { re
   
   return {
     ...result,
+    citations: citations.length > 0 ? citations : undefined,
     retrievedContext: ragContext.length > 0 ? ragContext : undefined,
   };
 }
