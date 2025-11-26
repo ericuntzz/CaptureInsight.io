@@ -73,6 +73,12 @@ async function handleMessage(message, sender) {
       return handleGetCurrentTab();
     case MessageType.UPLOAD_SCREENSHOT:
       return handleUploadScreenshot(message);
+    case "OPEN_DASHBOARD":
+      return handleOpenDashboard();
+    case "FETCH_SPACES":
+      return handleFetchSpaces();
+    case "FETCH_TAGS":
+      return handleFetchTags(message);
     default:
       console.warn("Unknown message type:", message);
       return { success: false, error: "Unknown message type" };
@@ -252,5 +258,57 @@ chrome.action.onClicked.addListener(async (tab) => {
     }
   }
 });
+async function handleOpenDashboard() {
+  try {
+    const storage = await chrome.storage.local.get([STORAGE_KEYS.API_BASE_URL]);
+    const apiUrl = storage[STORAGE_KEYS.API_BASE_URL] || DEFAULT_API_URL;
+    await chrome.tabs.create({ url: apiUrl });
+    return { success: true };
+  } catch (error) {
+    console.error("Error opening dashboard:", error);
+    return { success: false, error: "Failed to open dashboard" };
+  }
+}
+async function handleFetchSpaces() {
+  try {
+    const storage = await chrome.storage.local.get([STORAGE_KEYS.API_BASE_URL]);
+    const apiUrl = storage[STORAGE_KEYS.API_BASE_URL] || DEFAULT_API_URL;
+    const response = await fetch(`${apiUrl}/api/spaces`, {
+      credentials: "include"
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        return { success: false, error: "Not authenticated", spaces: [] };
+      }
+      return { success: false, error: "Failed to fetch spaces", spaces: [] };
+    }
+    const spaces = await response.json();
+    return { success: true, spaces };
+  } catch (error) {
+    console.error("Error fetching spaces:", error);
+    return { success: false, error: "Network error", spaces: [] };
+  }
+}
+async function handleFetchTags(message) {
+  try {
+    const storage = await chrome.storage.local.get([STORAGE_KEYS.API_BASE_URL]);
+    const apiUrl = storage[STORAGE_KEYS.API_BASE_URL] || DEFAULT_API_URL;
+    const spaceId = message.spaceId;
+    if (!spaceId) {
+      return { success: false, error: "No space selected", tags: [] };
+    }
+    const response = await fetch(`${apiUrl}/api/spaces/${spaceId}/tags`, {
+      credentials: "include"
+    });
+    if (!response.ok) {
+      return { success: false, error: "Failed to fetch tags", tags: [] };
+    }
+    const tags = await response.json();
+    return { success: true, tags };
+  } catch (error) {
+    console.error("Error fetching tags:", error);
+    return { success: false, error: "Network error", tags: [] };
+  }
+}
 console.log("CaptureInsight background service worker initialized");
 //# sourceMappingURL=index.js.map

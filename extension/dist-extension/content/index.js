@@ -576,6 +576,14 @@
     /* @__PURE__ */ jsxRuntimeExports.jsx("line", { x1: "2", y1: "2", x2: "22", y2: "22" })
   ] });
   const CheckIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("polyline", { points: "20 6 9 17 4 12" }) });
+  const CheckboxIcon = ({ checked }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "16", height: "16", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2", ry: "2", fill: checked ? "#FF6B35" : "transparent", stroke: checked ? "#FF6B35" : "#9CA3AF" }),
+    checked && /* @__PURE__ */ jsxRuntimeExports.jsx("polyline", { points: "9 12 12 15 16 9", stroke: "#fff" })
+  ] });
+  const RadioIcon = ({ checked }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "16", height: "16", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "12", cy: "12", r: "9", fill: "transparent", stroke: checked ? "#FF6B35" : "#9CA3AF" }),
+    checked && /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "12", cy: "12", r: "5", fill: "#FF6B35" })
+  ] });
   const ToolButton = ({
     icon,
     label,
@@ -686,19 +694,107 @@
       }, children: label })
     ] });
   };
-  const FloatingToolbar = ({ onCapture, status, statusMessage, onOpenDashboard }) => {
+  const popupStyles = {
+    container: {
+      position: "absolute",
+      bottom: "100%",
+      left: "50%",
+      transform: "translateX(-50%)",
+      marginBottom: "12px",
+      width: "280px",
+      backgroundColor: "rgba(26, 31, 46, 0.98)",
+      backdropFilter: "blur(16px)",
+      borderRadius: "12px",
+      border: "1px solid rgba(255, 107, 53, 0.2)",
+      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
+      padding: "12px",
+      zIndex: 110
+    },
+    header: {
+      fontSize: "10px",
+      color: "#9CA3AF",
+      marginBottom: "8px",
+      textTransform: "uppercase",
+      letterSpacing: "0.5px"
+    },
+    listItem: {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      padding: "10px 12px",
+      backgroundColor: "transparent",
+      border: "none",
+      borderRadius: "8px",
+      color: "#fff",
+      fontSize: "13px",
+      cursor: "pointer",
+      width: "100%",
+      textAlign: "left",
+      transition: "background-color 0.15s ease"
+    },
+    listItemActive: {
+      backgroundColor: "rgba(255, 107, 53, 0.15)",
+      border: "1px solid rgba(255, 107, 53, 0.3)"
+    },
+    scrollContainer: {
+      maxHeight: "200px",
+      overflowY: "auto",
+      marginBottom: "8px"
+    },
+    emptyState: {
+      padding: "20px",
+      textAlign: "center",
+      color: "#9CA3AF",
+      fontSize: "12px"
+    },
+    loadingState: {
+      padding: "20px",
+      textAlign: "center",
+      color: "#9CA3AF",
+      fontSize: "12px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "8px"
+    }
+  };
+  const FloatingToolbar = ({
+    onCapture,
+    status,
+    statusMessage,
+    onOpenDashboard,
+    onStatusChange,
+    capturedData,
+    onClearCapturedData
+  }) => {
     const [position, setPosition] = reactExports.useState(TOOLBAR_DEFAULTS.POSITION);
     const [isDragging, setIsDragging] = reactExports.useState(false);
     const [dragOffset, setDragOffset] = reactExports.useState({ x: 0, y: 0 });
     const [activeCapture, setActiveCapture] = reactExports.useState(null);
-    const [hasContent, setHasContent] = reactExports.useState(false);
     const [showLinkPopup, setShowLinkPopup] = reactExports.useState(false);
     const [linkUrl, setLinkUrl] = reactExports.useState("");
     const [showApiTooltip, setShowApiTooltip] = reactExports.useState(false);
+    const [showDestinationPopup, setShowDestinationPopup] = reactExports.useState(false);
+    const [showTagsPopup, setShowTagsPopup] = reactExports.useState(false);
+    const [showLlmPopup, setShowLlmPopup] = reactExports.useState(false);
+    const [spaces, setSpaces] = reactExports.useState([]);
+    const [tags, setTags] = reactExports.useState([]);
+    const [loadingSpaces, setLoadingSpaces] = reactExports.useState(false);
+    const [loadingTags, setLoadingTags] = reactExports.useState(false);
     const [selectedDestination, setSelectedDestination] = reactExports.useState(null);
     const [selectedTags, setSelectedTags] = reactExports.useState([]);
     const [selectedLlm, setSelectedLlm] = reactExports.useState(null);
+    const [uploadedDataUrl, setUploadedDataUrl] = reactExports.useState(null);
+    const [uploadedMetadata, setUploadedMetadata] = reactExports.useState(null);
+    const [storedLink, setStoredLink] = reactExports.useState(null);
     const toolbarRef = reactExports.useRef(null);
+    const hasContent = !!(capturedData || uploadedDataUrl || storedLink);
+    const closeAllPopups = reactExports.useCallback(() => {
+      setShowLinkPopup(false);
+      setShowDestinationPopup(false);
+      setShowTagsPopup(false);
+      setShowLlmPopup(false);
+    }, []);
     const handleMouseDown = reactExports.useCallback((e) => {
       if (e.target.closest("button")) return;
       if (e.target.closest(".popup-content")) return;
@@ -731,13 +827,78 @@
     reactExports.useEffect(() => {
       const handleClickOutside = (event) => {
         if (toolbarRef.current && !toolbarRef.current.contains(event.target)) {
-          setShowLinkPopup(false);
+          closeAllPopups();
         }
       };
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+    }, [closeAllPopups]);
     const isWorking = status === "capturing" || status === "uploading";
+    const fetchSpaces = reactExports.useCallback(async () => {
+      setLoadingSpaces(true);
+      try {
+        const response = await chrome.runtime.sendMessage({ type: "FETCH_SPACES" });
+        if (response.success && response.spaces) {
+          setSpaces(response.spaces);
+        } else {
+          console.error("[CaptureInsight] Failed to fetch spaces:", response.error);
+        }
+      } catch (error) {
+        console.error("[CaptureInsight] Error fetching spaces:", error);
+      } finally {
+        setLoadingSpaces(false);
+      }
+    }, []);
+    const fetchTags = reactExports.useCallback(async (spaceId) => {
+      setLoadingTags(true);
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type: "FETCH_TAGS",
+          spaceId
+        });
+        if (response.success && response.tags) {
+          setTags(response.tags);
+        } else {
+          console.error("[CaptureInsight] Failed to fetch tags:", response.error);
+        }
+      } catch (error) {
+        console.error("[CaptureInsight] Error fetching tags:", error);
+      } finally {
+        setLoadingTags(false);
+      }
+    }, []);
+    const handleDestinationClick = reactExports.useCallback(() => {
+      closeAllPopups();
+      setShowDestinationPopup(true);
+      fetchSpaces();
+    }, [closeAllPopups, fetchSpaces]);
+    const handleTagsClick = reactExports.useCallback(() => {
+      closeAllPopups();
+      setShowTagsPopup(true);
+      if (selectedDestination?.spaceId) {
+        fetchTags(selectedDestination.spaceId);
+      }
+    }, [closeAllPopups, fetchTags, selectedDestination]);
+    const handleLlmClick = reactExports.useCallback(() => {
+      closeAllPopups();
+      setShowLlmPopup(true);
+    }, [closeAllPopups]);
+    const handleSelectSpace = reactExports.useCallback((space) => {
+      setSelectedDestination({ spaceId: space.id, spaceName: space.name });
+      setSelectedTags([]);
+      setShowDestinationPopup(false);
+      console.log("[CaptureInsight] Selected space:", space.name);
+    }, []);
+    const handleToggleTag = reactExports.useCallback((tagId) => {
+      setSelectedTags(
+        (prev) => prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+      );
+    }, []);
+    const handleSelectLlm = reactExports.useCallback((option) => {
+      setSelectedLlm(option);
+      setShowLlmPopup(false);
+      console.log("[CaptureInsight] Selected LLM:", option);
+    }, []);
     const handleCaptureClick = (mode, buttonId) => {
       if (isWorking) return;
       setActiveCapture(buttonId);
@@ -751,30 +912,97 @@
       input.onchange = async (e) => {
         const file = e.target.files?.[0];
         if (file) {
-          setHasContent(true);
-          console.log("[CaptureInsight] File selected:", file.name);
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const dataUrl = event.target?.result;
+            setUploadedDataUrl(dataUrl);
+            setUploadedMetadata({
+              url: window.location.href,
+              title: document.title,
+              timestamp: Date.now(),
+              mode: CaptureMode.TAB,
+              dimensions: { width: 0, height: 0 }
+            });
+            console.log("[CaptureInsight] File uploaded and converted to dataUrl:", file.name);
+          };
+          reader.readAsDataURL(file);
         }
       };
       input.click();
     };
     const handleLinkSubmit = () => {
       if (linkUrl.trim()) {
-        setHasContent(true);
+        setStoredLink(linkUrl.trim());
         setShowLinkPopup(false);
-        console.log("[CaptureInsight] Link added:", linkUrl);
+        console.log("[CaptureInsight] Link stored:", linkUrl);
         setLinkUrl("");
       }
     };
-    const handleFinalCapture = () => {
-      console.log("[CaptureInsight] Final capture with settings:", {
-        destination: selectedDestination,
-        tags: selectedTags,
-        llm: selectedLlm
-      });
+    const handleFinalCapture = async () => {
+      const dataUrl = capturedData?.dataUrl || uploadedDataUrl;
+      const metadata = capturedData?.metadata || uploadedMetadata;
+      if (!dataUrl && !storedLink) {
+        onStatusChange("error", "No content to upload");
+        return;
+      }
+      onStatusChange("uploading", "Uploading to CaptureInsight...");
+      try {
+        const uploadData = {
+          type: MessageType.UPLOAD_SCREENSHOT,
+          metadata: metadata || {
+            url: storedLink || window.location.href,
+            title: document.title,
+            timestamp: Date.now(),
+            mode: CaptureMode.TAB,
+            dimensions: { width: 0, height: 0 }
+          }
+        };
+        if (dataUrl) {
+          uploadData.dataUrl = dataUrl;
+        }
+        if (selectedDestination?.spaceId) {
+          uploadData.spaceId = selectedDestination.spaceId;
+        }
+        if (selectedTags.length > 0) {
+          uploadData.tags = selectedTags;
+        }
+        if (storedLink) {
+          uploadData.metadata.url = storedLink;
+        }
+        console.log("[CaptureInsight] Uploading with settings:", {
+          hasDataUrl: !!dataUrl,
+          destination: selectedDestination,
+          tags: selectedTags,
+          llm: selectedLlm,
+          link: storedLink
+        });
+        const result = await chrome.runtime.sendMessage(uploadData);
+        if (result.success) {
+          onStatusChange("success", "Saved to CaptureInsight!");
+          setUploadedDataUrl(null);
+          setUploadedMetadata(null);
+          setStoredLink(null);
+          setSelectedTags([]);
+          onClearCapturedData();
+          setTimeout(() => {
+            onStatusChange("idle", "");
+          }, 3e3);
+        } else {
+          onStatusChange("error", result.error || "Upload failed");
+          setTimeout(() => {
+            onStatusChange("idle", "");
+          }, 5e3);
+        }
+      } catch (error) {
+        console.error("[CaptureInsight] Upload error:", error);
+        onStatusChange("error", "Upload failed");
+        setTimeout(() => {
+          onStatusChange("idle", "");
+        }, 5e3);
+      }
     };
     reactExports.useEffect(() => {
       if (status === "success") {
-        setHasContent(true);
         const timer = setTimeout(() => {
           setActiveCapture(null);
         }, 2e3);
@@ -785,6 +1013,11 @@
         return () => clearTimeout(timer);
       }
     }, [status, activeCapture]);
+    const llmOptions = [
+      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+      { id: "none", label: "Don't analyze" }
+    ];
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
       {
@@ -815,6 +1048,9 @@
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        .popup-list-item:hover {
+          background-color: rgba(255, 107, 53, 0.1) !important;
         }
       ` }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -854,7 +1090,10 @@
               {
                 icon: /* @__PURE__ */ jsxRuntimeExports.jsx(LinkIcon, {}),
                 label: "Insert Share Link",
-                onClick: () => setShowLinkPopup(!showLinkPopup),
+                onClick: () => {
+                  closeAllPopups();
+                  setShowLinkPopup(!showLinkPopup);
+                },
                 active: showLinkPopup,
                 disabled: isWorking,
                 showTooltip: !showLinkPopup
@@ -864,23 +1103,9 @@
               "div",
               {
                 className: "popup-content",
-                style: {
-                  position: "absolute",
-                  bottom: "100%",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  marginBottom: "12px",
-                  width: "280px",
-                  backgroundColor: "rgba(26, 31, 46, 0.98)",
-                  backdropFilter: "blur(16px)",
-                  borderRadius: "12px",
-                  border: "1px solid rgba(255, 107, 53, 0.2)",
-                  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
-                  padding: "12px",
-                  zIndex: 110
-                },
+                style: popupStyles.container,
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "10px", color: "#9CA3AF", marginBottom: "8px", textTransform: "uppercase" }, children: "Add URL" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: popupStyles.header, children: "Add URL" }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "input",
                     {
@@ -898,7 +1123,8 @@
                         color: "#fff",
                         fontSize: "13px",
                         outline: "none",
-                        marginBottom: "8px"
+                        marginBottom: "8px",
+                        boxSizing: "border-box"
                       }
                     }
                   ),
@@ -974,36 +1200,168 @@
                 variant: "setting"
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              ToolButton,
-              {
-                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(FolderIcon, {}),
-                label: "Save To",
-                onClick: () => console.log("Open destination picker"),
-                variant: "setting",
-                hasValue: !!selectedDestination
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              ToolButton,
-              {
-                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(TagIcon, {}),
-                label: "Tags",
-                onClick: () => console.log("Open tags picker"),
-                variant: "setting",
-                hasValue: selectedTags.length > 0
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              ToolButton,
-              {
-                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(SparklesIcon, {}),
-                label: "Send to LLM",
-                onClick: () => console.log("Open LLM picker"),
-                variant: "setting",
-                hasValue: !!selectedLlm
-              }
-            )
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { position: "relative" }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                ToolButton,
+                {
+                  icon: /* @__PURE__ */ jsxRuntimeExports.jsx(FolderIcon, {}),
+                  label: selectedDestination ? `Save to: ${selectedDestination.spaceName}` : "Save To",
+                  onClick: handleDestinationClick,
+                  active: showDestinationPopup,
+                  variant: "setting",
+                  hasValue: !!selectedDestination,
+                  showTooltip: !showDestinationPopup
+                }
+              ),
+              showDestinationPopup && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: "popup-content",
+                  style: popupStyles.container,
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: popupStyles.header, children: "Select Destination" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: popupStyles.scrollContainer, children: loadingSpaces ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: popupStyles.loadingState, children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderIcon, {}),
+                      " Loading spaces..."
+                    ] }) : spaces.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: popupStyles.emptyState, children: "No spaces found. Create a space in CaptureInsight first." }) : spaces.map((space) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "button",
+                      {
+                        className: "popup-list-item",
+                        onClick: () => handleSelectSpace(space),
+                        style: {
+                          ...popupStyles.listItem,
+                          ...selectedDestination?.spaceId === space.id ? popupStyles.listItemActive : {}
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(FolderIcon, {}),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: space.name }),
+                          selectedDestination?.spaceId === space.id && /* @__PURE__ */ jsxRuntimeExports.jsx(CheckIcon, {})
+                        ]
+                      },
+                      space.id
+                    )) })
+                  ]
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { position: "relative" }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                ToolButton,
+                {
+                  icon: /* @__PURE__ */ jsxRuntimeExports.jsx(TagIcon, {}),
+                  label: selectedTags.length > 0 ? `${selectedTags.length} tags selected` : "Tags",
+                  onClick: handleTagsClick,
+                  active: showTagsPopup,
+                  variant: "setting",
+                  hasValue: selectedTags.length > 0,
+                  showTooltip: !showTagsPopup
+                }
+              ),
+              showTagsPopup && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: "popup-content",
+                  style: popupStyles.container,
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: popupStyles.header, children: [
+                      "Select Tags ",
+                      selectedDestination && `(${selectedDestination.spaceName})`
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: popupStyles.scrollContainer, children: !selectedDestination ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: popupStyles.emptyState, children: "Select a destination space first to see available tags." }) : loadingTags ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: popupStyles.loadingState, children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderIcon, {}),
+                      " Loading tags..."
+                    ] }) : tags.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: popupStyles.emptyState, children: "No tags found in this space." }) : tags.map((tag) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "button",
+                      {
+                        className: "popup-list-item",
+                        onClick: () => handleToggleTag(tag.id),
+                        style: popupStyles.listItem,
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(CheckboxIcon, { checked: selectedTags.includes(tag.id) }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: {
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px"
+                          }, children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: {
+                              width: "10px",
+                              height: "10px",
+                              borderRadius: "50%",
+                              backgroundColor: tag.color || "#FF6B35"
+                            } }),
+                            tag.name
+                          ] })
+                        ]
+                      },
+                      tag.id
+                    )) }),
+                    selectedTags.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "button",
+                      {
+                        onClick: () => setShowTagsPopup(false),
+                        style: {
+                          width: "100%",
+                          padding: "8px",
+                          backgroundColor: "#FF6B35",
+                          border: "none",
+                          borderRadius: "8px",
+                          color: "#fff",
+                          fontSize: "12px",
+                          fontWeight: 500,
+                          cursor: "pointer",
+                          marginTop: "4px"
+                        },
+                        children: [
+                          "Done (",
+                          selectedTags.length,
+                          " selected)"
+                        ]
+                      }
+                    )
+                  ]
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { position: "relative" }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                ToolButton,
+                {
+                  icon: /* @__PURE__ */ jsxRuntimeExports.jsx(SparklesIcon, {}),
+                  label: selectedLlm ? `LLM: ${llmOptions.find((o) => o.id === selectedLlm)?.label}` : "Send to LLM",
+                  onClick: handleLlmClick,
+                  active: showLlmPopup,
+                  variant: "setting",
+                  hasValue: !!selectedLlm,
+                  showTooltip: !showLlmPopup
+                }
+              ),
+              showLlmPopup && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: "popup-content",
+                  style: popupStyles.container,
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: popupStyles.header, children: "AI Analysis" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { marginBottom: "4px" }, children: llmOptions.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "button",
+                      {
+                        className: "popup-list-item",
+                        onClick: () => handleSelectLlm(option.id),
+                        style: {
+                          ...popupStyles.listItem,
+                          ...selectedLlm === option.id ? popupStyles.listItemActive : {}
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(RadioIcon, { checked: selectedLlm === option.id }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: option.label })
+                        ]
+                      },
+                      option.id
+                    )) })
+                  ]
+                }
+              )
+            ] })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
             width: "1px",
@@ -1023,11 +1381,12 @@
           hasContent && /* @__PURE__ */ jsxRuntimeExports.jsx(
             ToolButton,
             {
-              icon: /* @__PURE__ */ jsxRuntimeExports.jsx(BrainIcon, {}),
+              icon: status === "uploading" ? /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(BrainIcon, {}),
               label: "Capture Data",
               onClick: handleFinalCapture,
               variant: "primary",
-              count: 1
+              count: 1,
+              disabled: status === "uploading"
             }
           ),
           statusMessage && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
@@ -1037,7 +1396,7 @@
             transform: "translateX(-50%)",
             marginTop: "8px",
             padding: "6px 12px",
-            backgroundColor: status === "error" ? "rgba(239, 68, 68, 0.9)" : "rgba(26, 31, 46, 0.95)",
+            backgroundColor: status === "error" ? "rgba(239, 68, 68, 0.9)" : status === "success" ? "rgba(34, 197, 94, 0.9)" : "rgba(26, 31, 46, 0.95)",
             borderRadius: "8px",
             fontSize: "12px",
             color: "#fff",
@@ -1052,6 +1411,7 @@
     const [visible, setVisible] = reactExports.useState(false);
     const [status, setStatus] = reactExports.useState("idle");
     const [statusMessage, setStatusMessage] = reactExports.useState("");
+    const [capturedData, setCapturedData] = reactExports.useState(null);
     reactExports.useEffect(() => {
       console.log("[CaptureInsight] Content script message listener registered");
       const handleMessage = (message, _sender, sendResponse) => {
@@ -1072,6 +1432,10 @@
         chrome.runtime.onMessage.removeListener(handleMessage);
       };
     }, []);
+    const handleStatusChange = reactExports.useCallback((newStatus, message) => {
+      setStatus(newStatus);
+      setStatusMessage(message);
+    }, []);
     const handleCapture = reactExports.useCallback(async (mode) => {
       setStatus("capturing");
       setStatusMessage("Taking screenshot...");
@@ -1081,36 +1445,42 @@
           mode
         });
         if (response.success && response.dataUrl) {
-          setStatus("uploading");
-          setStatusMessage("Uploading to CaptureInsight...");
-          const uploadResult = await chrome.runtime.sendMessage({
-            type: MessageType.UPLOAD_SCREENSHOT,
+          setCapturedData({
             dataUrl: response.dataUrl,
             metadata: response.metadata
           });
-          if (uploadResult.success) {
-            setStatus("success");
-            setStatusMessage("Screenshot saved!");
-            setTimeout(() => {
-              setStatus("idle");
-              setStatusMessage("");
-            }, 3e3);
-          } else {
-            setStatus("error");
-            setStatusMessage(uploadResult.error || "Upload failed");
-          }
+          setStatus("success");
+          setStatusMessage("Screenshot captured! Configure options and click Capture.");
+          setTimeout(() => {
+            setStatusMessage("");
+          }, 3e3);
         } else {
           setStatus("error");
           setStatusMessage(response.error || "Capture failed");
+          setTimeout(() => {
+            setStatus("idle");
+            setStatusMessage("");
+          }, 5e3);
         }
       } catch (error) {
-        console.error("Capture error:", error);
+        console.error("[CaptureInsight] Capture error:", error);
         setStatus("error");
-        setStatusMessage(error instanceof Error ? error.message : "Unknown error");
+        setStatusMessage("Capture failed");
+        setTimeout(() => {
+          setStatus("idle");
+          setStatusMessage("");
+        }, 5e3);
       }
     }, []);
-    const handleOpenDashboard = reactExports.useCallback(() => {
-      chrome.runtime.sendMessage({ type: "OPEN_DASHBOARD" });
+    const handleOpenDashboard = reactExports.useCallback(async () => {
+      try {
+        await chrome.runtime.sendMessage({ type: "OPEN_DASHBOARD" });
+      } catch (error) {
+        console.error("[CaptureInsight] Error opening dashboard:", error);
+      }
+    }, []);
+    const handleClearCapturedData = reactExports.useCallback(() => {
+      setCapturedData(null);
     }, []);
     if (!visible) return null;
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -1119,58 +1489,44 @@
         onCapture: handleCapture,
         status,
         statusMessage,
-        onOpenDashboard: handleOpenDashboard
+        onOpenDashboard: handleOpenDashboard,
+        onStatusChange: handleStatusChange,
+        capturedData,
+        onClearCapturedData: handleClearCapturedData
       }
     );
   };
-  function initContentScript() {
-    const containerId = "captureinsight-root";
-    if (document.getElementById(containerId)) {
+  const CONTAINER_ID = "captureinsight-toolbar-container";
+  function init() {
+    if (document.getElementById(CONTAINER_ID)) {
+      console.log("[CaptureInsight] Already initialized");
       return;
     }
+    console.log("[CaptureInsight] Initializing content script");
     const container = document.createElement("div");
-    container.id = containerId;
-    container.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 0;
-    height: 0;
-    z-index: 2147483647;
-    pointer-events: none;
-  `;
+    container.id = CONTAINER_ID;
+    container.style.cssText = "position: fixed; z-index: 2147483647; pointer-events: none;";
+    document.body.appendChild(container);
     const shadowRoot = container.attachShadow({ mode: "closed" });
     const styleSheet = document.createElement("style");
     styleSheet.textContent = `
     * {
-      box-sizing: border-box;
-    }
-    .captureinsight-toolbar {
       pointer-events: auto;
-    }
-    button:hover:not(:disabled) {
-      filter: brightness(1.1);
-    }
-    button:active:not(:disabled) {
-      transform: scale(0.95);
-    }
-    input:focus {
-      border-color: rgba(255, 107, 53, 0.5) !important;
+      box-sizing: border-box;
     }
   `;
     shadowRoot.appendChild(styleSheet);
-    const reactRoot = document.createElement("div");
-    shadowRoot.appendChild(reactRoot);
-    document.body.appendChild(container);
-    const root = clientExports.createRoot(reactRoot);
+    const appContainer = document.createElement("div");
+    shadowRoot.appendChild(appContainer);
+    const root = clientExports.createRoot(appContainer);
     root.render(/* @__PURE__ */ jsxRuntimeExports.jsx(ContentApp, {}));
+    console.log("[CaptureInsight] Content script initialized");
   }
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initContentScript);
+    document.addEventListener("DOMContentLoaded", init);
   } else {
-    initContentScript();
+    init();
   }
-  console.log("[CaptureInsight] Content script loaded on:", window.location.href);
 
 })();
 //# sourceMappingURL=index.js.map

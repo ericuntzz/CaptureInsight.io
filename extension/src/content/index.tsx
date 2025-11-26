@@ -4,11 +4,24 @@ import {
   MessageType, 
   CaptureMode, 
   ToggleToolbarMessage,
-  CaptureResponse
+  CaptureResponse,
+  CaptureMetadata
 } from '@shared/types';
 import { TOOLBAR_DEFAULTS } from '@shared/constants';
 
 type StatusType = 'idle' | 'capturing' | 'uploading' | 'success' | 'error';
+
+interface Space {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
 
 const ScanIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -116,6 +129,20 @@ const ArrowLeftIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m12 19-7-7 7-7" />
     <path d="M19 12H5" />
+  </svg>
+);
+
+const CheckboxIcon = ({ checked }: { checked: boolean }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" fill={checked ? '#FF6B35' : 'transparent'} stroke={checked ? '#FF6B35' : '#9CA3AF'} />
+    {checked && <polyline points="9 12 12 15 16 9" stroke="#fff" />}
+  </svg>
+);
+
+const RadioIcon = ({ checked }: { checked: boolean }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="9" fill="transparent" stroke={checked ? '#FF6B35' : '#9CA3AF'} />
+    {checked && <circle cx="12" cy="12" r="5" fill="#FF6B35" />}
   </svg>
 );
 
@@ -255,28 +282,128 @@ const ToolButton: React.FC<ToolButtonProps> = ({
   );
 };
 
+const popupStyles = {
+  container: {
+    position: 'absolute' as const,
+    bottom: '100%',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    marginBottom: '12px',
+    width: '280px',
+    backgroundColor: 'rgba(26, 31, 46, 0.98)',
+    backdropFilter: 'blur(16px)',
+    borderRadius: '12px',
+    border: '1px solid rgba(255, 107, 53, 0.2)',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
+    padding: '12px',
+    zIndex: 110
+  },
+  header: {
+    fontSize: '10px',
+    color: '#9CA3AF',
+    marginBottom: '8px',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px'
+  },
+  listItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 12px',
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderRadius: '8px',
+    color: '#fff',
+    fontSize: '13px',
+    cursor: 'pointer',
+    width: '100%',
+    textAlign: 'left' as const,
+    transition: 'background-color 0.15s ease'
+  },
+  listItemHover: {
+    backgroundColor: 'rgba(255, 107, 53, 0.1)'
+  },
+  listItemActive: {
+    backgroundColor: 'rgba(255, 107, 53, 0.15)',
+    border: '1px solid rgba(255, 107, 53, 0.3)'
+  },
+  scrollContainer: {
+    maxHeight: '200px',
+    overflowY: 'auto' as const,
+    marginBottom: '8px'
+  },
+  emptyState: {
+    padding: '20px',
+    textAlign: 'center' as const,
+    color: '#9CA3AF',
+    fontSize: '12px'
+  },
+  loadingState: {
+    padding: '20px',
+    textAlign: 'center' as const,
+    color: '#9CA3AF',
+    fontSize: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px'
+  }
+};
+
 interface FloatingToolbarProps {
   onCapture: (mode: CaptureMode) => void;
   status: StatusType;
   statusMessage: string;
   onOpenDashboard: () => void;
+  onStatusChange: (status: StatusType, message: string) => void;
+  capturedData: { dataUrl: string; metadata: CaptureMetadata } | null;
+  onClearCapturedData: () => void;
 }
 
-const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, statusMessage, onOpenDashboard }) => {
+const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ 
+  onCapture, 
+  status, 
+  statusMessage, 
+  onOpenDashboard, 
+  onStatusChange,
+  capturedData,
+  onClearCapturedData
+}) => {
   const [position, setPosition] = useState(TOOLBAR_DEFAULTS.POSITION);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [activeCapture, setActiveCapture] = useState<string | null>(null);
-  const [hasContent, setHasContent] = useState(false);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [showApiTooltip, setShowApiTooltip] = useState(false);
   
-  const [selectedDestination, setSelectedDestination] = useState<{spaceId: string, folderId: string} | null>(null);
+  const [showDestinationPopup, setShowDestinationPopup] = useState(false);
+  const [showTagsPopup, setShowTagsPopup] = useState(false);
+  const [showLlmPopup, setShowLlmPopup] = useState(false);
+  
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [loadingSpaces, setLoadingSpaces] = useState(false);
+  const [loadingTags, setLoadingTags] = useState(false);
+  
+  const [selectedDestination, setSelectedDestination] = useState<{spaceId: string, spaceName: string} | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedLlm, setSelectedLlm] = useState<string | null>(null);
   
+  const [uploadedDataUrl, setUploadedDataUrl] = useState<string | null>(null);
+  const [uploadedMetadata, setUploadedMetadata] = useState<CaptureMetadata | null>(null);
+  const [storedLink, setStoredLink] = useState<string | null>(null);
+  
   const toolbarRef = useRef<HTMLDivElement>(null);
+  
+  const hasContent = !!(capturedData || uploadedDataUrl || storedLink);
+
+  const closeAllPopups = useCallback(() => {
+    setShowLinkPopup(false);
+    setShowDestinationPopup(false);
+    setShowTagsPopup(false);
+    setShowLlmPopup(false);
+  }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
@@ -315,14 +442,89 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (toolbarRef.current && !toolbarRef.current.contains(event.target as Node)) {
-        setShowLinkPopup(false);
+        closeAllPopups();
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [closeAllPopups]);
 
   const isWorking = status === 'capturing' || status === 'uploading';
+
+  const fetchSpaces = useCallback(async () => {
+    setLoadingSpaces(true);
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'FETCH_SPACES' });
+      if (response.success && response.spaces) {
+        setSpaces(response.spaces);
+      } else {
+        console.error('[CaptureInsight] Failed to fetch spaces:', response.error);
+      }
+    } catch (error) {
+      console.error('[CaptureInsight] Error fetching spaces:', error);
+    } finally {
+      setLoadingSpaces(false);
+    }
+  }, []);
+
+  const fetchTags = useCallback(async (spaceId: string) => {
+    setLoadingTags(true);
+    try {
+      const response = await chrome.runtime.sendMessage({ 
+        type: 'FETCH_TAGS',
+        spaceId 
+      });
+      if (response.success && response.tags) {
+        setTags(response.tags);
+      } else {
+        console.error('[CaptureInsight] Failed to fetch tags:', response.error);
+      }
+    } catch (error) {
+      console.error('[CaptureInsight] Error fetching tags:', error);
+    } finally {
+      setLoadingTags(false);
+    }
+  }, []);
+
+  const handleDestinationClick = useCallback(() => {
+    closeAllPopups();
+    setShowDestinationPopup(true);
+    fetchSpaces();
+  }, [closeAllPopups, fetchSpaces]);
+
+  const handleTagsClick = useCallback(() => {
+    closeAllPopups();
+    setShowTagsPopup(true);
+    if (selectedDestination?.spaceId) {
+      fetchTags(selectedDestination.spaceId);
+    }
+  }, [closeAllPopups, fetchTags, selectedDestination]);
+
+  const handleLlmClick = useCallback(() => {
+    closeAllPopups();
+    setShowLlmPopup(true);
+  }, [closeAllPopups]);
+
+  const handleSelectSpace = useCallback((space: Space) => {
+    setSelectedDestination({ spaceId: space.id, spaceName: space.name });
+    setSelectedTags([]);
+    setShowDestinationPopup(false);
+    console.log('[CaptureInsight] Selected space:', space.name);
+  }, []);
+
+  const handleToggleTag = useCallback((tagId: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tagId) 
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId]
+    );
+  }, []);
+
+  const handleSelectLlm = useCallback((option: string) => {
+    setSelectedLlm(option);
+    setShowLlmPopup(false);
+    console.log('[CaptureInsight] Selected LLM:', option);
+  }, []);
 
   const handleCaptureClick = (mode: CaptureMode, buttonId: string) => {
     if (isWorking) return;
@@ -338,8 +540,20 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
-        setHasContent(true);
-        console.log('[CaptureInsight] File selected:', file.name);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string;
+          setUploadedDataUrl(dataUrl);
+          setUploadedMetadata({
+            url: window.location.href,
+            title: document.title,
+            timestamp: Date.now(),
+            mode: CaptureMode.TAB,
+            dimensions: { width: 0, height: 0 }
+          });
+          console.log('[CaptureInsight] File uploaded and converted to dataUrl:', file.name);
+        };
+        reader.readAsDataURL(file);
       }
     };
     input.click();
@@ -347,24 +561,90 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
 
   const handleLinkSubmit = () => {
     if (linkUrl.trim()) {
-      setHasContent(true);
+      setStoredLink(linkUrl.trim());
       setShowLinkPopup(false);
-      console.log('[CaptureInsight] Link added:', linkUrl);
+      console.log('[CaptureInsight] Link stored:', linkUrl);
       setLinkUrl('');
     }
   };
 
-  const handleFinalCapture = () => {
-    console.log('[CaptureInsight] Final capture with settings:', {
-      destination: selectedDestination,
-      tags: selectedTags,
-      llm: selectedLlm
-    });
+  const handleFinalCapture = async () => {
+    const dataUrl = capturedData?.dataUrl || uploadedDataUrl;
+    const metadata = capturedData?.metadata || uploadedMetadata;
+    
+    if (!dataUrl && !storedLink) {
+      onStatusChange('error', 'No content to upload');
+      return;
+    }
+
+    onStatusChange('uploading', 'Uploading to CaptureInsight...');
+
+    try {
+      const uploadData: any = {
+        type: MessageType.UPLOAD_SCREENSHOT,
+        metadata: metadata || {
+          url: storedLink || window.location.href,
+          title: document.title,
+          timestamp: Date.now(),
+          mode: CaptureMode.TAB,
+          dimensions: { width: 0, height: 0 }
+        }
+      };
+
+      if (dataUrl) {
+        uploadData.dataUrl = dataUrl;
+      }
+
+      if (selectedDestination?.spaceId) {
+        uploadData.spaceId = selectedDestination.spaceId;
+      }
+
+      if (selectedTags.length > 0) {
+        uploadData.tags = selectedTags;
+      }
+
+      if (storedLink) {
+        uploadData.metadata.url = storedLink;
+      }
+
+      console.log('[CaptureInsight] Uploading with settings:', {
+        hasDataUrl: !!dataUrl,
+        destination: selectedDestination,
+        tags: selectedTags,
+        llm: selectedLlm,
+        link: storedLink
+      });
+
+      const result = await chrome.runtime.sendMessage(uploadData);
+
+      if (result.success) {
+        onStatusChange('success', 'Saved to CaptureInsight!');
+        setUploadedDataUrl(null);
+        setUploadedMetadata(null);
+        setStoredLink(null);
+        setSelectedTags([]);
+        onClearCapturedData();
+        
+        setTimeout(() => {
+          onStatusChange('idle', '');
+        }, 3000);
+      } else {
+        onStatusChange('error', result.error || 'Upload failed');
+        setTimeout(() => {
+          onStatusChange('idle', '');
+        }, 5000);
+      }
+    } catch (error) {
+      console.error('[CaptureInsight] Upload error:', error);
+      onStatusChange('error', 'Upload failed');
+      setTimeout(() => {
+        onStatusChange('idle', '');
+      }, 5000);
+    }
   };
 
   useEffect(() => {
     if (status === 'success') {
-      setHasContent(true);
       const timer = setTimeout(() => {
         setActiveCapture(null);
       }, 2000);
@@ -375,6 +655,12 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
       return () => clearTimeout(timer);
     }
   }, [status, activeCapture]);
+
+  const llmOptions = [
+    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { id: 'none', label: "Don't analyze" }
+  ];
 
   return (
     <div
@@ -406,9 +692,11 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        .popup-list-item:hover {
+          background-color: rgba(255, 107, 53, 0.1) !important;
+        }
       `}</style>
 
-      {/* Capture Mode Buttons */}
       <ToolButton
         icon={isWorking && activeCapture === 'selection' ? <LoaderIcon /> : <ScanIcon />}
         label="Capture Selected Portion"
@@ -434,12 +722,14 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
         disabled={isWorking}
       />
 
-      {/* Share Link Button with Popup */}
       <div style={{ position: 'relative' }}>
         <ToolButton
           icon={<LinkIcon />}
           label="Insert Share Link"
-          onClick={() => setShowLinkPopup(!showLinkPopup)}
+          onClick={() => {
+            closeAllPopups();
+            setShowLinkPopup(!showLinkPopup);
+          }}
           active={showLinkPopup}
           disabled={isWorking}
           showTooltip={!showLinkPopup}
@@ -448,23 +738,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
         {showLinkPopup && (
           <div 
             className="popup-content"
-            style={{
-              position: 'absolute',
-              bottom: '100%',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              marginBottom: '12px',
-              width: '280px',
-              backgroundColor: 'rgba(26, 31, 46, 0.98)',
-              backdropFilter: 'blur(16px)',
-              borderRadius: '12px',
-              border: '1px solid rgba(255, 107, 53, 0.2)',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
-              padding: '12px',
-              zIndex: 110
-            }}
+            style={popupStyles.container}
           >
-            <div style={{ fontSize: '10px', color: '#9CA3AF', marginBottom: '8px', textTransform: 'uppercase' }}>
+            <div style={popupStyles.header}>
               Add URL
             </div>
             <input
@@ -482,7 +758,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
                 color: '#fff',
                 fontSize: '13px',
                 outline: 'none',
-                marginBottom: '8px'
+                marginBottom: '8px',
+                boxSizing: 'border-box'
               }}
             />
             <button
@@ -505,7 +782,6 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
         )}
       </div>
 
-      {/* API Button (Coming Soon) */}
       <div 
         style={{ position: 'relative' }}
         onMouseEnter={() => setShowApiTooltip(true)}
@@ -537,7 +813,6 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
         )}
       </div>
 
-      {/* Setting Buttons - Only show when content exists */}
       {hasContent && (
         <>
           <div style={{
@@ -554,33 +829,180 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
             variant="setting"
           />
           
-          <ToolButton
-            icon={<FolderIcon />}
-            label="Save To"
-            onClick={() => console.log('Open destination picker')}
-            variant="setting"
-            hasValue={!!selectedDestination}
-          />
+          <div style={{ position: 'relative' }}>
+            <ToolButton
+              icon={<FolderIcon />}
+              label={selectedDestination ? `Save to: ${selectedDestination.spaceName}` : "Save To"}
+              onClick={handleDestinationClick}
+              active={showDestinationPopup}
+              variant="setting"
+              hasValue={!!selectedDestination}
+              showTooltip={!showDestinationPopup}
+            />
+            
+            {showDestinationPopup && (
+              <div 
+                className="popup-content"
+                style={popupStyles.container}
+              >
+                <div style={popupStyles.header}>
+                  Select Destination
+                </div>
+                <div style={popupStyles.scrollContainer}>
+                  {loadingSpaces ? (
+                    <div style={popupStyles.loadingState}>
+                      <LoaderIcon /> Loading spaces...
+                    </div>
+                  ) : spaces.length === 0 ? (
+                    <div style={popupStyles.emptyState}>
+                      No spaces found. Create a space in CaptureInsight first.
+                    </div>
+                  ) : (
+                    spaces.map(space => (
+                      <button
+                        key={space.id}
+                        className="popup-list-item"
+                        onClick={() => handleSelectSpace(space)}
+                        style={{
+                          ...popupStyles.listItem,
+                          ...(selectedDestination?.spaceId === space.id ? popupStyles.listItemActive : {})
+                        }}
+                      >
+                        <FolderIcon />
+                        <span>{space.name}</span>
+                        {selectedDestination?.spaceId === space.id && (
+                          <CheckIcon />
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           
-          <ToolButton
-            icon={<TagIcon />}
-            label="Tags"
-            onClick={() => console.log('Open tags picker')}
-            variant="setting"
-            hasValue={selectedTags.length > 0}
-          />
+          <div style={{ position: 'relative' }}>
+            <ToolButton
+              icon={<TagIcon />}
+              label={selectedTags.length > 0 ? `${selectedTags.length} tags selected` : "Tags"}
+              onClick={handleTagsClick}
+              active={showTagsPopup}
+              variant="setting"
+              hasValue={selectedTags.length > 0}
+              showTooltip={!showTagsPopup}
+            />
+            
+            {showTagsPopup && (
+              <div 
+                className="popup-content"
+                style={popupStyles.container}
+              >
+                <div style={popupStyles.header}>
+                  Select Tags {selectedDestination && `(${selectedDestination.spaceName})`}
+                </div>
+                <div style={popupStyles.scrollContainer}>
+                  {!selectedDestination ? (
+                    <div style={popupStyles.emptyState}>
+                      Select a destination space first to see available tags.
+                    </div>
+                  ) : loadingTags ? (
+                    <div style={popupStyles.loadingState}>
+                      <LoaderIcon /> Loading tags...
+                    </div>
+                  ) : tags.length === 0 ? (
+                    <div style={popupStyles.emptyState}>
+                      No tags found in this space.
+                    </div>
+                  ) : (
+                    tags.map(tag => (
+                      <button
+                        key={tag.id}
+                        className="popup-list-item"
+                        onClick={() => handleToggleTag(tag.id)}
+                        style={popupStyles.listItem}
+                      >
+                        <CheckboxIcon checked={selectedTags.includes(tag.id)} />
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <span style={{
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '50%',
+                            backgroundColor: tag.color || '#FF6B35'
+                          }} />
+                          {tag.name}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+                {selectedTags.length > 0 && (
+                  <button
+                    onClick={() => setShowTagsPopup(false)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      backgroundColor: '#FF6B35',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      marginTop: '4px'
+                    }}
+                  >
+                    Done ({selectedTags.length} selected)
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           
-          <ToolButton
-            icon={<SparklesIcon />}
-            label="Send to LLM"
-            onClick={() => console.log('Open LLM picker')}
-            variant="setting"
-            hasValue={!!selectedLlm}
-          />
+          <div style={{ position: 'relative' }}>
+            <ToolButton
+              icon={<SparklesIcon />}
+              label={selectedLlm ? `LLM: ${llmOptions.find(o => o.id === selectedLlm)?.label}` : "Send to LLM"}
+              onClick={handleLlmClick}
+              active={showLlmPopup}
+              variant="setting"
+              hasValue={!!selectedLlm}
+              showTooltip={!showLlmPopup}
+            />
+            
+            {showLlmPopup && (
+              <div 
+                className="popup-content"
+                style={popupStyles.container}
+              >
+                <div style={popupStyles.header}>
+                  AI Analysis
+                </div>
+                <div style={{ marginBottom: '4px' }}>
+                  {llmOptions.map(option => (
+                    <button
+                      key={option.id}
+                      className="popup-list-item"
+                      onClick={() => handleSelectLlm(option.id)}
+                      style={{
+                        ...popupStyles.listItem,
+                        ...(selectedLlm === option.id ? popupStyles.listItemActive : {})
+                      }}
+                    >
+                      <RadioIcon checked={selectedLlm === option.id} />
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </>
       )}
 
-      {/* Separator before dashboard */}
       <div style={{
         width: '1px',
         height: '24px',
@@ -588,7 +1010,6 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
         margin: '0 4px'
       }} />
 
-      {/* Dashboard Button */}
       <ToolButton
         icon={status === 'success' ? <CheckIcon /> : <DatabaseIcon />}
         label="View Dashboard"
@@ -596,18 +1017,17 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
         variant="dashboard"
       />
 
-      {/* Final Capture Button - Only show when content exists */}
       {hasContent && (
         <ToolButton
-          icon={<BrainIcon />}
+          icon={status === 'uploading' ? <LoaderIcon /> : <BrainIcon />}
           label="Capture Data"
           onClick={handleFinalCapture}
           variant="primary"
           count={1}
+          disabled={status === 'uploading'}
         />
       )}
 
-      {/* Status Message */}
       {statusMessage && (
         <div style={{
           position: 'absolute',
@@ -616,7 +1036,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ onCapture, status, st
           transform: 'translateX(-50%)',
           marginTop: '8px',
           padding: '6px 12px',
-          backgroundColor: status === 'error' ? 'rgba(239, 68, 68, 0.9)' : 'rgba(26, 31, 46, 0.95)',
+          backgroundColor: status === 'error' ? 'rgba(239, 68, 68, 0.9)' : 
+                          status === 'success' ? 'rgba(34, 197, 94, 0.9)' : 
+                          'rgba(26, 31, 46, 0.95)',
           borderRadius: '8px',
           fontSize: '12px',
           color: '#fff',
@@ -634,6 +1056,7 @@ const ContentApp: React.FC = () => {
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState<StatusType>('idle');
   const [statusMessage, setStatusMessage] = useState('');
+  const [capturedData, setCapturedData] = useState<{dataUrl: string, metadata: CaptureMetadata} | null>(null);
 
   useEffect(() => {
     console.log('[CaptureInsight] Content script message listener registered');
@@ -659,6 +1082,11 @@ const ContentApp: React.FC = () => {
     };
   }, []);
 
+  const handleStatusChange = useCallback((newStatus: StatusType, message: string) => {
+    setStatus(newStatus);
+    setStatusMessage(message);
+  }, []);
+
   const handleCapture = useCallback(async (mode: CaptureMode) => {
     setStatus('capturing');
     setStatusMessage('Taking screenshot...');
@@ -670,108 +1098,101 @@ const ContentApp: React.FC = () => {
       });
 
       if (response.success && response.dataUrl) {
-        setStatus('uploading');
-        setStatusMessage('Uploading to CaptureInsight...');
-        
-        const uploadResult = await chrome.runtime.sendMessage({
-          type: MessageType.UPLOAD_SCREENSHOT,
+        setCapturedData({
           dataUrl: response.dataUrl,
-          metadata: response.metadata
+          metadata: response.metadata!
         });
+        setStatus('success');
+        setStatusMessage('Screenshot captured! Configure options and click Capture.');
         
-        if (uploadResult.success) {
-          setStatus('success');
-          setStatusMessage('Screenshot saved!');
-          
-          setTimeout(() => {
-            setStatus('idle');
-            setStatusMessage('');
-          }, 3000);
-        } else {
-          setStatus('error');
-          setStatusMessage(uploadResult.error || 'Upload failed');
-        }
+        setTimeout(() => {
+          setStatusMessage('');
+        }, 3000);
       } else {
         setStatus('error');
         setStatusMessage(response.error || 'Capture failed');
+        
+        setTimeout(() => {
+          setStatus('idle');
+          setStatusMessage('');
+        }, 5000);
       }
     } catch (error) {
-      console.error('Capture error:', error);
+      console.error('[CaptureInsight] Capture error:', error);
       setStatus('error');
-      setStatusMessage(error instanceof Error ? error.message : 'Unknown error');
+      setStatusMessage('Capture failed');
+      
+      setTimeout(() => {
+        setStatus('idle');
+        setStatusMessage('');
+      }, 5000);
     }
   }, []);
 
-  const handleOpenDashboard = useCallback(() => {
-    chrome.runtime.sendMessage({ type: 'OPEN_DASHBOARD' });
+  const handleOpenDashboard = useCallback(async () => {
+    try {
+      await chrome.runtime.sendMessage({ type: 'OPEN_DASHBOARD' });
+    } catch (error) {
+      console.error('[CaptureInsight] Error opening dashboard:', error);
+    }
+  }, []);
+
+  const handleClearCapturedData = useCallback(() => {
+    setCapturedData(null);
   }, []);
 
   if (!visible) return null;
 
   return (
-    <FloatingToolbar
+    <FloatingToolbar 
       onCapture={handleCapture}
       status={status}
       statusMessage={statusMessage}
       onOpenDashboard={handleOpenDashboard}
+      onStatusChange={handleStatusChange}
+      capturedData={capturedData}
+      onClearCapturedData={handleClearCapturedData}
     />
   );
 };
 
-function initContentScript() {
-  const containerId = 'captureinsight-root';
-  
-  if (document.getElementById(containerId)) {
+const CONTAINER_ID = 'captureinsight-toolbar-container';
+
+function init() {
+  if (document.getElementById(CONTAINER_ID)) {
+    console.log('[CaptureInsight] Already initialized');
     return;
   }
 
+  console.log('[CaptureInsight] Initializing content script');
+  
   const container = document.createElement('div');
-  container.id = containerId;
-  container.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 0;
-    height: 0;
-    z-index: 2147483647;
-    pointer-events: none;
-  `;
+  container.id = CONTAINER_ID;
+  container.style.cssText = 'position: fixed; z-index: 2147483647; pointer-events: none;';
+  document.body.appendChild(container);
   
   const shadowRoot = container.attachShadow({ mode: 'closed' });
   
   const styleSheet = document.createElement('style');
   styleSheet.textContent = `
     * {
-      box-sizing: border-box;
-    }
-    .captureinsight-toolbar {
       pointer-events: auto;
-    }
-    button:hover:not(:disabled) {
-      filter: brightness(1.1);
-    }
-    button:active:not(:disabled) {
-      transform: scale(0.95);
-    }
-    input:focus {
-      border-color: rgba(255, 107, 53, 0.5) !important;
+      box-sizing: border-box;
     }
   `;
   shadowRoot.appendChild(styleSheet);
   
-  const reactRoot = document.createElement('div');
-  shadowRoot.appendChild(reactRoot);
+  const appContainer = document.createElement('div');
+  shadowRoot.appendChild(appContainer);
   
-  document.body.appendChild(container);
-  
-  const root = createRoot(reactRoot);
+  const root = createRoot(appContainer);
   root.render(<ContentApp />);
+  
+  console.log('[CaptureInsight] Content script initialized');
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initContentScript);
+  document.addEventListener('DOMContentLoaded', init);
 } else {
-  initContentScript();
+  init();
 }
-
-console.log('[CaptureInsight] Content script loaded on:', window.location.href);
