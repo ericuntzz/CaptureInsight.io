@@ -12,6 +12,7 @@ import { TagBadge } from './TagBadge';
 import { toast } from 'sonner';
 import { useInsights, useUpdateInsight, useCreateInsightComment, useCreateInsight } from '../hooks/useInsights';
 import { useTags, useCreateTag } from '../hooks/useTags';
+import { useChat } from '../hooks/useChat';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -342,6 +343,7 @@ export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: Insi
         openTabs={openCanvasTabs}
         activeTabId={canvasInsightId}
         tags={tags}
+        spaceId={currentSpaceId}
         onSwitchTab={handleSwitchCanvasTab}
         onCloseTab={handleCloseCanvasTab}
         onCloseCanvas={handleCloseCanvas}
@@ -546,6 +548,7 @@ export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: Insi
             onFullscreen={setFullscreenInsight}
             onOpenCanvas={handleOpenCanvas}
             onAddInsight={() => setShowAddInsightModal(true)}
+            spaceId={currentSpaceId}
           />
         ) : (
           <KanbanView
@@ -556,6 +559,7 @@ export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: Insi
             onFullscreen={setFullscreenInsight}
             onOpenCanvas={handleOpenCanvas}
             onAddInsight={() => setShowAddInsightModal(true)}
+            spaceId={currentSpaceId}
           />
         )}
       </div>
@@ -645,6 +649,7 @@ export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: Insi
                   insight={fullscreenInsight} 
                   tags={tags.filter((tag) => fullscreenInsight.tags.includes(tag.id))} 
                   onOpenCanvas={() => handleOpenCanvas(fullscreenInsight.id)}
+                  spaceId={currentSpaceId}
                 />
               </div>
             </motion.div>
@@ -672,6 +677,7 @@ function RowView({
   onFullscreen,
   onOpenCanvas,
   onAddInsight,
+  spaceId,
 }: {
   insights: Insight[];
   tags: Tag[];
@@ -680,6 +686,7 @@ function RowView({
   onFullscreen: (insight: Insight) => void;
   onOpenCanvas: (insightId: string) => void;
   onAddInsight: () => void;
+  spaceId: string | null;
 }) {
   return (
     <div className="space-y-2">
@@ -703,6 +710,7 @@ function RowView({
           onToggle={() => onToggleExpand(insight.id)}
           onFullscreen={onFullscreen}
           onOpenCanvas={onOpenCanvas}
+          spaceId={spaceId}
         />
       ))}
 
@@ -724,6 +732,7 @@ function KanbanView({
   onFullscreen,
   onOpenCanvas,
   onAddInsight,
+  spaceId,
 }: {
   groupedInsights: { [key: string]: Insight[] };
   tags: Tag[];
@@ -732,6 +741,7 @@ function KanbanView({
   onFullscreen: (insight: Insight) => void;
   onOpenCanvas: (insightId: string) => void;
   onAddInsight: () => void;
+  spaceId: string | null;
 }) {
   return (
     <div className="space-y-4">
@@ -764,6 +774,7 @@ function KanbanView({
                     onToggle={() => onToggleExpand(insight.id)}
                     onFullscreen={onFullscreen}
                     onOpenCanvas={onOpenCanvas}
+                    spaceId={spaceId}
                   />
                 ))}
               </div>
@@ -920,6 +931,7 @@ function InsightRow({
   onToggle,
   onFullscreen,
   onOpenCanvas,
+  spaceId,
 }: {
   insight: Insight;
   tags: Tag[];
@@ -927,6 +939,7 @@ function InsightRow({
   onToggle: () => void;
   onFullscreen: (insight: Insight) => void;
   onOpenCanvas: (insightId: string) => void;
+  spaceId: string | null;
 }) {
   const insightTags = tags.filter((tag) => insight.tags.includes(tag.id));
 
@@ -971,7 +984,7 @@ function InsightRow({
             exit={{ height: 0, opacity: 0 }}
             className="border-t border-[#2D3B4E]"
           >
-            <InsightDetails insight={insight} tags={insightTags} onOpenCanvas={() => onOpenCanvas(insight.id)} />
+            <InsightDetails insight={insight} tags={insightTags} onOpenCanvas={() => onOpenCanvas(insight.id)} spaceId={spaceId} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -987,6 +1000,7 @@ function InsightCard({
   onToggle,
   onFullscreen,
   onOpenCanvas,
+  spaceId,
 }: {
   insight: Insight;
   tags: Tag[];
@@ -994,6 +1008,7 @@ function InsightCard({
   onToggle: () => void;
   onFullscreen: (insight: Insight) => void;
   onOpenCanvas: (insightId: string) => void;
+  spaceId: string | null;
 }) {
   const insightTags = tags.filter((tag) => insight.tags.includes(tag.id));
 
@@ -1016,7 +1031,7 @@ function InsightCard({
             </button>
           </div>
         </div>
-        <InsightDetails insight={insight} tags={insightTags} compact onOpenCanvas={() => onOpenCanvas(insight.id)} />
+        <InsightDetails insight={insight} tags={insightTags} compact onOpenCanvas={() => onOpenCanvas(insight.id)} spaceId={spaceId} />
       </motion.div>
     );
   }
@@ -1065,27 +1080,28 @@ function InsightDetails({
   tags,
   compact = false,
   onOpenCanvas,
+  spaceId,
 }: {
   insight: Insight;
   tags: Tag[];
   compact?: boolean;
   onOpenCanvas?: () => void;
+  spaceId: string | null;
 }) {
   const [newComment, setNewComment] = useState('');
   const [aiChatInput, setAiChatInput] = useState('');
-  const [aiChatMessages, setAiChatMessages] = useState<Array<{
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: Date;
-  }>>([]);
-  const [isAiTyping, setIsAiTyping] = useState(false);
-  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]); // Track selected messages for tagging
-  const [isSelectionMode, setIsSelectionMode] = useState(false); // Track if we're in message selection mode
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const aiChatContainerRef = React.useRef<HTMLDivElement>(null);
 
+  // Use the chat hook for AI messages
+  const { messages: aiChatMessages, sendMessage, isLoading: isAiTyping } = useChat({
+    spaceId,
+    insightId: insight.id,
+  });
+
   // Collapse state for sections
-  const [isMetadataCollapsed, setIsMetadataCollapsed] = useState(true); // Auto-collapsed by default
+  const [isMetadataCollapsed, setIsMetadataCollapsed] = useState(true);
   const [isAiChatCollapsed, setIsAiChatCollapsed] = useState(false);
   const [isTagsCollapsed, setIsTagsCollapsed] = useState(true);
   const [isSourcesCollapsed, setIsSourcesCollapsed] = useState(true);
@@ -1115,33 +1131,6 @@ function InsightDetails({
     setIsMetadataCollapsed(!isMetadataCollapsed);
   };
 
-  // Load chat history from localStorage on mount
-  useEffect(() => {
-    const userId = 'current-user'; // TODO: Replace with actual user ID from auth
-    const storageKey = `insightChat_${userId}_${insight.id}`;
-    const savedChat = localStorage.getItem(storageKey);
-    if (savedChat) {
-      try {
-        const parsed = JSON.parse(savedChat);
-        setAiChatMessages(parsed.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        })));
-      } catch (e) {
-        console.error('Failed to load chat history', e);
-      }
-    }
-  }, [insight.id]);
-
-  // Save chat history to localStorage whenever it changes
-  useEffect(() => {
-    if (aiChatMessages.length > 0) {
-      const userId = 'current-user'; // TODO: Replace with actual user ID from auth
-      const storageKey = `insightChat_${userId}_${insight.id}`;
-      localStorage.setItem(storageKey, JSON.stringify(aiChatMessages));
-    }
-  }, [aiChatMessages, insight.id]);
-
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (aiChatContainerRef.current) {
@@ -1152,38 +1141,19 @@ function InsightDetails({
   const handleSendAiMessage = async () => {
     if (!aiChatInput.trim()) return;
 
-    const userMessage = {
-      id: `msg-${Date.now()}`,
-      role: 'user' as const,
-      content: aiChatInput.trim(),
-      timestamp: new Date(),
-    };
-
-    setAiChatMessages(prev => [...prev, userMessage]);
+    const messageContent = aiChatInput.trim();
     setAiChatInput('');
-    setIsAiTyping(true);
 
     // Open Canvas view when sending first message
     if (onOpenCanvas) {
       onOpenCanvas();
     }
 
-    // TODO: Replace with actual AI API call
-    // Simulate AI response
-    setTimeout(() => {
-      const aiMessage = {
-        id: `msg-${Date.now()}-ai`,
-        role: 'assistant' as const,
-        content: `This is a simulated AI response about "${insight.title}". In production, the AI will analyze the insight's sources, comments, and all space data to provide contextual answers.`,
-        timestamp: new Date(),
-      };
-      setAiChatMessages(prev => [...prev, aiMessage]);
-      setIsAiTyping(false);
-    }, 1500);
+    // Send message using the hook
+    await sendMessage(messageContent);
   };
 
   const handleConvertToComment = (messageContent: string) => {
-    // TODO: Implement actual comment creation
     toast.success('AI response converted to comment!');
   };
 
@@ -1250,10 +1220,9 @@ function InsightDetails({
         
         IMPLEMENTATION NOTES:
         ====================
-        - Current implementation uses simulated AI responses (TODO: connect to actual AI backend)
-        - Chat messages stored as: { id, role: 'user'|'assistant', content, timestamp }
-        - Uses localStorage for demo; production should use database with user_id foreign key
-        - AI API call should send full insight context + space context + chat history
+        - AI chat now connected to real backend via useChat hook (/api/ai/chat)
+        - Chat messages stored in database via /api/chat-threads endpoints
+        - AI API receives full insight context + space context + chat history
         - Consider rate limiting to prevent abuse (e.g., max 50 messages per insight)
         - Consider adding "Clear Chat" button for users to reset conversation
         - Consider adding "Export Chat" to download conversation history

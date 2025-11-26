@@ -29,6 +29,7 @@ import { Badge } from './ui/badge';
 import { Tag, mockTags, TAG_COLORS } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
 import { toast } from 'sonner';
+import { useAuth } from '../hooks/useAuth';
 
 interface LLMProvider {
   id: string;
@@ -103,6 +104,7 @@ export function FloatingCaptureToolbar({
   onViewDashboard,
   forceOpenPopup
 }: FloatingCaptureToolbarProps) {
+  const { user } = useAuth();
   const toolbarRef = useRef<HTMLDivElement>(null);
   
   // Individual popup states
@@ -432,7 +434,7 @@ export function FloatingCaptureToolbar({
                     name,
                     color,
                     createdAt: new Date(),
-                    createdBy: 'Current User', // TODO: Replace with actual user
+                    createdBy: user?.firstName || user?.email || 'Anonymous',
                     spaceId, // Added: Properly scope tag to current space
                   };
                   setTags(prev => [...prev, newTag]);

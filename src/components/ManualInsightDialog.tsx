@@ -5,6 +5,7 @@ import { Insight, Tag, InsightSource, mockTags } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
 import { toast } from 'sonner';
 import { validateTagName, getNextTagColor } from '../utils/tagUtils';
+import { useAuth } from '../hooks/useAuth';
 
 interface ManualInsightDialogProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export function ManualInsightDialog({
   onAddInsight,
   spaceId, // Added: Receive spaceId prop
 }: ManualInsightDialogProps) {
+  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [status, setStatus] = useState<'Open' | 'Archived'>('Open');
@@ -72,7 +74,7 @@ export function ManualInsightDialog({
       summary: summary.trim(),
       status,
       dateCreated: new Date(),
-      createdBy: 'Current User', // TODO: Replace with actual user
+      createdBy: user?.firstName || user?.email || 'Anonymous',
       tags: selectedTags,
       sources,
       comments: [],
@@ -124,7 +126,7 @@ export function ManualInsightDialog({
       name,
       color,
       createdAt: new Date(),
-      createdBy: 'Current User',
+      createdBy: user?.firstName || user?.email || 'Anonymous',
     };
     setTags([...tags, newTag]);
     setSelectedTags([...selectedTags, newTag.id]);

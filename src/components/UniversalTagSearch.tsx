@@ -1,4 +1,6 @@
 // Universal Tag Search - Search across all tagged items in a space
+// TODO: Backend tag-based search endpoint needed for full functionality.
+// Currently uses client-side filtering of insights/sheets from existing endpoints.
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -16,9 +18,135 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Tag } from '../data/insightsData';
-import { TaggedItem, TagSearchFilters } from '../types/database';
+import { TaggedItem, TagSearchFilters, DbTag } from '../types/database';
 import { TagBadge } from './TagBadge';
-import { searchTaggedItems } from '../api/tags';
+import { apiRequest } from '../lib/queryClient';
+
+async function searchTaggedItems(
+  filters: TagSearchFilters,
+  allTags: Tag[]
+): Promise<TaggedItem[]> {
+  if (!filters.spaceId) return [];
+
+  const results: TaggedItem[] = [];
+
+  try {
+    const entityTypesToSearch = filters.entityTypes?.length
+      ? filters.entityTypes
+      : ['insight', 'data_sheet'];
+
+    if (entityTypesToSearch.includes('insight')) {
+      const insightsRes = await apiRequest('GET', `/api/spaces/${filters.spaceId}/insights`);
+      const insights = await insightsRes.json();
+
+      for (const insight of insights) {
+        if (filters.searchQuery) {
+          const query = filters.searchQuery.toLowerCase();
+          const matchesTitle = insight.title?.toLowerCase().includes(query);
+          const matchesSummary = insight.summary?.toLowerCase().includes(query);
+          if (!matchesTitle && !matchesSummary) continue;
+        }
+
+        let entityTags: DbTag[] = [];
+        try {
+          const assocRes = await apiRequest('GET', `/api/tag-associations/insight/${insight.id}`);
+          const associations = await assocRes.json();
+          entityTags = associations
+            .map((assoc: { tagId: string }) => allTags.find(t => t.id === assoc.tagId))
+            .filter(Boolean)
+            .map((tag: Tag) => ({
+              id: tag.id,
+              name: tag.name,
+              color: tag.color,
+              created_at: tag.createdAt || new Date(),
+              created_by: tag.createdBy || 'unknown',
+              space_id: filters.spaceId,
+            }));
+        } catch {
+          entityTags = [];
+        }
+
+        if (filters.tags?.length) {
+          const hasMatchingTag = filters.tags.some(tagId =>
+            entityTags.some(t => t.id === tagId)
+          );
+          if (!hasMatchingTag) continue;
+        }
+
+        results.push({
+          entity_type: 'insight',
+          entity_id: insight.id,
+          entity_name: insight.title || 'Untitled Insight',
+          entity_preview: insight.summary,
+          tags: entityTags,
+          created_at: new Date(insight.createdAt || Date.now()),
+          created_by: insight.createdBy || 'unknown',
+          space_id: filters.spaceId,
+          folder_id: insight.folderId,
+        });
+      }
+    }
+
+    if (entityTypesToSearch.includes('data_sheet')) {
+      const sheetsRes = await apiRequest('GET', `/api/spaces/${filters.spaceId}/sheets`);
+      const sheets = await sheetsRes.json();
+
+      for (const sheet of sheets) {
+        if (filters.searchQuery) {
+          const query = filters.searchQuery.toLowerCase();
+          const matchesName = sheet.name?.toLowerCase().includes(query);
+          if (!matchesName) continue;
+        }
+
+        let entityTags: DbTag[] = [];
+        try {
+          const assocRes = await apiRequest('GET', `/api/tag-associations/data_sheet/${sheet.id}`);
+          const associations = await assocRes.json();
+          entityTags = associations
+            .map((assoc: { tagId: string }) => allTags.find(t => t.id === assoc.tagId))
+            .filter(Boolean)
+            .map((tag: Tag) => ({
+              id: tag.id,
+              name: tag.name,
+              color: tag.color,
+              created_at: tag.createdAt || new Date(),
+              created_by: tag.createdBy || 'unknown',
+              space_id: filters.spaceId,
+            }));
+        } catch {
+          entityTags = [];
+        }
+
+        if (filters.tags?.length) {
+          const hasMatchingTag = filters.tags.some(tagId =>
+            entityTags.some(t => t.id === tagId)
+          );
+          if (!hasMatchingTag) continue;
+        }
+
+        results.push({
+          entity_type: 'data_sheet',
+          entity_id: sheet.id,
+          entity_name: sheet.name || 'Untitled Sheet',
+          entity_preview: sheet.dataSourceType === 'screenshot'
+            ? 'Screenshot capture'
+            : sheet.dataSourceType === 'link'
+            ? 'Saved link'
+            : undefined,
+          tags: entityTags,
+          created_at: new Date(sheet.createdAt || Date.now()),
+          created_by: sheet.createdBy || 'unknown',
+          space_id: filters.spaceId,
+          folder_id: sheet.folderId,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error searching tagged items:', err);
+  }
+
+  return results.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+}
 
 interface UniversalTagSearchProps {
   spaceId: string | null;
@@ -50,7 +178,6 @@ export function UniversalTagSearch({ spaceId, allTags }: UniversalTagSearchProps
     return () => clearTimeout(timer);
   }, [searchQuery, filters]);
 
-  // Perform search
   const performSearch = async () => {
     if (!spaceId) return;
 
@@ -61,7 +188,7 @@ export function UniversalTagSearch({ spaceId, allTags }: UniversalTagSearchProps
         spaceId,
         searchQuery: searchQuery.trim(),
       };
-      const items = await searchTaggedItems(searchFilters);
+      const items = await searchTaggedItems(searchFilters, allTags);
       setResults(items);
     } catch (err) {
       console.error('Search failed:', err);

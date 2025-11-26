@@ -6,17 +6,20 @@ import { TagBadge } from './TagBadge';
 import { toast } from 'sonner';
 import { copyToClipboard } from '../utils/clipboard';
 import { RichTextEditor } from './RichTextEditor';
+import { useChat, ChatMessage } from '../hooks/useChat';
+import { useAuth } from '../hooks/useAuth';
 
 interface CanvasInsightViewProps {
   insights: Insight[];
   openTabs: string[];
   activeTabId: string;
   tags: Tag[];
+  spaceId: string | null;
   onSwitchTab: (insightId: string) => void;
   onCloseTab: (insightId: string) => void;
   onCloseCanvas: () => void;
-  onCreateNewInsight?: (insight: Insight) => void; // NEW: Callback to create new insight from chat
-  onUpdateInsight?: (insightId: string, updates: Partial<Insight>) => void; // NEW: Callback to update insight
+  onCreateNewInsight?: (insight: Insight) => void;
+  onUpdateInsight?: (insightId: string, updates: Partial<Insight>) => void;
 }
 
 export function CanvasInsightView({
@@ -24,25 +27,26 @@ export function CanvasInsightView({
   openTabs,
   activeTabId,
   tags,
+  spaceId,
   onSwitchTab,
   onCloseTab,
   onCloseCanvas,
   onCreateNewInsight,
   onUpdateInsight,
 }: CanvasInsightViewProps) {
+  const { user } = useAuth();
+  
   // Get the active insight
   const activeInsight = insights.find(i => i.id === activeTabId);
   
   // View mode state: 'default', 'slide', or 'doc'
   const [viewMode, setViewMode] = useState<'default' | 'slide' | 'doc'>('default');
   
-  // State to share chat messages between panels
-  const [chatMessages, setChatMessages] = useState<Array<{
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: Date;
-  }>>([]);
+  // Use the chat hook to manage messages
+  const { messages: chatMessages, sendMessage, isLoading: isAiTyping, clearMessages } = useChat({
+    spaceId,
+    insightId: activeTabId,
+  });
 
   // Add keyboard shortcuts: Esc to close canvas, Cmd/Ctrl+K for new chat, Cmd/Ctrl+W to close tab
   useEffect(() => {
@@ -65,7 +69,7 @@ export function CanvasInsightView({
             sources: [],
             comments: [],
             dateCreated: new Date(),
-            createdBy: 'Current User',
+            createdBy: user?.firstName || user?.email || 'Anonymous',
             folderId: '',
           };
           onCreateNewInsight(newInsight);
@@ -97,10 +101,16 @@ export function CanvasInsightView({
     >
       {/* Left Panel: AI Chat (30%) */}
       <div className="w-[30%] h-full border-r border-[#2A2A2A] flex flex-col bg-[#1A1A1A]">
-        <CanvasAIChat insight={activeInsight} onCreateNewInsight={onCreateNewInsight} onUpdateInsight={onUpdateInsight} onRequestNotesUpdate={() => {
-          // Trigger notes update from chat in the right panel
-          // This will be handled by passing chat messages to the card component
-        }} chatMessages={chatMessages} setChatMessages={setChatMessages} />
+        <CanvasAIChat 
+          insight={activeInsight} 
+          spaceId={spaceId}
+          onCreateNewInsight={onCreateNewInsight} 
+          onUpdateInsight={onUpdateInsight} 
+          chatMessages={chatMessages} 
+          sendMessage={sendMessage}
+          isAiTyping={isAiTyping}
+          clearMessages={clearMessages}
+        />
       </div>
 
       {/* Right Panel: Insight Card Canvas (70%) */}
@@ -155,7 +165,7 @@ export function CanvasInsightView({
                       sources: [],
                       comments: [],
                       dateCreated: new Date(),
-                      createdBy: 'Current User',
+                      createdBy: user?.firstName || user?.email || 'Anonymous',
                       folderId: '',
                     };
                     onCreateNewInsight(newInsight);
@@ -211,47 +221,29 @@ export function CanvasInsightView({
 }
 
 // AI Chat Panel Component (Left Side)
-function CanvasAIChat({ insight, onCreateNewInsight, onUpdateInsight, onRequestNotesUpdate, chatMessages, setChatMessages }: { insight: Insight; onCreateNewInsight?: (insight: Insight) => void; onUpdateInsight?: (insightId: string, updates: Partial<Insight>) => void; onRequestNotesUpdate?: () => void; chatMessages: Array<{
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: Date;
-  }>; setChatMessages: React.Dispatch<React.SetStateAction<Array<{
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: Date;
-  }>>> }) {
+interface CanvasAIChatProps {
+  insight: Insight;
+  spaceId: string | null;
+  onCreateNewInsight?: (insight: Insight) => void;
+  onUpdateInsight?: (insightId: string, updates: Partial<Insight>) => void;
+  chatMessages: ChatMessage[];
+  sendMessage: (content: string) => Promise<void>;
+  isAiTyping: boolean;
+  clearMessages: () => void;
+}
+
+function CanvasAIChat({ 
+  insight, 
+  spaceId,
+  onCreateNewInsight, 
+  onUpdateInsight, 
+  chatMessages, 
+  sendMessage,
+  isAiTyping,
+  clearMessages,
+}: CanvasAIChatProps) {
   const [aiChatInput, setAiChatInput] = useState('');
-  const [isAiTyping, setIsAiTyping] = useState(false);
   const aiChatContainerRef = useRef<HTMLDivElement>(null);
-
-  // Load chat history from localStorage on mount
-  useEffect(() => {
-    const userId = 'current-user'; // TODO: Replace with actual user ID
-    const storageKey = `insightChat_${userId}_${insight.id}`;
-    const savedChat = localStorage.getItem(storageKey);
-    if (savedChat) {
-      try {
-        const parsed = JSON.parse(savedChat);
-        setChatMessages(parsed.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        })));
-      } catch (e) {
-        console.error('Failed to load chat history', e);
-      }
-    }
-  }, [insight.id]);
-
-  // Save chat history to localStorage
-  useEffect(() => {
-    if (chatMessages.length > 0) {
-      const userId = 'current-user';
-      const storageKey = `insightChat_${userId}_${insight.id}`;
-      localStorage.setItem(storageKey, JSON.stringify(chatMessages));
-    }
-  }, [chatMessages, insight.id]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -262,21 +254,12 @@ function CanvasAIChat({ insight, onCreateNewInsight, onUpdateInsight, onRequestN
 
   const handleSendAiMessage = async () => {
     if (!aiChatInput.trim()) return;
-
-    const userMessage = {
-      id: `msg-${Date.now()}`,
-      role: 'user' as const,
-      content: aiChatInput.trim(),
-      timestamp: new Date(),
-    };
-
-    setChatMessages(prev => [...prev, userMessage]);
+    
+    const messageContent = aiChatInput.trim();
     
     // Auto-generate title from first message
     if (chatMessages.length === 0 && onUpdateInsight) {
-      const firstMessage = aiChatInput.trim();
-      // Generate a smart title from the message
-      let autoTitle = firstMessage;
+      let autoTitle = messageContent;
       
       // Truncate if too long
       if (autoTitle.length > 50) {
@@ -291,67 +274,15 @@ function CanvasAIChat({ insight, onCreateNewInsight, onUpdateInsight, onRequestN
     }
     
     setAiChatInput('');
-    setIsAiTyping(true);
-
-    // TODO: Replace with actual AI API call
-    setTimeout(() => {
-      const aiMessage = {
-        id: `msg-${Date.now()}-ai`,
-        role: 'assistant' as const,
-        content: `This is a simulated AI response about "${insight.title}". In production, the AI will analyze the insight's sources, comments, and all space data to provide contextual answers.`,
-        timestamp: new Date(),
-      };
-      setChatMessages(prev => [...prev, aiMessage]);
-      setIsAiTyping(false);
-      
-      // Trigger notes update in the right panel
-      if (onRequestNotesUpdate) {
-        onRequestNotesUpdate();
-      }
-    }, 1500);
+    
+    // Send message using the hook
+    await sendMessage(messageContent);
   };
   
   // Copy message to clipboard
   const handleCopyMessage = (content: string) => {
     copyToClipboard(content);
     toast.success('Message copied to clipboard!');
-  };
-  
-  // Delete message
-  const handleDeleteMessage = (messageId: string) => {
-    setChatMessages(prev => prev.filter(msg => msg.id !== messageId));
-    toast.success('Message deleted');
-  };
-  
-  // Edit user message
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editingContent, setEditingContent] = useState('');
-  
-  const handleStartEdit = (messageId: string, content: string) => {
-    setEditingMessageId(messageId);
-    setEditingContent(content);
-  };
-  
-  const handleSaveEdit = (messageId: string) => {
-    if (!editingContent.trim()) {
-      toast.error('Message cannot be empty');
-      return;
-    }
-    
-    setChatMessages(prev => prev.map(msg => 
-      msg.id === messageId 
-        ? { ...msg, content: editingContent.trim() }
-        : msg
-    ));
-    
-    setEditingMessageId(null);
-    setEditingContent('');
-    toast.success('Message updated');
-  };
-  
-  const handleCancelEdit = () => {
-    setEditingMessageId(null);
-    setEditingContent('');
   };
   
   // Format relative time
@@ -370,10 +301,7 @@ function CanvasAIChat({ insight, onCreateNewInsight, onUpdateInsight, onRequestN
   // Clear all chat history
   const handleClearChat = () => {
     if (confirm('Are you sure you want to clear all chat history? This cannot be undone.')) {
-      setChatMessages([]);
-      const userId = 'current-user';
-      const storageKey = `insightChat_${userId}_${insight.id}`;
-      localStorage.removeItem(storageKey);
+      clearMessages();
       toast.success('Chat history cleared');
     }
   };
@@ -456,59 +384,23 @@ function CanvasAIChat({ insight, onCreateNewInsight, onUpdateInsight, onRequestN
             className={`flex gap-3 group ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`relative max-w-[85%] rounded-lg p-3 transition-all ${"bg-[#1A1F2E] text-[#E5E7EB]"}`}
+              className={`relative max-w-[85%] rounded-lg p-3 transition-all bg-[#1A1F2E] text-[#E5E7EB]`}
             >
-              {editingMessageId === message.id ? (
-                <div className="space-y-2">
-                  <textarea
-                    value={editingContent}
-                    onChange={(e) => setEditingContent(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSaveEdit(message.id);
-                      }
-                      if (e.key === 'Escape') {
-                        handleCancelEdit();
-                      }
-                    }}
-                    className="w-full min-h-[60px] px-3 py-2 bg-[#0A0E1A] border border-[#2D3B4E] text-white placeholder:text-[#6B7280] outline-none focus:border-[#FF6B35] transition-colors rounded resize-none text-sm"
-                    autoFocus
-                  />
-                  <div className="flex items-center gap-2 justify-end">
-                    <button
-                      onClick={handleCancelEdit}
-                      className="px-3 py-1 text-xs text-[#6B7280] hover:text-white transition-colors"
-                    >
-                      Cancel (Esc)
-                    </button>
-                    <button
-                      onClick={() => handleSaveEdit(message.id)}
-                      className="px-3 py-1 text-xs bg-[#FF6B35] text-white rounded hover:bg-[#FFA07A] transition-colors"
-                    >
-                      Save (Enter)
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  <p className="text-xs opacity-60 mt-1">
-                    {formatRelativeTime(message.timestamp)}
-                  </p>
-                  
-                  {/* Hover Action Buttons */}
-                  <div className="absolute -top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-[#1A1F2E] border border-[#2D3B4E] rounded px-1 py-1">
-                    <button
-                      onClick={() => handleCopyMessage(message.content)}
-                      className="p-1 text-[#6B7280] hover:text-white transition-colors"
-                      title="Copy message"
-                    >
-                      <Copy className="w-3 h-3" />
-                    </button>
-                  </div>
-                </>
-              )}
+              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              <p className="text-xs opacity-60 mt-1">
+                {formatRelativeTime(message.timestamp)}
+              </p>
+              
+              {/* Hover Action Buttons */}
+              <div className="absolute -top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-[#1A1F2E] border border-[#2D3B4E] rounded px-1 py-1">
+                <button
+                  onClick={() => handleCopyMessage(message.content)}
+                  className="p-1 text-[#6B7280] hover:text-white transition-colors"
+                  title="Copy message"
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -547,12 +439,7 @@ function CanvasAIChat({ insight, onCreateNewInsight, onUpdateInsight, onRequestN
 }
 
 // Insight Card Canvas Component (Right Side)
-function CanvasInsightCard({ insight, tags, onUpdateInsight, insightId, chatMessages, viewMode }: { insight: Insight; tags: Tag[]; onUpdateInsight?: (insightId: string, updates: Partial<Insight>) => void; insightId: string; chatMessages: Array<{
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: Date;
-  }>; viewMode: 'default' | 'slide' | 'doc' }) {
+function CanvasInsightCard({ insight, tags, onUpdateInsight, insightId, chatMessages, viewMode }: { insight: Insight; tags: Tag[]; onUpdateInsight?: (insightId: string, updates: Partial<Insight>) => void; insightId: string; chatMessages: ChatMessage[]; viewMode: 'default' | 'slide' | 'doc' }) {
   const [isDetailsCollapsed, setIsDetailsCollapsed] = useState(true); // Collapsed by default in canvas mode
   const [notes, setNotes] = useState(insight.summary);
   const [isEditingNotes, setIsEditingNotes] = useState(false);

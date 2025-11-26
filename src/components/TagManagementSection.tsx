@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Tag as TagIcon, Plus, Edit2, Trash2, Check, X } from 'lucide-react';
 import { Tag, TAG_COLORS } from '../data/insightsData';
 import { toast } from 'sonner';
+import { useAuth } from '../hooks/useAuth';
 
 interface TagManagementSectionProps {
   tags: Tag[];
@@ -14,6 +15,7 @@ export function TagManagementSection({
   tags, 
   onTagsChange
 }: TagManagementSectionProps) {
+  const { user } = useAuth();
   const [showNewTagForm, setShowNewTagForm] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export function TagManagementSection({
       name: newTagName.trim(),
       color,
       createdAt: new Date(),
-      createdBy: 'Current User', // TODO: Get from auth
+      createdBy: user?.firstName || user?.email || 'Anonymous',
       spaceId: '', // Will be set by parent
     };
     

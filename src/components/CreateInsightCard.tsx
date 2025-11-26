@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Tag, Insight, InsightSource } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
 import { toast } from 'sonner';
+import { useAuth } from '../hooks/useAuth';
 
 interface Message {
   id: string;
@@ -35,6 +36,7 @@ export function CreateInsightCard({
   onCreateTag,
   onSave,
 }: CreateInsightCardProps) {
+  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [status, setStatus] = useState<'Open' | 'Archived'>('Open');
@@ -88,7 +90,7 @@ export function CreateInsightCard({
       summary: summary.trim(),
       status,
       dateCreated: new Date(),
-      createdBy: 'Current User', // TODO: Replace with actual user
+      createdBy: user?.firstName || user?.email || 'Anonymous',
       tags: selectedTagIds,
       sources,
       comments: [],
