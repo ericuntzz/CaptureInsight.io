@@ -248,10 +248,13 @@ export function Spreadsheet({
 
   // Update quick copy position when selection changes - DISABLED
   useEffect(() => {
-    if (false) { // Disabled - no cell select mode
+    if (selection && scrollRef.current) {
       // Find the table element
       const table = scrollRef.current.querySelector('table');
-      if (!table) return;
+      if (!table) {
+        setQuickCopyPosition(null);
+        return;
+      }
       
       const maxRow = Math.max(selection.startRow, selection.endRow);
       const maxCol = Math.max(selection.startCol, selection.endCol);
@@ -732,7 +735,7 @@ export function Spreadsheet({
             
             {/* Add Data Capture Button */}
             <button
-              onClick={() => onAddDataCapture?.(spaceId, folderId)}
+              onClick={() => spaceId && folderId && onAddDataCapture?.(spaceId, folderId)}
               className="ml-auto mr-2 p-2 hover:bg-[#FF6B35] rounded-lg transition-all text-[#FF6B35] hover:text-white"
               title="Add Data Capture"
             >
@@ -999,7 +1002,7 @@ export function Spreadsheet({
       )}
 
       {/* Quick Copy Popup - DISABLED */}
-      {false && (
+      {false && quickCopyPosition && (
         <button
           onClick={() => {
             handleCopy();
@@ -1007,8 +1010,8 @@ export function Spreadsheet({
           }}
           className="fixed bg-[#FF6B35] hover:bg-[#ff8558] text-white text-xs px-3 py-1.5 rounded-md shadow-lg flex items-center gap-1.5 z-50 transition-all hover:scale-105"
           style={{ 
-            left: `${quickCopyPosition.x}px`, 
-            top: `${quickCopyPosition.y}px`,
+            left: `${quickCopyPosition?.x ?? 0}px`, 
+            top: `${quickCopyPosition?.y ?? 0}px`,
             transform: 'translate(-100%, -100%)'
           }}
         >

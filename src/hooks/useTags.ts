@@ -69,3 +69,36 @@ export function useDeleteTag() {
     },
   });
 }
+
+interface TagUsageStats {
+  insightsCount: number;
+  dataSheetsCount: number;
+  chatMessagesCount: number;
+  changeLogsCount: number;
+  totalCount: number;
+}
+
+export function useTagUsage(tagId: string, spaceId: string | null) {
+  const { data, isLoading } = useQuery<TagUsageStats>({
+    queryKey: ["/api/tags/" + tagId + "/usage", spaceId],
+    enabled: !!tagId && !!spaceId,
+    placeholderData: {
+      insightsCount: 0,
+      dataSheetsCount: 0,
+      chatMessagesCount: 0,
+      changeLogsCount: 0,
+      totalCount: 0,
+    },
+  });
+
+  return {
+    usage: data ?? {
+      insightsCount: 0,
+      dataSheetsCount: 0,
+      chatMessagesCount: 0,
+      changeLogsCount: 0,
+      totalCount: 0,
+    },
+    isLoading,
+  };
+}

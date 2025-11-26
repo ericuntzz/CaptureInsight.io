@@ -388,7 +388,7 @@ export function ChangeLogsView({ spaces, onCaptureNewAsset, currentSpaceId, onUp
               onAddTag={(tagName, color) => {
                 if (!currentSpace || !currentSpaceId || !onUpdateTags) return;
                 const newTag = { id: `tag-${Date.now()}`, name: tagName, color, spaceId: currentSpaceId };
-                const updatedTags = [...currentSpace.tags, newTag];
+                const updatedTags = [...(currentSpace.tags || []), newTag];
                 onUpdateTags(currentSpaceId, updatedTags);
                 toast.success(`Tag "${tagName}" created!`);
               }}

@@ -92,6 +92,7 @@ export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseS
       content,
       author: 'Current User', // TODO: Replace with actual user
       createdAt: new Date(),
+      mentions: [],
       parentId,
     };
 
@@ -831,12 +832,22 @@ function InsightRow({
 }) {
   const insightTags = tags.filter((tag) => insight.tags.includes(tag.id));
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onToggle();
+    }
+  };
+
   return (
     <div className="bg-[#1A1F2E] rounded-lg overflow-hidden">
       {/* Collapsed View */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#252B3D] transition-colors text-left"
+        onKeyDown={handleKeyDown}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#252B3D] transition-colors text-left cursor-pointer"
       >
         <div className="flex-1 flex items-center gap-4">
           <div className={`w-2 h-2 rounded-full ${insight.status === 'Open' ? 'bg-[#FF6B35]' : 'bg-[#4ECDC4]'}`} />
@@ -851,7 +862,7 @@ function InsightRow({
           </div>
         </div>
         <InsightActionButtons insight={insight} onFullscreen={() => onFullscreen(insight)} onOpenCanvas={() => onOpenCanvas(insight.id)} />
-      </button>
+      </div>
 
       {/* Expanded View */}
       <AnimatePresence>
@@ -912,10 +923,20 @@ function InsightCard({
     );
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onToggle();
+    }
+  };
+
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onToggle}
-      className="w-full bg-[#0A0E1A] rounded-lg p-3 text-left hover:border-[#FF6B35] transition-colors border border-transparent"
+      onKeyDown={handleKeyDown}
+      className="w-full bg-[#0A0E1A] rounded-lg p-3 text-left hover:border-[#FF6B35] transition-colors border border-transparent cursor-pointer"
     >
       <div className="flex items-start justify-between mb-2">
         <h4 className="text-white text-sm">{insight.title}</h4>
@@ -936,7 +957,7 @@ function InsightCard({
           <TagBadge key={tag.id} tag={tag} size="sm" interactive={false} />
         ))}
       </div>
-    </button>
+    </div>
   );
 }
 

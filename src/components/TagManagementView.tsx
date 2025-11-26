@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Tag } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
 import { TagDeleteConfirmDialog } from './TagDeleteConfirmDialog';
-import { useTags, useTagUsage } from '../hooks/useTags';
+import { useTags, useCreateTag, useUpdateTag, useDeleteTag, useTagUsage } from '../hooks/useTags';
 import { getTagUsageStats } from '../utils/tagUtils';
 import { toast } from 'sonner';
 
@@ -16,7 +16,10 @@ interface TagManagementViewProps {
 }
 
 export function TagManagementView({ spaceId, spaceName }: TagManagementViewProps) {
-  const { tags, createTag, updateTag, deleteTag } = useTags(spaceId);
+  const { data: tags = [] } = useTags(spaceId);
+  const createTagMutation = useCreateTag();
+  const updateTagMutation = useUpdateTag();
+  const deleteTagMutation = useDeleteTag();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<Tag | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -29,7 +32,7 @@ export function TagManagementView({ spaceId, spaceName }: TagManagementViewProps
 
   // Handle tag edit
   const handleEditTag = (tagId: string, newName: string, newColor: string) => {
-    updateTag(tagId, { name: newName, color: newColor });
+    updateTagMutation.mutate({ id: tagId, data: { name: newName, color: newColor } });
   };
 
   // Handle tag delete
@@ -40,7 +43,7 @@ export function TagManagementView({ spaceId, spaceName }: TagManagementViewProps
 
   const confirmDelete = () => {
     if (tagToDelete) {
-      deleteTag(tagToDelete.id);
+      deleteTagMutation.mutate(tagToDelete.id);
       setShowDeleteConfirm(false);
       setTagToDelete(null);
       if (selectedTag?.id === tagToDelete.id) {
@@ -118,8 +121,8 @@ export function TagManagementView({ spaceId, spaceName }: TagManagementViewProps
           <button
             onClick={() => {
               const name = prompt('Enter tag name:');
-              if (name) {
-                createTag(name);
+              if (name && spaceId) {
+                createTagMutation.mutate({ spaceId, name, color: '#FF6B35' });
               }
             }}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#FF6B35] text-white rounded-lg hover:bg-[#FFA07A] transition-colors"
