@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Tag as TagIcon, Users, Calendar, ChevronDown, Grid, List, Columns, Settings2, X, MessageSquare, Send, ExternalLink, CheckCircle, Clock, Archive, TrendingUp, CheckCircle2, FolderOpen, User, LayoutGrid, Sparkles, Paperclip, Link, Maximize, MoreVertical, Copy, Merge, Share2, Download, Trash2 } from 'lucide-react';
+import { Plus, Tag as TagIcon, Users, Calendar, ChevronDown, Grid, List, Columns, Settings2, X, MessageSquare, Send, ExternalLink, CheckCircle, Clock, Archive, TrendingUp, CheckCircle2, FolderOpen, User, LayoutGrid, Sparkles, Paperclip, Link, Maximize, MoreVertical, Copy, Merge, Share2, Download, Trash2, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ManualInsightDialog } from './ManualInsightDialog';
 import { TagDeleteConfirmDialog } from './TagDeleteConfirmDialog';
 import { CanvasInsightView } from './CanvasInsightView';
 import { AddInsightModal } from './AddInsightModal';
-import { getTagUsageStats, cascadeDeleteTag } from '../utils/tagUtils';
+import { getTagUsageStats } from '../utils/tagUtils';
 import { Tag } from '../data/insightsData';
-import { Insight, mockInsights, mockTeamMembers } from '../data/insightsData';
+import type { Insight } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
 import { toast } from 'sonner';
+import { useInsights, useUpdateInsight, useCreateInsightComment, useCreateInsight } from '../hooks/useInsights';
+import { useTags, useCreateTag } from '../hooks/useTags';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,13 +24,13 @@ interface InsightsViewProps {
   spaces: any[];
   currentSpaceId: string | null;
   onUpdateTags?: (spaceId: string, tags: any[]) => void;
-  onCollapseSidebar?: (collapsed: boolean) => void; // NEW: Control sidebar from InsightsView
+  onCollapseSidebar?: (collapsed: boolean) => void;
 }
 
 type ViewStyle = 'row' | 'kanban';
 type KanbanColumn = 'tag' | 'status' | 'folder' | 'date';
 
-export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseSidebar }: InsightsViewProps) {
+export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: InsightsViewProps) {
   const [viewStyle, setViewStyle] = useState<ViewStyle>('row');
   const [kanbanColumn, setKanbanColumn] = useState<KanbanColumn>('status');
   const [selectedFilters, setSelectedFilters] = useState({
@@ -39,7 +41,6 @@ export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseS
     status: [] as ('Open' | 'Archived')[],
   });
   const [expandedInsightId, setExpandedInsightId] = useState<string | null>(null);
-  const [insights, setInsights] = useState<Insight[]>(mockInsights);
   const [showManualInsightDialog, setShowManualInsightDialog] = useState(false);
   const [showTagDeleteConfirmDialog, setShowTagDeleteConfirmDialog] = useState(false);
   const [tagToDelete, setTagToDelete] = useState<Tag | null>(null);
@@ -54,8 +55,33 @@ export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseS
   // Get current space
   const currentSpace = spaces.find((s) => s.id === currentSpaceId);
   
-  // ⚠️ NEW: Pull tags from current space instead of local state
-  const tags = currentSpace?.tags || [];
+  // Fetch insights from API with date conversion
+  const { data: rawInsights = [], isLoading: insightsLoading } = useInsights(currentSpaceId);
+  const insights: Insight[] = useMemo(() => {
+    return rawInsights.map((insight: any) => ({
+      ...insight,
+      dateCreated: insight.dateCreated instanceof Date ? insight.dateCreated : new Date(insight.dateCreated),
+      comments: (insight.comments || []).map((comment: any) => ({
+        ...comment,
+        createdAt: comment.createdAt instanceof Date ? comment.createdAt : new Date(comment.createdAt),
+      })),
+    }));
+  }, [rawInsights]);
+
+  // Fetch tags from API with date conversion
+  const { data: rawTags = [], isLoading: tagsLoading } = useTags(currentSpaceId);
+  const tags: Tag[] = useMemo(() => {
+    return rawTags.map((tag: any) => ({
+      ...tag,
+      createdAt: tag.createdAt instanceof Date ? tag.createdAt : new Date(tag.createdAt),
+    }));
+  }, [rawTags]);
+
+  // Mutation hooks
+  const updateInsightMutation = useUpdateInsight();
+  const createCommentMutation = useCreateInsightComment();
+  const createTagMutation = useCreateTag();
+  const createInsightMutation = useCreateInsight();
 
   // ⚠️ NEW: Auto-expand last worked insight on mount
   useEffect(() => {
@@ -75,35 +101,34 @@ export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseS
     }
   }, [currentSpaceId]); // Only run on mount or when space changes
 
-  // Handle status change
+  // Handle status change using mutation
   const handleStatusChange = (insightId: string, newStatus: 'Open' | 'Archived') => {
-    setInsights(prev =>
-      prev.map(insight =>
-        insight.id === insightId ? { ...insight, status: newStatus } : insight
-      )
+    updateInsightMutation.mutate(
+      { id: insightId, data: { status: newStatus } },
+      {
+        onSuccess: () => {
+          toast.success(`Insight ${newStatus === 'Archived' ? 'archived' : 'reopened'}!`);
+        },
+        onError: () => {
+          toast.error('Failed to update insight status');
+        },
+      }
     );
-    toast.success(`Insight ${newStatus === 'Archived' ? 'archived' : 'reopened'}!`);
   };
 
-  // Handle comment submission
+  // Handle comment submission using mutation
   const handleAddComment = (insightId: string, content: string, parentId?: string) => {
-    const newComment = {
-      id: `comment-${Date.now()}`,
-      content,
-      author: 'Current User', // TODO: Replace with actual user
-      createdAt: new Date(),
-      mentions: [],
-      parentId,
-    };
-
-    setInsights(prev =>
-      prev.map(insight =>
-        insight.id === insightId
-          ? { ...insight, comments: [...insight.comments, newComment] }
-          : insight
-      )
+    createCommentMutation.mutate(
+      { insightId, content, parentId },
+      {
+        onSuccess: () => {
+          toast.success('Comment added!');
+        },
+        onError: () => {
+          toast.error('Failed to add comment');
+        },
+      }
     );
-    toast.success('Comment added!');
   };
 
   // Filter insights
@@ -252,48 +277,61 @@ export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseS
 
   // Handle "Upload Data" from modal
   const handleUploadData = () => {
-    // Create a new insight card
-    const newInsight: Insight = {
-      id: `insight-${Date.now()}`,
-      title: 'Untitled Insight',
-      summary: 'Click to add notes or capture data...',
-      status: 'Open',
-      tags: [],
-      sources: [],
-      comments: [],
-      dateCreated: new Date(),
-      createdBy: 'Current User',
-      folderId: '',
-    };
-    setInsights(prev => [newInsight, ...prev]);
+    if (!currentSpaceId) {
+      toast.error('Please select a space first');
+      return;
+    }
     
-    // TODO: Open floating capture toolbar
-    // NOTE FOR REPLIT AGENT: When implementing the floating capture toolbar,
-    // link all captured data to newInsight.id so the data is associated with this insight card
-    toast.success('New insight created! Opening capture toolbar...');
-    toast.info('Floating capture toolbar will open here (to be implemented)');
+    createInsightMutation.mutate(
+      {
+        spaceId: currentSpaceId,
+        data: {
+          title: 'Untitled Insight',
+          summary: 'Click to add notes or capture data...',
+          status: 'Open',
+          tags: [],
+        },
+      },
+      {
+        onSuccess: () => {
+          // TODO: Open floating capture toolbar
+          toast.success('New insight created! Opening capture toolbar...');
+          toast.info('Floating capture toolbar will open here (to be implemented)');
+        },
+        onError: () => {
+          toast.error('Failed to create insight');
+        },
+      }
+    );
   };
 
   // Handle "Create Blank Card" from modal
   const handleCreateBlank = () => {
-    // Create a new blank insight card
-    const newInsight: Insight = {
-      id: `insight-${Date.now()}`,
-      title: 'Untitled Insight',
-      summary: '',
-      status: 'Open',
-      tags: [],
-      sources: [],
-      comments: [],
-      dateCreated: new Date(),
-      createdBy: 'Current User',
-      folderId: '',
-    };
-    setInsights(prev => [newInsight, ...prev]);
+    if (!currentSpaceId) {
+      toast.error('Please select a space first');
+      return;
+    }
     
-    // Open in canvas mode
-    handleOpenCanvas(newInsight.id);
-    toast.success('New blank insight created!');
+    createInsightMutation.mutate(
+      {
+        spaceId: currentSpaceId,
+        data: {
+          title: 'Untitled Insight',
+          summary: '',
+          status: 'Open',
+          tags: [],
+        },
+      },
+      {
+        onSuccess: (newInsight) => {
+          handleOpenCanvas(newInsight.id);
+          toast.success('New blank insight created!');
+        },
+        onError: () => {
+          toast.error('Failed to create insight');
+        },
+      }
+    );
   };
 
   // ⚠️ NEW: If canvas mode is active, render Canvas view instead of list view
@@ -308,18 +346,54 @@ export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseS
         onCloseTab={handleCloseCanvasTab}
         onCloseCanvas={handleCloseCanvas}
         onCreateNewInsight={(newInsight) => {
-          setInsights(prev => [newInsight, ...prev]);
-          handleOpenCanvas(newInsight.id);
-          toast.success('New insight created from chat!');
+          if (!currentSpaceId) {
+            toast.error('Please select a space first');
+            return;
+          }
+          createInsightMutation.mutate(
+            {
+              spaceId: currentSpaceId,
+              data: {
+                title: newInsight.title,
+                summary: newInsight.summary,
+                status: newInsight.status,
+                tags: newInsight.tags,
+              },
+            },
+            {
+              onSuccess: (createdInsight) => {
+                handleOpenCanvas(createdInsight.id);
+                toast.success('New insight created from chat!');
+              },
+              onError: () => {
+                toast.error('Failed to create insight');
+              },
+            }
+          );
         }}
         onUpdateInsight={(insightId, updates) => {
-          setInsights(prev => prev.map(insight => 
-            insight.id === insightId 
-              ? { ...insight, ...updates }
-              : insight
-          ));
+          updateInsightMutation.mutate(
+            { id: insightId, data: updates },
+            {
+              onError: () => {
+                toast.error('Failed to update insight');
+              },
+            }
+          );
         }}
       />
+    );
+  }
+
+  // Show loading indicator while data is loading
+  if (insightsLoading || tagsLoading) {
+    return (
+      <div className="h-full bg-[#0A0E1A] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" />
+          <p className="text-[#9CA3AF]">Loading insights...</p>
+        </div>
+      </div>
     );
   }
 
@@ -376,11 +450,18 @@ export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseS
                 selectedIds={selectedFilters.tags}
                 onChange={(ids) => setSelectedFilters({ ...selectedFilters, tags: ids })}
                 onAddTag={(tagName, color) => {
-                  if (!currentSpace || !currentSpaceId || !onUpdateTags) return;
-                  const newTag = { id: `tag-${Date.now()}`, name: tagName, color, spaceId: currentSpaceId };
-                  const updatedTags = [...currentSpace.tags, newTag];
-                  onUpdateTags(currentSpaceId, updatedTags);
-                  toast.success(`Tag "${tagName}" created!`);
+                  if (!currentSpaceId) return;
+                  createTagMutation.mutate(
+                    { spaceId: currentSpaceId, name: tagName, color },
+                    {
+                      onSuccess: () => {
+                        toast.success(`Tag "${tagName}" created!`);
+                      },
+                      onError: () => {
+                        toast.error('Failed to create tag');
+                      },
+                    }
+                  );
                 }}
                 showAddTag={true}
               />
@@ -396,11 +477,11 @@ export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseS
                 />
               )}
 
-              {/* People Filter */}
+              {/* People Filter - derived from insights data */}
               <FilterDropdown
                 label="People"
                 icon={User}
-                items={mockTeamMembers.map((m) => ({ id: m.name, name: m.name }))}
+                items={Array.from(new Set(insights.map(i => i.createdBy))).filter(Boolean).map((name) => ({ id: name, name: name }))}
                 selectedIds={selectedFilters.people}
                 onChange={(ids) => setSelectedFilters({ ...selectedFilters, people: ids })}
               />
@@ -485,9 +566,30 @@ export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseS
         onClose={() => setShowManualInsightDialog(false)}
         spaceId={currentSpaceId}
         onAddInsight={(newInsight) => {
-          setInsights([...insights, newInsight]);
-          toast.success('Insight added successfully!');
-          setShowManualInsightDialog(false);
+          if (!currentSpaceId) {
+            toast.error('Please select a space first');
+            return;
+          }
+          createInsightMutation.mutate(
+            {
+              spaceId: currentSpaceId,
+              data: {
+                title: newInsight.title,
+                summary: newInsight.summary,
+                status: newInsight.status,
+                tags: newInsight.tags,
+              },
+            },
+            {
+              onSuccess: () => {
+                toast.success('Insight added successfully!');
+                setShowManualInsightDialog(false);
+              },
+              onError: () => {
+                toast.error('Failed to add insight');
+              },
+            }
+          );
         }}
       />
 
@@ -498,11 +600,7 @@ export function InsightsView({ spaces, currentSpaceId, onUpdateTags, onCollapseS
         usageStats={tagToDelete ? getTagUsageStats(tagToDelete.id, insights) : { insightsCount: 0, dataSheetsCount: 0, chatMessagesCount: 0, changeLogsCount: 0, totalCount: 0 }}
         onConfirm={() => {
           if (tagToDelete) {
-            // Cascade delete: remove tag from all insights
-            cascadeDeleteTag(tagToDelete.id, { insights });
-            setInsights([...insights]); // Trigger re-render
-            // Note: Tag deletion from space must be done through Space Settings
-            toast.info('Tag removed from insights. To delete globally, use Space Settings.');
+            toast.info('Tag removal from insights should be done through Space Settings.');
             setShowTagDeleteConfirmDialog(false);
             setTagToDelete(null);
           }
