@@ -227,5 +227,73 @@ npm run dev:extension      # Watch mode for development
 - Cookie-based auth via `credentials: 'include'` in fetch requests
 - PNG dimension parsing for accurate metadata
 
+## Security Implementation (Phase 5 - Complete)
+
+### Multi-Tenant Data Isolation
+CaptureInsight implements comprehensive security to ensure users can only access their own data:
+
+#### Space-Level Authorization
+- `requireSpaceOwner` middleware validates ownership for all space-scoped endpoints
+- Applied to 15+ endpoints: folders, sheets, tags, insights operations
+- Checks: space.ownerId === req.user.id
+
+#### Entity-Level Authorization
+- `requireEntityOwner` middleware factory for id-based routes
+- Protects: `/api/folders/:id`, `/api/sheets/:id`, `/api/tags/:id`, `/api/insights/:id`
+- Loads entity, resolves spaceId, validates ownership
+- Returns 404 for non-existent, 403 for unauthorized access
+
+### PII Filtering for AI
+- **Module**: `server/ai/piiFilter.ts`
+- **14 Pattern Types**: email, phone, SSN, credit cards, API keys, passwords, IPs, names, addresses, bank accounts, dates, URLs, passport numbers, driver licenses
+- **Configurable per-space** via `aiSettings.piiFiltering` (boolean)
+- **Integrated into**: analyzeCapture, chat functions
+- **API Endpoint**: `GET /api/ai/pii-patterns` - List available filter patterns
+
+### AI Consent Tracking
+- **Schema**: `aiSettings` JSONB field in spaces table
+- **Settings**: 
+  - `enableAI` (boolean) - Master toggle for AI features
+  - `piiFiltering` (boolean) - Enable/disable PII scrubbing
+  - `allowedPatterns` (string[]) - Specific patterns to filter
+- **Endpoints**: 
+  - `PUT /api/spaces/:id/ai-settings` - Update AI consent settings
+  - `GET /api/spaces/:id/ai-settings` - Retrieve current settings
+
+## Frontend-Backend Integration (Phase 6 - Complete)
+
+### Connected Components
+All major frontend components now use real backend APIs instead of mock data:
+
+#### InsightsView
+- Uses `useInsights(spaceId)` hook for insights data
+- Uses `useTags(spaceId)` hook for tag data
+- Mutations: `useUpdateInsight`, `useCreateInsightComment`, `useCreateInsight`
+- Date normalization: API dates (strings) converted to Date objects
+
+#### AIAssistantPanel
+- Uses `useTags(spaceId)` for real tag data
+- Uses `useCreateTag` mutation for tag creation
+- Chat connected to `/api/ai/chat` with RAG support
+
+#### App.tsx (Main Application)
+- Removed 200+ lines of `initialSpaces` mock data
+- Uses `useSpaces()` hook with React Query
+- All CRUD operations via API mutations
+- No more localStorage for spaces persistence
+
+#### Spreadsheet
+- Uses `fetch('/api/sheets/:id')` for sheet data
+- Removed `marketingData` mock dependency
+- Loading and empty state handling
+
+### React Query Hooks
+Located in `src/hooks/`:
+- `useSpaces.ts` - Spaces CRUD, folders, sheets
+- `useInsights.ts` - Insights CRUD, comments, sources
+- `useTags.ts` - Tags CRUD, usage stats
+- `useAuth.ts` - Authentication state
+
 ## Future Phases
-- **Phase 5**: Desktop application (Electron/Tauri) for system-wide floating toolbar
+- **Phase 7**: Desktop application (Electron/Tauri) for system-wide floating toolbar
+- **Phase 8**: Advanced analytics and reporting features
