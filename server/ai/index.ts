@@ -23,6 +23,8 @@ import {
   type BatchEmbeddingResult,
 } from "./openai";
 
+import { storage } from "../storage";
+
 export {
   analyzeScreenshot,
   analyzeData,
@@ -113,8 +115,11 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][] | 
 
 export interface SimilarityResult {
   id: string;
+  entityType: string;
+  entityId: string;
   score: number;
-  content?: any;
+  content?: string | null;
+  metadata?: any;
 }
 
 export async function searchSimilar(
@@ -127,8 +132,32 @@ export async function searchSimilar(
     return [];
   }
 
-  console.log(`Placeholder: searchSimilar called for space ${spaceId} with limit ${limit}`);
-  return [];
+  try {
+    const embedding = await createEmbedding(query);
+    
+    if (!embedding || !embedding.embedding) {
+      console.error("Failed to generate embedding for query");
+      return [];
+    }
+
+    const results = await storage.searchSimilarDocuments(
+      embedding.embedding,
+      spaceId,
+      limit
+    );
+
+    return results.map((doc) => ({
+      id: doc.id,
+      entityType: doc.entityType,
+      entityId: doc.entityId,
+      score: doc.similarity,
+      content: doc.content,
+      metadata: doc.metadata,
+    }));
+  } catch (error) {
+    console.error("Error in searchSimilar:", error);
+    return [];
+  }
 }
 
 export function getAIStatus(): {

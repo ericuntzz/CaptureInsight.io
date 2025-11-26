@@ -7,7 +7,20 @@ import {
   varchar,
   text,
   integer,
+  customType,
 } from "drizzle-orm/pg-core";
+
+const vector = customType<{ data: number[]; driverData: string }>({
+  dataType() {
+    return 'vector(1536)';
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(',')}]`;
+  },
+  fromDriver(value: string): number[] {
+    return value.slice(1, -1).split(',').map(Number);
+  },
+});
 
 // Session storage table.
 // (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
@@ -302,17 +315,20 @@ export const changeLogsRelations = relations(changeLogs, ({ one }) => ({
   }),
 }));
 
-// Document embeddings table (for future pgvector support)
-// Note: When pgvector extension is enabled, change embeddingData to vector type
+// Document embeddings table with pgvector support for semantic search
 export const documentEmbeddings = pgTable("document_embeddings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   entityType: varchar("entity_type").notNull(),
   entityId: varchar("entity_id").notNull(),
   content: text("content"),
-  embeddingData: text("embedding_data"), // Store as JSON string until pgvector is enabled
+  embedding: vector("embedding"),
   metadata: jsonb("metadata"),
+  spaceId: varchar("space_id").references(() => spaces.id),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_document_embeddings_space").on(table.spaceId),
+  index("idx_document_embeddings_entity").on(table.entityType, table.entityId),
+]);
 
 // Export types
 export type UpsertUser = typeof users.$inferInsert;

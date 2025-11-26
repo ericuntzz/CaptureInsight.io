@@ -11,6 +11,7 @@ import {
   chatThreads,
   chatMessages,
   changeLogs,
+  documentEmbeddings,
   type User,
   type UpsertUser,
   type Space,
@@ -35,8 +36,10 @@ import {
   type InsertChatMessage,
   type ChangeLog,
   type InsertChangeLog,
+  type DocumentEmbedding,
+  type InsertDocumentEmbedding,
 } from "../shared/schema";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, and, desc } from "drizzle-orm";
 
 export interface IStorage {
@@ -109,6 +112,12 @@ export interface IStorage {
   // Change log operations
   getChangeLogs(spaceId: string): Promise<ChangeLog[]>;
   createChangeLog(changeLog: InsertChangeLog): Promise<ChangeLog>;
+
+  // Document embedding operations
+  createDocumentEmbedding(data: InsertDocumentEmbedding): Promise<DocumentEmbedding>;
+  getDocumentEmbedding(entityType: string, entityId: string): Promise<DocumentEmbedding | undefined>;
+  deleteDocumentEmbedding(entityType: string, entityId: string): Promise<boolean>;
+  searchSimilarDocuments(embedding: number[], spaceId: string, limit?: number): Promise<Array<DocumentEmbedding & { similarity: number }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -411,6 +420,84 @@ export class DatabaseStorage implements IStorage {
   async createChangeLog(changeLog: InsertChangeLog): Promise<ChangeLog> {
     const [created] = await db.insert(changeLogs).values(changeLog).returning();
     return created;
+  }
+
+  // Document embedding operations
+  async createDocumentEmbedding(data: InsertDocumentEmbedding): Promise<DocumentEmbedding> {
+    await db
+      .delete(documentEmbeddings)
+      .where(
+        and(
+          eq(documentEmbeddings.entityType, data.entityType),
+          eq(documentEmbeddings.entityId, data.entityId)
+        )
+      );
+    
+    const [created] = await db.insert(documentEmbeddings).values(data).returning();
+    return created;
+  }
+
+  async getDocumentEmbedding(entityType: string, entityId: string): Promise<DocumentEmbedding | undefined> {
+    const [embedding] = await db
+      .select()
+      .from(documentEmbeddings)
+      .where(
+        and(
+          eq(documentEmbeddings.entityType, entityType),
+          eq(documentEmbeddings.entityId, entityId)
+        )
+      );
+    return embedding;
+  }
+
+  async deleteDocumentEmbedding(entityType: string, entityId: string): Promise<boolean> {
+    const result = await db
+      .delete(documentEmbeddings)
+      .where(
+        and(
+          eq(documentEmbeddings.entityType, entityType),
+          eq(documentEmbeddings.entityId, entityId)
+        )
+      );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async searchSimilarDocuments(
+    embedding: number[],
+    spaceId: string,
+    limit: number = 10
+  ): Promise<Array<DocumentEmbedding & { similarity: number }>> {
+    const embeddingStr = `[${embedding.join(',')}]`;
+    
+    const result = await pool.query(
+      `SELECT 
+        id, 
+        entity_type as "entityType", 
+        entity_id as "entityId", 
+        content, 
+        metadata, 
+        space_id as "spaceId", 
+        created_at as "createdAt",
+        embedding,
+        1 - (embedding <=> $1::vector) as similarity
+      FROM document_embeddings
+      WHERE space_id = $2
+      ORDER BY embedding <=> $1::vector
+      LIMIT $3`,
+      [embeddingStr, spaceId, limit]
+    );
+    
+    return result.rows.map(row => ({
+      id: row.id,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      content: row.content,
+      embedding: row.embedding ? row.embedding.slice(1, -1).split(',').map(Number) : null,
+      metadata: row.metadata,
+      spaceId: row.spaceId,
+      createdAt: row.createdAt,
+      similarity: parseFloat(row.similarity),
+    }));
   }
 }
 

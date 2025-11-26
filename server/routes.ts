@@ -8,8 +8,16 @@ import {
   extractInsights,
   getAIStatus,
   isGeminiConfigured,
+  isOpenAIConfigured,
+  searchSimilar,
   type ChatMessage,
 } from "./ai";
+import {
+  embedAndStoreInsight,
+  embedAndStoreSheet,
+  embedAndStoreContent,
+  reindexSpace,
+} from "./ai/embeddings";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -604,6 +612,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error extracting insights:", error);
       res.status(500).json({ 
         message: "Failed to extract insights",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // ==================== EMBEDDINGS & SEARCH ====================
+  app.post('/api/embeddings/index', isAuthenticated, async (req: any, res) => {
+    try {
+      const { entityType, entityId, spaceId } = req.body;
+
+      if (!entityType || !entityId || !spaceId) {
+        return res.status(400).json({ 
+          message: "Missing required fields: entityType, entityId, and spaceId" 
+        });
+      }
+
+      if (!isOpenAIConfigured()) {
+        return res.status(503).json({ 
+          message: "Embeddings service not configured. OpenAI API key is required." 
+        });
+      }
+
+      let result;
+
+      if (entityType === 'insight') {
+        const insight = await storage.getInsight(entityId);
+        if (!insight) {
+          return res.status(404).json({ message: "Insight not found" });
+        }
+        result = await embedAndStoreInsight(insight, spaceId);
+      } else if (entityType === 'sheet') {
+        const sheet = await storage.getSheet(entityId);
+        if (!sheet) {
+          return res.status(404).json({ message: "Sheet not found" });
+        }
+        result = await embedAndStoreSheet(sheet, spaceId);
+      } else {
+        return res.status(400).json({ 
+          message: "Invalid entityType. Must be 'insight' or 'sheet'" 
+        });
+      }
+
+      if (result.success) {
+        res.json({ message: "Entity indexed successfully", result });
+      } else {
+        res.status(500).json({ 
+          message: "Failed to index entity", 
+          error: result.error 
+        });
+      }
+    } catch (error) {
+      console.error("Error indexing entity:", error);
+      res.status(500).json({ 
+        message: "Failed to index entity",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post('/api/embeddings/reindex-space/:spaceId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { spaceId } = req.params;
+
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ message: "Space not found" });
+      }
+
+      if (!isOpenAIConfigured()) {
+        return res.status(503).json({ 
+          message: "Embeddings service not configured. OpenAI API key is required." 
+        });
+      }
+
+      const result = await reindexSpace(spaceId);
+      res.json({ 
+        message: "Space reindexed successfully", 
+        result 
+      });
+    } catch (error) {
+      console.error("Error reindexing space:", error);
+      res.status(500).json({ 
+        message: "Failed to reindex space",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get('/api/search', isAuthenticated, async (req: any, res) => {
+    try {
+      const { query, spaceId, limit } = req.query;
+
+      if (!query || !spaceId) {
+        return res.status(400).json({ 
+          message: "Missing required query parameters: query and spaceId" 
+        });
+      }
+
+      if (!isOpenAIConfigured()) {
+        return res.status(503).json({ 
+          message: "Search service not configured. OpenAI API key is required." 
+        });
+      }
+
+      const parsedLimit = limit ? parseInt(limit as string, 10) : 10;
+      const results = await searchSimilar(query as string, spaceId as string, parsedLimit);
+
+      res.json({ results });
+    } catch (error) {
+      console.error("Error in semantic search:", error);
+      res.status(500).json({ 
+        message: "Failed to perform search",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }
