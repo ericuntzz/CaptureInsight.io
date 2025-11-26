@@ -26,12 +26,13 @@ interface InsightsViewProps {
   currentSpaceId: string | null;
   onUpdateTags?: (spaceId: string, tags: any[]) => void;
   onCollapseSidebar?: (collapsed: boolean) => void;
+  onNavigateToCapture?: (insightId?: string) => void;
 }
 
 type ViewStyle = 'row' | 'kanban';
 type KanbanColumn = 'tag' | 'status' | 'folder' | 'date';
 
-export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: InsightsViewProps) {
+export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar, onNavigateToCapture }: InsightsViewProps) {
   const [viewStyle, setViewStyle] = useState<ViewStyle>('row');
   const [kanbanColumn, setKanbanColumn] = useState<KanbanColumn>('status');
   const [selectedFilters, setSelectedFilters] = useState({
@@ -297,10 +298,13 @@ export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: Insi
         },
       },
       {
-        onSuccess: () => {
-          // TODO: Open floating capture toolbar
+        onSuccess: (newInsight) => {
+          setShowAddInsightModal(false);
           toast.success('New insight created! Opening capture toolbar...');
-          toast.info('Floating capture toolbar will open here (to be implemented)');
+          // Navigate to capture view with the new insight ID
+          if (onNavigateToCapture) {
+            onNavigateToCapture(newInsight.id);
+          }
         },
         onError: () => {
           toast.error('Failed to create insight');

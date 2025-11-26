@@ -1022,6 +1022,14 @@ export default function App() {
       <InsightsView 
         spaces={spaces}
         currentSpaceId={currentSpaceId}
+        onNavigateToCapture={(insightId) => {
+          // Navigate to capture view and show floating toolbar
+          setCurrentView('capture');
+          setShowToolbar(true);
+          if (insightId) {
+            toast.info('Capture data to link to your new insight');
+          }
+        }}
       />
     );
   }

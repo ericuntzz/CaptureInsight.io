@@ -446,7 +446,9 @@ function CanvasInsightCard({ insight, tags, onUpdateInsight, insightId, chatMess
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isAIGenerated, setIsAIGenerated] = useState(true); // Track if content is AI-generated
 
-  const insightTags = tags.filter((tag) => insight.tags.includes(tag.id));
+  // Guard against undefined tags - API may return null/undefined
+  const insightTagIds = insight.tags || [];
+  const insightTags = tags.filter((tag) => insightTagIds.includes(tag.id));
 
   const handleRegenerateAISummary = () => {
     setIsRegenerating(true);
