@@ -530,10 +530,59 @@
   const TOOLBAR_DEFAULTS = {
     POSITION: { x: 20, y: 20 }};
 
-  const FloatingToolbar = ({ onCapture, onClose, status, statusMessage }) => {
+  const ScanIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 7V5a2 2 0 0 1 2-2h2" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M17 3h2a2 2 0 0 1 2 2v2" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M21 17v2a2 2 0 0 1-2 2h-2" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M7 21H5a2 2 0 0 1-2-2v-2" })
+  ] });
+  const SquareIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2", ry: "2" }) });
+  const UploadIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("polyline", { points: "17 8 12 3 7 8" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("line", { x1: "12", y1: "3", x2: "12", y2: "15" })
+  ] });
+  const LinkIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" })
+  ] });
+  const ZapIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("polygon", { points: "13 2 3 14 12 14 11 22 21 10 12 10 13 2" }) });
+  const DatabaseIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("ellipse", { cx: "12", cy: "5", rx: "9", ry: "3" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" })
+  ] });
+  const CheckIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("polyline", { points: "20 6 9 17 4 12" }) });
+  const LoaderIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: { animation: "spin 1s linear infinite" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M21 12a9 9 0 1 1-6.219-8.56" }) });
+  const ToolButton = ({ icon, label, onClick, active = false, disabled = false, color = "#9CA3AF" }) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "button",
+    {
+      onClick,
+      disabled,
+      title: label,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "44px",
+        height: "44px",
+        backgroundColor: active ? "rgba(255, 107, 53, 0.15)" : "transparent",
+        border: active ? "1.5px solid rgba(255, 107, 53, 0.4)" : "1.5px solid transparent",
+        borderRadius: "10px",
+        cursor: disabled ? "not-allowed" : "pointer",
+        color: active ? "#FF6B35" : color,
+        opacity: disabled ? 0.5 : 1,
+        transition: "all 0.15s ease",
+        padding: 0
+      },
+      children: icon
+    }
+  );
+  const FloatingToolbar = ({ onCapture, status, statusMessage }) => {
     const [position, setPosition] = reactExports.useState(TOOLBAR_DEFAULTS.POSITION);
     const [isDragging, setIsDragging] = reactExports.useState(false);
     const [dragOffset, setDragOffset] = reactExports.useState({ x: 0, y: 0 });
+    const [activeButton, setActiveButton] = reactExports.useState(null);
     const handleMouseDown = reactExports.useCallback((e) => {
       if (e.target.closest("button")) return;
       setIsDragging(true);
@@ -563,30 +612,29 @@
       };
     }, [isDragging, dragOffset]);
     const isWorking = status === "capturing" || status === "uploading";
-    const getButtonContent = () => {
-      switch (status) {
-        case "capturing":
-          return "📷 Capturing...";
-        case "uploading":
-          return "⬆️ Uploading...";
-        case "success":
-          return "✓ Saved!";
-        case "error":
-          return "✗ Failed";
-        default:
-          return "📸 Capture";
-      }
+    const handleCaptureClick = (mode, buttonId) => {
+      if (isWorking) return;
+      setActiveButton(buttonId);
+      onCapture(mode);
     };
-    const getButtonColor = () => {
-      switch (status) {
-        case "success":
-          return "#22c55e";
-        case "error":
-          return "#ef4444";
-        default:
-          return "#6366f1";
-      }
+    const handleUploadClick = () => {
+      if (isWorking) return;
+      setActiveButton("upload");
     };
+    const handleLinkClick = () => {
+      if (isWorking) return;
+      setActiveButton("link");
+    };
+    reactExports.useEffect(() => {
+      if (status === "idle" && activeButton) {
+        const timer = setTimeout(() => setActiveButton(null), 100);
+        return () => clearTimeout(timer);
+      }
+      if (status === "success") {
+        const timer = setTimeout(() => setActiveButton(null), 2e3);
+        return () => clearTimeout(timer);
+      }
+    }, [status, activeButton]);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
       {
@@ -597,71 +645,106 @@
           top: position.y,
           zIndex: 2147483647,
           display: "flex",
-          flexDirection: "column",
+          alignItems: "center",
           gap: "4px",
-          padding: "10px 14px",
-          backgroundColor: "#1a1a2e",
-          borderRadius: "12px",
-          boxShadow: "0 4px 24px rgba(0, 0, 0, 0.4)",
+          padding: "6px 10px",
+          backgroundColor: "rgba(26, 31, 46, 0.98)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          borderRadius: "14px",
+          border: "1px solid rgba(255, 107, 53, 0.25)",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.1)",
           cursor: isDragging ? "grabbing" : "grab",
           userSelect: "none",
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
         },
         onMouseDown: handleMouseDown,
         children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: {
-              color: "#fff",
-              fontSize: "14px",
-              fontWeight: 600,
-              marginRight: "8px"
-            }, children: "CaptureInsight" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                onClick: () => onCapture(CaptureMode.TAB),
-                disabled: isWorking,
-                style: {
-                  padding: "8px 16px",
-                  backgroundColor: getButtonColor(),
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: isWorking ? "wait" : "pointer",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  opacity: isWorking ? 0.8 : 1,
-                  minWidth: "110px",
-                  transition: "background-color 0.2s"
-                },
-                title: "Capture and save to CaptureInsight",
-                children: getButtonContent()
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                onClick: onClose,
-                style: {
-                  padding: "6px 8px",
-                  backgroundColor: "transparent",
-                  color: "#9ca3af",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "16px"
-                },
-                title: "Close toolbar",
-                children: "✕"
-              }
-            )
-          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: `
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      ` }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ToolButton,
+            {
+              icon: isWorking && activeButton === "selection" ? /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(ScanIcon, {}),
+              label: "Capture Selection",
+              onClick: () => handleCaptureClick(CaptureMode.SELECTION, "selection"),
+              active: activeButton === "selection",
+              disabled: isWorking
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ToolButton,
+            {
+              icon: isWorking && activeButton === "tab" ? /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(SquareIcon, {}),
+              label: "Capture Full Tab",
+              onClick: () => handleCaptureClick(CaptureMode.TAB, "tab"),
+              active: activeButton === "tab",
+              disabled: isWorking
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ToolButton,
+            {
+              icon: /* @__PURE__ */ jsxRuntimeExports.jsx(UploadIcon, {}),
+              label: "Upload File",
+              onClick: handleUploadClick,
+              active: activeButton === "upload",
+              disabled: isWorking
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ToolButton,
+            {
+              icon: /* @__PURE__ */ jsxRuntimeExports.jsx(LinkIcon, {}),
+              label: "Add Link",
+              onClick: handleLinkClick,
+              active: activeButton === "link",
+              disabled: isWorking
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
+            width: "1px",
+            height: "28px",
+            backgroundColor: "rgba(255, 107, 53, 0.2)",
+            margin: "0 4px"
+          } }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ToolButton,
+            {
+              icon: /* @__PURE__ */ jsxRuntimeExports.jsx(ZapIcon, {}),
+              label: "Quick Actions",
+              onClick: () => {
+              },
+              disabled: isWorking
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ToolButton,
+            {
+              icon: status === "success" ? /* @__PURE__ */ jsxRuntimeExports.jsx(CheckIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(DatabaseIcon, {}),
+              label: "Open Dashboard",
+              onClick: () => window.open(window.location.origin, "_blank"),
+              active: status === "success",
+              color: status === "success" ? "#22c55e" : "#FF6B35"
+            }
+          ),
           statusMessage && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
-            fontSize: "11px",
-            color: status === "error" ? "#ef4444" : "#9ca3af",
-            marginTop: "4px",
-            maxWidth: "280px",
-            wordBreak: "break-word"
+            position: "absolute",
+            top: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginTop: "8px",
+            padding: "6px 12px",
+            backgroundColor: status === "error" ? "rgba(239, 68, 68, 0.9)" : "rgba(26, 31, 46, 0.95)",
+            borderRadius: "8px",
+            fontSize: "12px",
+            color: "#fff",
+            whiteSpace: "nowrap",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)"
           }, children: statusMessage })
         ]
       }
@@ -673,7 +756,7 @@
     const [statusMessage, setStatusMessage] = reactExports.useState("");
     reactExports.useEffect(() => {
       console.log("[CaptureInsight] Content script message listener registered");
-      const handleMessage = (message, sender, sendResponse) => {
+      const handleMessage = (message, _sender, sendResponse) => {
         console.log("[CaptureInsight] Message received:", message);
         if (message.type === MessageType.TOGGLE_TOOLBAR) {
           console.log("[CaptureInsight] Setting visible to:", message.visible);
@@ -709,14 +792,14 @@
           });
           if (uploadResult.success) {
             setStatus("success");
-            setStatusMessage("Screenshot saved! Check your dashboard.");
+            setStatusMessage("Screenshot saved!");
             setTimeout(() => {
               setStatus("idle");
               setStatusMessage("");
             }, 3e3);
           } else {
             setStatus("error");
-            setStatusMessage(uploadResult.error || "Failed to upload. Please try again.");
+            setStatusMessage(uploadResult.error || "Upload failed");
           }
         } else {
           setStatus("error");
@@ -725,20 +808,14 @@
       } catch (error) {
         console.error("Capture error:", error);
         setStatus("error");
-        setStatusMessage(error instanceof Error ? error.message : "Unknown error occurred");
+        setStatusMessage(error instanceof Error ? error.message : "Unknown error");
       }
-    }, []);
-    const handleClose = reactExports.useCallback(() => {
-      setVisible(false);
-      setStatus("idle");
-      setStatusMessage("");
     }, []);
     if (!visible) return null;
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       FloatingToolbar,
       {
         onCapture: handleCapture,
-        onClose: handleClose,
         status,
         statusMessage
       }
@@ -769,11 +846,11 @@
     .captureinsight-toolbar {
       pointer-events: auto;
     }
-    button:hover {
-      filter: brightness(1.1);
+    button:hover:not(:disabled) {
+      background-color: rgba(255, 107, 53, 0.1) !important;
     }
-    button:active {
-      transform: scale(0.98);
+    button:active:not(:disabled) {
+      transform: scale(0.95);
     }
   `;
     shadowRoot.appendChild(styleSheet);
