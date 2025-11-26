@@ -956,8 +956,8 @@ export default function App() {
     await refetchSpaces();
   };
 
-  // Switch between views
-  if (currentView === 'data') {
+  // Switch between views - All non-capture views go through DataManagementView for consistent sidebar
+  if (currentView === 'data' || currentView === 'changelogs' || currentView === 'insights') {
     return (
       <>
         <DataManagementView 
@@ -967,6 +967,7 @@ export default function App() {
           currentSpaceId={currentSpaceId}
           onSpaceChange={handleSpaceChange}
           onCreateBlankSpace={handleCreateBlankSpace}
+          initialActiveView={currentView === 'data' ? 'data' : currentView === 'insights' ? 'insights' : 'changelogs'}
           onCreateSpace={async (data) => {
             try {
               await createSpaceMutation.mutateAsync({
@@ -1030,33 +1031,6 @@ export default function App() {
           onTopLevelViewChange={handleViewChange}
         />
       </>
-    );
-  } else if (currentView === 'changelogs') {
-    return (
-      <ChangeLogsView 
-        spaces={spaces}
-        currentSpaceId={currentSpaceId}
-        onUpdateTags={handleUpdateSpaceTags}
-        onCaptureNewAsset={() => {
-          setCurrentView('capture');
-          toast.info('Create a new capture to link to your change log');
-        }}
-      />
-    );
-  } else if (currentView === 'insights') {
-    return (
-      <InsightsView 
-        spaces={spaces}
-        currentSpaceId={currentSpaceId}
-        onNavigateToCapture={(insightId) => {
-          // Navigate to capture view and show floating toolbar
-          setCurrentView('capture');
-          setShowToolbar(true);
-          if (insightId) {
-            toast.info('Capture data to link to your new insight');
-          }
-        }}
-      />
     );
   }
 

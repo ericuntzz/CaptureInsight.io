@@ -30,7 +30,7 @@
  * ============================================================================
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ProjectBrowser, Project } from './ProjectBrowser';
 import { Spreadsheet } from './Spreadsheet';
 import { AIAssistantPanel } from './AIAssistantPanel';
@@ -116,6 +116,7 @@ interface DataManagementViewProps {
   currentSpaceId?: string | null; // ⚠️ NEW: Current active Space for Space-scoped architecture
   onSpaceChange?: (spaceId: string) => void; // ⚠️ NEW: Handle Space switching
   onCreateBlankSpace?: () => Promise<string>; // ⚠️ NEW: Create blank Space (returns spaceId)
+  initialActiveView?: 'data' | 'ai' | 'changelogs' | 'insights'; // ⚠️ NEW: Initial view to display
   onCreateSpace: (data: { name: string; description: string; goals: string; instructions: string }) => void;
   onUpdateSpace: (spaceId: string, data: { name: string; goals: string; instructions: string }) => void;
   onDeleteSpace: (spaceId: string) => void;
@@ -143,6 +144,7 @@ export function DataManagementView({
   currentSpaceId,
   onSpaceChange,
   onCreateBlankSpace,
+  initialActiveView = 'data', // ⚠️ NEW: Default to 'data' view
   onCreateSpace,
   onUpdateSpace,
   onDeleteSpace,
@@ -172,7 +174,7 @@ export function DataManagementView({
     return initFolder?.sheets[0]?.id || null;
   });
   const [isSpreadsheetHovered, setIsSpreadsheetHovered] = useState(false);
-  const [activeView, setActiveView] = useState<'data' | 'ai' | 'changelogs' | 'insights'>('data');
+  const [activeView, setActiveView] = useState<'data' | 'ai' | 'changelogs' | 'insights'>(initialActiveView);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // NEW: Data source sidebar state
@@ -180,6 +182,11 @@ export function DataManagementView({
   
   // NEW: Sidebar collapse control for Canvas mode
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Sync activeView with initialActiveView prop when it changes
+  useEffect(() => {
+    setActiveView(initialActiveView);
+  }, [initialActiveView]);
 
   const handleSelectSheet = (projectId: string, folderId: string, sheetId: string) => {
     setSelectedProject(projectId);
