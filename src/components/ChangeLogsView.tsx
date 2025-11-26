@@ -85,7 +85,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, Filter, Plus, ArrowLeft, Calendar, Tag, Link, Camera, X, Check, FileText, FolderOpen, ChevronDown, User, Tag as TagIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Project } from './ProjectBrowser';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface ChangeLog {
   id: string;

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Share2, Download, Settings, Copy, Eye, EyeOff, WrapText, ArrowUpAZ, ArrowDownAZ, Plus } from 'lucide-react';
 import { marketingData } from '../data/mockData';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface Sheet {
   id: string;

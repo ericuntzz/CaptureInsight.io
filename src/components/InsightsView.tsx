@@ -9,7 +9,7 @@ import { getTagUsageStats, cascadeDeleteTag } from '../utils/tagUtils';
 import { Tag } from '../data/insightsData';
 import { Insight, mockInsights, mockTeamMembers } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,

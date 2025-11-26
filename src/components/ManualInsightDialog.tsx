@@ -3,7 +3,7 @@ import { X, ExternalLink, Plus, Trash2, Sparkles, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Insight, Tag, InsightSource, mockTags } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { validateTagName, getNextTagColor } from '../utils/tagUtils';
 
 interface ManualInsightDialogProps {

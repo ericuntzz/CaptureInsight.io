@@ -3,7 +3,7 @@ import { X, Send, Sparkles, RotateCw, ChevronDown, ExternalLink, FileText, Copy,
 import { motion, AnimatePresence } from 'motion/react';
 import { Insight, Tag } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { copyToClipboard } from '../utils/clipboard';
 import { RichTextEditor } from './RichTextEditor';
 

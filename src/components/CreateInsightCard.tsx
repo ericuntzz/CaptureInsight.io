@@ -3,7 +3,7 @@ import { X, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Tag, Insight, InsightSource } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;

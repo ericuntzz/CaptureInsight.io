@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Copy, Link2, FileText, CheckCircle2, Sparkles, Eye } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { Space } from './SpaceBrowser';
 import { copyToClipboard } from '../utils/clipboard';
 

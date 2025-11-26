@@ -3,7 +3,7 @@
 
 import { DbTag, DbTagAssociation, TaggedItem, TagSearchFilters } from '../types/database';
 import { Tag, mockTags } from '../data/insightsData';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 // ============================================================================
 // TAG CRUD OPERATIONS

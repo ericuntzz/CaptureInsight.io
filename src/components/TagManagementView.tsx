@@ -8,7 +8,7 @@ import { TagBadge } from './TagBadge';
 import { TagDeleteConfirmDialog } from './TagDeleteConfirmDialog';
 import { useTags, useTagUsage } from '../hooks/useTags';
 import { getTagUsageStats } from '../utils/tagUtils';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface TagManagementViewProps {
   spaceId: string | null;
