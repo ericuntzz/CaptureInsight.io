@@ -268,8 +268,15 @@ All major frontend components now use real backend APIs instead of mock data:
 #### InsightsView
 - Uses `useInsights(spaceId)` hook for insights data
 - Uses `useTags(spaceId)` hook for tag data
+- Uses `useChat(spaceId, insightId)` hook for insight-specific AI chat
 - Mutations: `useUpdateInsight`, `useCreateInsightComment`, `useCreateInsight`
 - Date normalization: API dates (strings) converted to Date objects
+- AI chat persisted to backend via chat_threads/chat_messages tables
+
+#### CanvasInsightView
+- Uses `useChat(spaceId, insightId)` hook for AI chat
+- AI conversations stored server-side (no localStorage)
+- User identity from useAuth hook
 
 #### AIAssistantPanel
 - Uses `useTags(spaceId)` for real tag data
