@@ -85,6 +85,9 @@
             "build": "vite build",
             "db:push": "drizzle-kit push",
             "server": "tsx server/index.ts",
-            "server:dev": "tsx watch server/index.ts"
+            "server:dev": "tsx watch server/index.ts",
+            "build:extension": "cd extension && npm run build",
+            "dev:extension": "cd extension && npm run dev",
+            "extension:icons": "cd extension && node scripts/generate-icons.js"
       }
 }

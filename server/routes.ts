@@ -735,6 +735,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== CAPTURES (Chrome Extension) ====================
+  app.post('/api/captures', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { dataUrl, metadata, spaceId, tags } = req.body;
+
+      if (!dataUrl) {
+        return res.status(400).json({ message: "Missing required field: dataUrl" });
+      }
+
+      // Get or create a default space if none provided
+      let targetSpaceId = spaceId;
+      if (!targetSpaceId) {
+        const spaces = await storage.getSpaces(userId);
+        if (spaces.length > 0) {
+          targetSpaceId = spaces[0].id;
+        } else {
+          // Create a default space for the user
+          const defaultSpace = await storage.createSpace({
+            name: "My Captures",
+            description: "Default space for captured screenshots",
+            ownerId: userId
+          });
+          targetSpaceId = defaultSpace.id;
+        }
+      }
+
+      // Store screenshot as a sheet with data
+      const sheet = await storage.createSheet({
+        spaceId: targetSpaceId,
+        name: metadata?.title || `Capture from ${new Date().toLocaleString()}`,
+        dataSourceType: 'screenshot',
+        dataSourceMeta: {
+          captureMode: metadata?.mode || 'tab',
+          sourceUrl: metadata?.url || '',
+          timestamp: metadata?.timestamp || Date.now(),
+          dimensions: metadata?.dimensions || { width: 0, height: 0 }
+        },
+        data: {
+          type: 'screenshot',
+          dataUrl: dataUrl,
+          capturedAt: new Date().toISOString()
+        },
+        createdBy: userId
+      });
+
+      // Create an insight linked to this capture
+      const insight = await storage.createInsight({
+        spaceId: targetSpaceId,
+        title: metadata?.title || `Capture from ${new Date().toLocaleString()}`,
+        summary: `Screenshot captured from: ${metadata?.url || 'Unknown source'}`,
+        status: 'Open',
+        priority: 'Medium',
+        createdBy: userId
+      });
+
+      // Link the sheet as a source for the insight
+      await storage.createInsightSource({
+        insightId: insight.id,
+        sourceId: sheet.id,
+        sourceType: 'capture',
+        sourceName: sheet.name
+      });
+
+      // Associate tags if provided
+      if (tags && tags.length > 0) {
+        for (const tagId of tags) {
+          await storage.createTagAssociation({
+            tagId,
+            entityId: insight.id,
+            entityType: 'insight'
+          });
+        }
+      }
+
+      // Optionally analyze with AI if configured
+      if (isGeminiConfigured()) {
+        try {
+          const analysisResult = await analyzeCapture(dataUrl, 'screenshot');
+          if (analysisResult.summary) {
+            await storage.updateInsight(insight.id, {
+              summary: `${insight.summary}\n\n**AI Analysis:**\n${analysisResult.summary}`
+            });
+          }
+        } catch (aiError) {
+          console.error("AI analysis failed (non-blocking):", aiError);
+        }
+      }
+
+      res.status(201).json({
+        id: insight.id,
+        sheetId: sheet.id,
+        message: "Screenshot captured and saved successfully"
+      });
+    } catch (error) {
+      console.error("Error saving capture:", error);
+      res.status(500).json({ 
+        message: "Failed to save capture",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
