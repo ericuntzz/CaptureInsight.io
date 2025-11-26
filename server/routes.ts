@@ -1069,6 +1069,298 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== PROFILE & SETTINGS ====================
+  
+  // Get user profile
+  app.get('/api/profile', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+
+  // Update user profile
+  app.put('/api/profile', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { firstName, lastName, profileImageUrl } = req.body;
+      
+      const updated = await storage.updateUserProfile(userId, {
+        firstName,
+        lastName,
+        profileImageUrl,
+      });
+      
+      if (!updated) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
+  // Get user settings (preferences, notifications, etc.)
+  app.get('/api/settings', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      let settings = await storage.getUserSettings(userId);
+      
+      if (!settings) {
+        settings = await storage.createUserSettings({ userId });
+      }
+      
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+      res.status(500).json({ message: "Failed to fetch settings" });
+    }
+  });
+
+  // Update user settings
+  app.put('/api/settings', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const settings = await storage.updateUserSettings(userId, req.body);
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating settings:", error);
+      res.status(500).json({ message: "Failed to update settings" });
+    }
+  });
+
+  // Update preferences (theme, language, timezone, etc.)
+  app.put('/api/preferences', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { theme, language, timezone, dateFormat } = req.body;
+      
+      const settings = await storage.updateUserSettings(userId, {
+        theme,
+        language,
+        timezone,
+        dateFormat,
+      });
+      
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating preferences:", error);
+      res.status(500).json({ message: "Failed to update preferences" });
+    }
+  });
+
+  // Update notification settings
+  app.put('/api/notifications', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { emailNotifications, pushNotifications } = req.body;
+      
+      const settings = await storage.updateUserSettings(userId, {
+        emailNotifications,
+        pushNotifications,
+      });
+      
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating notifications:", error);
+      res.status(500).json({ message: "Failed to update notification settings" });
+    }
+  });
+
+  // Get billing info (placeholder - returns mock data for now)
+  app.get('/api/billing', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      res.json({
+        plan: 'free',
+        status: 'active',
+        billingCycle: 'monthly',
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        features: {
+          maxSpaces: 3,
+          maxCaptures: 100,
+          aiAnalysis: true,
+          teamMembers: 1,
+        },
+        invoices: [],
+      });
+    } catch (error) {
+      console.error("Error fetching billing:", error);
+      res.status(500).json({ message: "Failed to fetch billing info" });
+    }
+  });
+
+  // ==================== COMPANIES ====================
+  
+  // Get user's companies
+  app.get('/api/companies', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const companies = await storage.getCompanies(userId);
+      res.json(companies);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+      res.status(500).json({ message: "Failed to fetch companies" });
+    }
+  });
+
+  // Create a new company
+  app.post('/api/companies', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { name, logo, industry, size, website } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ message: "Company name is required" });
+      }
+      
+      const company = await storage.createCompany({
+        name,
+        logo,
+        industry,
+        size,
+        website,
+      }, userId);
+      
+      res.status(201).json({ ...company, role: 'owner' });
+    } catch (error) {
+      console.error("Error creating company:", error);
+      res.status(500).json({ message: "Failed to create company" });
+    }
+  });
+
+  // Get a specific company
+  app.get('/api/companies/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getCompany(req.params.id);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(req.params.id, userId);
+      if (!member) {
+        return res.status(403).json({ message: "You don't have access to this company" });
+      }
+      
+      res.json({ ...company, role: member.role });
+    } catch (error) {
+      console.error("Error fetching company:", error);
+      res.status(500).json({ message: "Failed to fetch company" });
+    }
+  });
+
+  // Update a company
+  app.put('/api/companies/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const member = await storage.getCompanyMember(req.params.id, userId);
+      
+      if (!member) {
+        return res.status(403).json({ message: "You don't have access to this company" });
+      }
+      
+      if (member.role !== 'owner' && member.role !== 'admin') {
+        return res.status(403).json({ message: "You don't have permission to update this company" });
+      }
+      
+      const { name, logo, industry, size, website } = req.body;
+      const company = await storage.updateCompany(req.params.id, {
+        name,
+        logo,
+        industry,
+        size,
+        website,
+      });
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      res.json({ ...company, role: member.role });
+    } catch (error) {
+      console.error("Error updating company:", error);
+      res.status(500).json({ message: "Failed to update company" });
+    }
+  });
+
+  // Delete a company
+  app.delete('/api/companies/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const member = await storage.getCompanyMember(req.params.id, userId);
+      
+      if (!member) {
+        return res.status(403).json({ message: "You don't have access to this company" });
+      }
+      
+      if (member.role !== 'owner') {
+        return res.status(403).json({ message: "Only the owner can delete this company" });
+      }
+      
+      const deleted = await storage.deleteCompany(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting company:", error);
+      res.status(500).json({ message: "Failed to delete company" });
+    }
+  });
+
+  // Switch to a company (update current company in user settings)
+  app.post('/api/companies/:id/switch', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const member = await storage.getCompanyMember(req.params.id, userId);
+      
+      if (!member) {
+        return res.status(403).json({ message: "You don't have access to this company" });
+      }
+      
+      await storage.updateUserSettings(userId, {
+        currentCompanyId: req.params.id,
+      });
+      
+      const company = await storage.getCompany(req.params.id);
+      res.json({ message: "Switched to company", company: { ...company, role: member.role } });
+    } catch (error) {
+      console.error("Error switching company:", error);
+      res.status(500).json({ message: "Failed to switch company" });
+    }
+  });
+
+  // Get company members
+  app.get('/api/companies/:id/members', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const member = await storage.getCompanyMember(req.params.id, userId);
+      
+      if (!member) {
+        return res.status(403).json({ message: "You don't have access to this company" });
+      }
+      
+      const members = await storage.getCompanyMembers(req.params.id);
+      res.json(members);
+    } catch (error) {
+      console.error("Error fetching company members:", error);
+      res.status(500).json({ message: "Failed to fetch company members" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

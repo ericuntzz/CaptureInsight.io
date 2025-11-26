@@ -12,6 +12,9 @@ import {
   chatMessages,
   changeLogs,
   documentEmbeddings,
+  companies,
+  companyMembers,
+  userSettings,
   type User,
   type UpsertUser,
   type Space,
@@ -38,6 +41,12 @@ import {
   type InsertChangeLog,
   type DocumentEmbedding,
   type InsertDocumentEmbedding,
+  type Company,
+  type InsertCompany,
+  type CompanyMember,
+  type InsertCompanyMember,
+  type UserSettings,
+  type InsertUserSettings,
 } from "../shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc } from "drizzle-orm";
@@ -498,6 +507,138 @@ export class DatabaseStorage implements IStorage {
       createdAt: row.createdAt,
       similarity: parseFloat(row.similarity),
     }));
+  }
+
+  // Company operations
+  async getCompanies(userId: string): Promise<Array<Company & { role: string }>> {
+    const memberships = await db
+      .select({
+        company: companies,
+        role: companyMembers.role,
+      })
+      .from(companyMembers)
+      .innerJoin(companies, eq(companyMembers.companyId, companies.id))
+      .where(eq(companyMembers.userId, userId));
+    
+    return memberships.map(m => ({
+      ...m.company,
+      role: m.role,
+    }));
+  }
+
+  async getCompany(id: string): Promise<Company | undefined> {
+    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+    return company;
+  }
+
+  async createCompany(company: InsertCompany, userId: string): Promise<Company> {
+    const [created] = await db.insert(companies).values({
+      ...company,
+      createdBy: userId,
+    }).returning();
+    
+    await db.insert(companyMembers).values({
+      userId,
+      companyId: created.id,
+      role: 'owner',
+    });
+    
+    return created;
+  }
+
+  async updateCompany(id: string, company: Partial<InsertCompany>): Promise<Company | undefined> {
+    const [updated] = await db
+      .update(companies)
+      .set({ ...company, updatedAt: new Date() })
+      .where(eq(companies.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCompany(id: string): Promise<boolean> {
+    await db.delete(companyMembers).where(eq(companyMembers.companyId, id));
+    const result = await db.delete(companies).where(eq(companies.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getCompanyMember(companyId: string, userId: string): Promise<CompanyMember | undefined> {
+    const [member] = await db
+      .select()
+      .from(companyMembers)
+      .where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, userId)));
+    return member;
+  }
+
+  async getCompanyMembers(companyId: string): Promise<Array<CompanyMember & { user: User }>> {
+    const members = await db
+      .select({
+        member: companyMembers,
+        user: users,
+      })
+      .from(companyMembers)
+      .innerJoin(users, eq(companyMembers.userId, users.id))
+      .where(eq(companyMembers.companyId, companyId));
+    
+    return members.map(m => ({
+      ...m.member,
+      user: m.user,
+    }));
+  }
+
+  async addCompanyMember(member: InsertCompanyMember): Promise<CompanyMember> {
+    const [created] = await db.insert(companyMembers).values(member).returning();
+    return created;
+  }
+
+  async removeCompanyMember(companyId: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(companyMembers)
+      .where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, userId)));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async updateCompanyMemberRole(companyId: string, userId: string, role: string): Promise<CompanyMember | undefined> {
+    const [updated] = await db
+      .update(companyMembers)
+      .set({ role })
+      .where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  // User settings operations
+  async getUserSettings(userId: string): Promise<UserSettings | undefined> {
+    const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId));
+    return settings;
+  }
+
+  async createUserSettings(settings: InsertUserSettings): Promise<UserSettings> {
+    const [created] = await db.insert(userSettings).values(settings).returning();
+    return created;
+  }
+
+  async updateUserSettings(userId: string, settings: Partial<InsertUserSettings>): Promise<UserSettings | undefined> {
+    const existing = await this.getUserSettings(userId);
+    
+    if (!existing) {
+      return await this.createUserSettings({ ...settings, userId });
+    }
+    
+    const [updated] = await db
+      .update(userSettings)
+      .set({ ...settings, updatedAt: new Date() })
+      .where(eq(userSettings.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  async updateUserProfile(userId: string, profile: Partial<User>): Promise<User | undefined> {
+    const [updated] = await db
+      .update(users)
+      .set({ ...profile, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return updated;
   }
 }
 

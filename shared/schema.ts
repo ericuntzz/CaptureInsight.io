@@ -337,9 +337,107 @@ export const documentEmbeddings = pgTable("document_embeddings", {
   index("idx_document_embeddings_entity").on(table.entityType, table.entityId),
 ]);
 
+// Companies table
+export const companies = pgTable("companies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  logo: varchar("logo"),
+  industry: varchar("industry"),
+  size: varchar("size"),
+  website: varchar("website"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdBy: varchar("created_by").references(() => users.id),
+});
+
+export const companiesRelations = relations(companies, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [companies.createdBy],
+    references: [users.id],
+  }),
+  members: many(companyMembers),
+}));
+
+// Company members junction table
+export const companyMembers = pgTable("company_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  companyId: varchar("company_id").references(() => companies.id).notNull(),
+  role: varchar("role").notNull().default('member'),
+  joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+export const companyMembersRelations = relations(companyMembers, ({ one }) => ({
+  user: one(users, {
+    fields: [companyMembers.userId],
+    references: [users.id],
+  }),
+  company: one(companies, {
+    fields: [companyMembers.companyId],
+    references: [companies.id],
+  }),
+}));
+
+// User settings table for preferences and notifications
+export const userSettings = pgTable("user_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  theme: varchar("theme").default('dark'),
+  language: varchar("language").default('en'),
+  timezone: varchar("timezone").default('UTC'),
+  dateFormat: varchar("date_format").default('MM/DD/YYYY'),
+  emailNotifications: jsonb("email_notifications").$type<{
+    marketing: boolean;
+    updates: boolean;
+    insights: boolean;
+    comments: boolean;
+    mentions: boolean;
+  }>().default({
+    marketing: false,
+    updates: true,
+    insights: true,
+    comments: true,
+    mentions: true,
+  }),
+  pushNotifications: jsonb("push_notifications").$type<{
+    enabled: boolean;
+    insights: boolean;
+    comments: boolean;
+    mentions: boolean;
+  }>().default({
+    enabled: true,
+    insights: true,
+    comments: true,
+    mentions: true,
+  }),
+  currentCompanyId: varchar("current_company_id").references(() => companies.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const userSettingsRelations = relations(userSettings, ({ one }) => ({
+  user: one(users, {
+    fields: [userSettings.userId],
+    references: [users.id],
+  }),
+  currentCompany: one(companies, {
+    fields: [userSettings.currentCompanyId],
+    references: [companies.id],
+  }),
+}));
+
 // Export types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+export type InsertCompany = typeof companies.$inferInsert;
+export type Company = typeof companies.$inferSelect;
+
+export type InsertCompanyMember = typeof companyMembers.$inferInsert;
+export type CompanyMember = typeof companyMembers.$inferSelect;
+
+export type InsertUserSettings = typeof userSettings.$inferInsert;
+export type UserSettings = typeof userSettings.$inferSelect;
 
 export type InsertSpace = typeof spaces.$inferInsert;
 export type Space = typeof spaces.$inferSelect;
