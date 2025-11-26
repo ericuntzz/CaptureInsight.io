@@ -115,7 +115,7 @@ interface DataManagementViewProps {
   spaces: Project[]; // ⚠️ SYNCED FROM APP.TSX - Renamed from projects
   currentSpaceId?: string | null; // ⚠️ NEW: Current active Space for Space-scoped architecture
   onSpaceChange?: (spaceId: string) => void; // ⚠️ NEW: Handle Space switching
-  onCreateBlankSpace?: () => string; // ⚠️ NEW: Create blank Space (returns spaceId)
+  onCreateBlankSpace?: () => Promise<string>; // ⚠️ NEW: Create blank Space (returns spaceId)
   onCreateSpace: (data: { name: string; description: string; goals: string; instructions: string }) => void;
   onUpdateSpace: (spaceId: string, data: { name: string; goals: string; instructions: string }) => void;
   onDeleteSpace: (spaceId: string) => void;

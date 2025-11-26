@@ -46,7 +46,7 @@ interface ProjectBrowserProps {
   projects: Project[];
   currentSpaceId?: string | null; // ⚠️ NEW: Current active Space for Space-scoped architecture
   onSpaceChange?: (spaceId: string) => void; // ⚠️ NEW: Handle Space switching
-  onCreateBlankSpace?: () => string; // ⚠️ NEW: Create blank Space (returns spaceId)
+  onCreateBlankSpace?: () => Promise<string>; // ⚠️ NEW: Create blank Space (returns spaceId)
   selectedSheet: string | null;
   onSelectSheet: (projectId: string, folderId: string, sheetId: string) => void;
   onCreateProject: (data: { name: string; description: string; goals: string; instructions: string }) => void;
@@ -215,10 +215,13 @@ export function ProjectBrowser({
   const foldersToDisplay = currentSpace?.folders || [];
 
   // Handle create blank Space with auto-edit
-  const handleCreateBlankSpace = () => {
+  const handleCreateBlankSpace = async () => {
     if (onCreateBlankSpace) {
-      const newSpaceId = onCreateBlankSpace();
-      // Space created, component will auto-focus on name editing
+      const newSpaceId = await onCreateBlankSpace();
+      // Space created, switch to the new space
+      if (onSpaceChange && newSpaceId) {
+        onSpaceChange(newSpaceId);
+      }
     }
   };
 

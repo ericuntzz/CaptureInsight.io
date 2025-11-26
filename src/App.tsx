@@ -692,7 +692,7 @@ export default function App() {
   };
 
   // ⚠️ CRITICAL: Create blank Space for auto-edit name flow
-  const handleCreateBlankSpace = async () => {
+  const handleCreateBlankSpace = async (): Promise<string> => {
     try {
       const newSpace = await createSpaceMutation.mutateAsync({ 
         name: 'New Space',
@@ -703,7 +703,7 @@ export default function App() {
     } catch (error) {
       console.error('Error creating blank space:', error);
       toast.error('Failed to create space');
-      return null;
+      return '';
     }
   };
 
