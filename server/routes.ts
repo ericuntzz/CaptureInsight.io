@@ -739,11 +739,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/captures', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { dataUrl, metadata, spaceId, tags } = req.body;
+      const { dataUrl, metadata, spaceId, tags, sourceUrl, analyze, llmModel } = req.body;
 
-      if (!dataUrl) {
-        return res.status(400).json({ message: "Missing required field: dataUrl" });
+      if (!dataUrl && !sourceUrl) {
+        return res.status(400).json({ message: "Missing required field: dataUrl or sourceUrl" });
       }
+
+      const isLinkOnly = !dataUrl && !!sourceUrl;
 
       // Get or create a default space if none provided
       let targetSpaceId = spaceId;
@@ -762,18 +764,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Store screenshot as a sheet with data
+      // Store as a sheet with data
+      const captureTitle = metadata?.title || (isLinkOnly ? `Link from ${new Date().toLocaleString()}` : `Capture from ${new Date().toLocaleString()}`);
+      const captureSource = isLinkOnly ? sourceUrl : (metadata?.url || 'Unknown source');
+      
       const sheet = await storage.createSheet({
         spaceId: targetSpaceId,
-        name: metadata?.title || `Capture from ${new Date().toLocaleString()}`,
-        dataSourceType: 'screenshot',
+        name: captureTitle,
+        dataSourceType: isLinkOnly ? 'link' : 'screenshot',
         dataSourceMeta: {
-          captureMode: metadata?.mode || 'tab',
-          sourceUrl: metadata?.url || '',
+          captureMode: isLinkOnly ? 'link' : (metadata?.mode || 'tab'),
+          sourceUrl: captureSource,
           timestamp: metadata?.timestamp || Date.now(),
-          dimensions: metadata?.dimensions || { width: 0, height: 0 }
+          dimensions: isLinkOnly ? { width: 0, height: 0 } : (metadata?.dimensions || { width: 0, height: 0 })
         },
-        data: {
+        data: isLinkOnly ? {
+          type: 'link',
+          url: sourceUrl,
+          savedAt: new Date().toISOString()
+        } : {
           type: 'screenshot',
           dataUrl: dataUrl,
           capturedAt: new Date().toISOString()
@@ -784,8 +793,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create an insight linked to this capture
       const insight = await storage.createInsight({
         spaceId: targetSpaceId,
-        title: metadata?.title || `Capture from ${new Date().toLocaleString()}`,
-        summary: `Screenshot captured from: ${metadata?.url || 'Unknown source'}`,
+        title: captureTitle,
+        summary: isLinkOnly ? `Link saved: ${sourceUrl}` : `Screenshot captured from: ${captureSource}`,
         status: 'Open',
         priority: 'Medium',
         createdBy: userId
@@ -810,13 +819,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Optionally analyze with AI if configured
-      if (isGeminiConfigured()) {
+      // Optionally analyze with AI if configured and requested
+      const shouldAnalyze = analyze !== false && llmModel !== 'none' && !isLinkOnly;
+      if (shouldAnalyze && isGeminiConfigured() && dataUrl) {
         try {
           const analysisResult = await analyzeCapture(dataUrl, 'screenshot');
           if (analysisResult.summary) {
+            const modelLabel = llmModel === 'gemini-flash' ? 'Gemini 2.5 Flash' : 'Gemini 2.5 Pro';
             await storage.updateInsight(insight.id, {
-              summary: `${insight.summary}\n\n**AI Analysis:**\n${analysisResult.summary}`
+              summary: `${insight.summary}\n\n**AI Analysis (${modelLabel}):**\n${analysisResult.summary}`
             });
           }
         } catch (aiError) {

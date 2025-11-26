@@ -603,8 +603,15 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
         uploadData.tags = selectedTags;
       }
 
-      if (storedLink) {
+      if (storedLink && !dataUrl) {
+        uploadData.sourceUrl = storedLink;
+      } else if (storedLink) {
         uploadData.metadata.url = storedLink;
+      }
+
+      if (selectedLlm) {
+        uploadData.analyze = selectedLlm !== 'none';
+        uploadData.llmModel = selectedLlm === 'gemini-2.5-flash' ? 'gemini-flash' : 'gemini-pro';
       }
 
       console.log('[CaptureInsight] Uploading with settings:', {

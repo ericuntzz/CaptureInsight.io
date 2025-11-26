@@ -178,19 +178,36 @@ async function handleUploadScreenshot(message: ExtensionMessage) {
     const storage = await chrome.storage.local.get([STORAGE_KEYS.API_BASE_URL]);
     const apiUrl = storage[STORAGE_KEYS.API_BASE_URL] || DEFAULT_API_URL;
 
+    const uploadPayload: Record<string, unknown> = {
+      metadata: message.metadata,
+      spaceId: message.spaceId,
+      projectId: message.projectId,
+      tags: message.tags
+    };
+    
+    if (message.dataUrl) {
+      uploadPayload.dataUrl = message.dataUrl;
+    }
+    
+    if ((message as any).sourceUrl) {
+      uploadPayload.sourceUrl = (message as any).sourceUrl;
+    }
+    
+    if ((message as any).analyze !== undefined) {
+      uploadPayload.analyze = (message as any).analyze;
+    }
+    
+    if ((message as any).llmModel) {
+      uploadPayload.llmModel = (message as any).llmModel;
+    }
+
     const response = await fetch(`${apiUrl}${API_ENDPOINTS.UPLOAD_SCREENSHOT}`, {
       method: 'POST',
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        dataUrl: message.dataUrl,
-        metadata: message.metadata,
-        spaceId: message.spaceId,
-        projectId: message.projectId,
-        tags: message.tags
-      })
+      body: JSON.stringify(uploadPayload)
     });
 
     if (!response.ok) {
