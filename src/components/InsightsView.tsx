@@ -140,7 +140,7 @@ export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: Insi
       // Tag filter
       if (
         selectedFilters.tags.length > 0 &&
-        !insight.tags.some((tagId) => selectedFilters.tags.includes(tagId))
+        !(insight.tags || []).some((tagId) => selectedFilters.tags.includes(tagId))
       ) {
         return false;
       }
@@ -195,9 +195,10 @@ export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: Insi
           key = insight.status;
           break;
         case 'tag':
-          // Group by first tag
-          const firstTagId = insight.tags[0];
-          const firstTag = tags.find((t) => t.id === firstTagId);
+          // Group by first tag (guard against undefined tags)
+          const insightTags = insight.tags || [];
+          const firstTagId = insightTags[0];
+          const firstTag = firstTagId ? tags.find((t) => t.id === firstTagId) : null;
           key = firstTag ? firstTag.name : 'Untagged';
           break;
         case 'folder':
@@ -972,7 +973,9 @@ function InsightRow({
   onOpenCanvas: (insightId: string) => void;
   spaceId: string | null;
 }) {
-  const insightTags = tags.filter((tag) => insight.tags.includes(tag.id));
+  // Guard against undefined tags - API may return null/undefined
+  const insightTagIds = insight.tags || [];
+  const insightTags = tags.filter((tag) => insightTagIds.includes(tag.id));
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -1041,7 +1044,9 @@ function InsightCard({
   onOpenCanvas: (insightId: string) => void;
   spaceId: string | null;
 }) {
-  const insightTags = tags.filter((tag) => insight.tags.includes(tag.id));
+  // Guard against undefined tags - API may return null/undefined
+  const insightTagIds = insight.tags || [];
+  const insightTags = tags.filter((tag) => insightTagIds.includes(tag.id));
 
   if (isExpanded) {
     return (
