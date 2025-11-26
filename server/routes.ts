@@ -564,7 +564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ai/chat', isAuthenticated, async (req: any, res) => {
     try {
-      const { messages, context, spaceGoals } = req.body;
+      const { messages, context, spaceGoals, spaceId, useRag } = req.body;
 
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({ message: "Messages must be an array" });
@@ -581,7 +581,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content: m.content,
       }));
 
-      const result = await chat(chatMessages, context, spaceGoals);
+      const result = await chat({
+        messages: chatMessages,
+        spaceId,
+        spaceGoals,
+        additionalContext: context,
+        useRag: useRag !== false,
+      });
       res.json(result);
     } catch (error) {
       console.error("Error in AI chat:", error);

@@ -1,7 +1,7 @@
 import {
   analyzeScreenshot,
   analyzeData,
-  chat,
+  chat as geminiChat,
   extractInsights,
   analyzeKPI,
   isGeminiConfigured,
@@ -28,7 +28,6 @@ import { storage } from "../storage";
 export {
   analyzeScreenshot,
   analyzeData,
-  chat,
   extractInsights,
   analyzeKPI,
   isGeminiConfigured,
@@ -172,5 +171,59 @@ export function getAIStatus(): {
       configured: isOpenAIConfigured(),
       embeddingsEnabled: isOpenAIConfigured(),
     },
+  };
+}
+
+export interface RagChatOptions {
+  messages: ChatMessage[];
+  spaceId?: string;
+  spaceGoals?: string;
+  additionalContext?: string;
+  useRag?: boolean;
+}
+
+export async function chat(options: RagChatOptions): Promise<ChatResponse & { retrievedContext?: SimilarityResult[] }> {
+  const { messages, spaceId, spaceGoals, additionalContext, useRag = true } = options;
+  
+  if (!isGeminiConfigured()) {
+    throw new Error("Gemini AI is not configured");
+  }
+
+  let ragContext: SimilarityResult[] = [];
+  let contextString = additionalContext || "";
+
+  if (useRag && spaceId && isOpenAIConfigured() && messages.length > 0) {
+    const lastUserMessage = messages.filter(m => m.role === "user").pop();
+    if (lastUserMessage) {
+      try {
+        ragContext = await searchSimilar(lastUserMessage.content, spaceId, 5);
+        
+        if (ragContext.length > 0) {
+          const relevantContent = ragContext
+            .filter(r => r.score > 0.7)
+            .map(r => {
+              const entityLabel = r.entityType === "insight" ? "Insight" : "Data Sheet";
+              const meta = r.metadata ? ` (${JSON.stringify(r.metadata)})` : "";
+              return `[${entityLabel}${meta}]: ${r.content}`;
+            })
+            .join("\n\n");
+          
+          if (relevantContent) {
+            contextString = contextString 
+              ? `${contextString}\n\nRELEVANT CONTEXT FROM YOUR DATA:\n${relevantContent}`
+              : `RELEVANT CONTEXT FROM YOUR DATA:\n${relevantContent}`;
+          }
+        }
+      } catch (error) {
+        console.error("RAG context retrieval failed:", error);
+      }
+    }
+  }
+
+  const result = await geminiChat(messages, contextString, spaceGoals);
+  
+  return {
+    ...result,
+    retrievedContext: ragContext.length > 0 ? ragContext : undefined,
   };
 }
