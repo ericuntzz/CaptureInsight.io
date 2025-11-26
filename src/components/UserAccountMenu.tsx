@@ -78,7 +78,7 @@
  * ============================================================================
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { 
   Settings, 
   User, 
@@ -87,7 +87,6 @@ import {
   Check,
   LogOut,
   Bell,
-  HelpCircle,
   CreditCard,
   Palette
 } from 'lucide-react';

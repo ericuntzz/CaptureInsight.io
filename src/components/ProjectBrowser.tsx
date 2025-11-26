@@ -44,9 +44,9 @@ export interface Project {
 
 interface ProjectBrowserProps {
   projects: Project[];
-  currentSpaceId?: string | null; // ⚠️ NEW: Current active Space for Space-scoped architecture
-  onSpaceChange?: (spaceId: string) => void; // ⚠️ NEW: Handle Space switching
-  onCreateBlankSpace?: () => Promise<string>; // ⚠️ NEW: Create blank Space (returns spaceId)
+  currentSpaceId?: string | null;
+  onSpaceChange?: (spaceId: string) => void;
+  onCreateBlankSpace?: () => Promise<string>;
   selectedSheet: string | null;
   onSelectSheet: (projectId: string, folderId: string, sheetId: string) => void;
   onCreateProject: (data: { name: string; description: string; goals: string; instructions: string }) => void;
@@ -70,7 +70,16 @@ interface ProjectBrowserProps {
   activeView?: 'data' | 'ai' | 'changelogs' | 'insights';
   onViewChange?: (view: 'data' | 'ai' | 'changelogs' | 'insights') => void;
   onBackToCapture?: () => void;
-  externalCollapseControl?: boolean; // NEW: External control for collapse state
+  externalCollapseControl?: boolean;
+  user?: {
+    id: string;
+    email?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    profileImageUrl?: string | null;
+  } | null;
+  onNavigateToSettings?: (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies') => void;
+  onLogout?: () => void;
 }
 
 export function ProjectBrowser({ 
@@ -93,6 +102,9 @@ export function ProjectBrowser({
   onViewChange,
   onBackToCapture,
   externalCollapseControl,
+  user,
+  onNavigateToSettings,
+  onLogout,
 }: ProjectBrowserProps) {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set(projects.map(p => p.id)));
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -482,9 +494,9 @@ export function ProjectBrowser({
 
         {/* User Profile */}
         <UserAccountMenu
-          userName="Eric Unterberger"
-          userInitials="EU"
-          userEmail="eric@captureinsight.com"
+          userName={user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'User' : 'Guest'}
+          userInitials={user ? (user.firstName && user.lastName ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : (user.email?.[0] || 'U').toUpperCase()) : 'G'}
+          userEmail={user?.email || ''}
           currentCompany={{
             id: '1',
             name: 'CaptureInsight Demo',
@@ -492,36 +504,35 @@ export function ProjectBrowser({
           }}
           companies={[
             { id: '1', name: 'CaptureInsight Demo', role: 'owner' },
-            { id: '2', name: 'Acme Marketing Agency', role: 'admin' },
-            { id: '3', name: 'Tech Startup Inc', role: 'member' }
           ]}
           isCollapsed={isCollapsed}
           onSwitchCompany={(companyId) => {
-            console.log('Switch to company:', companyId);
-            toast.success(`Switched to ${companyId === '1' ? 'CaptureInsight Demo' : companyId === '2' ? 'Acme Marketing Agency' : 'Tech Startup Inc'}`);
+            toast.success(`Switched to company`);
           }}
           onCreateCompany={() => {
-            console.log('Create new company');
-            toast.success('Create Company feature coming soon!');
+            onNavigateToSettings?.('companies');
           }}
           onSettings={() => {
-            console.log('Open settings');
+            onNavigateToSettings?.('settings');
           }}
           onProfile={() => {
-            console.log('Open profile');
+            onNavigateToSettings?.('profile');
           }}
           onPreferences={() => {
-            console.log('Open preferences');
+            onNavigateToSettings?.('preferences');
           }}
           onBilling={() => {
-            console.log('Open billing');
+            onNavigateToSettings?.('billing');
           }}
           onHelp={() => {
-            console.log('Open help');
+            window.open('https://captureinsight.com/help', '_blank');
           }}
           onLogout={() => {
-            console.log('Logout');
-            toast.success('Logged out successfully');
+            if (onLogout) {
+              onLogout();
+            } else {
+              window.location.href = '/api/logout';
+            }
           }}
         />
       </div>

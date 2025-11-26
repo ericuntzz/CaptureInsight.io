@@ -14,6 +14,14 @@ import type { DataSource } from './components/DataSourceSidebar';
 import { buildRoute, getCurrentView } from './routes';
 import { useRouter } from './hooks/useRouter';
 import { useAuth } from './hooks/useAuth';
+import {
+  ProfilePage,
+  SettingsPage,
+  PreferencesPage,
+  NotificationsPage,
+  BillingPage,
+  CompanyManagementPage,
+} from './components/settings';
 import { 
   useSpaces, 
   useCreateSpace, 
@@ -86,6 +94,21 @@ export default function App() {
     }
     return 'capture';
   });
+  
+  type SettingsPage = 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | null;
+  const [activeSettingsPage, setActiveSettingsPage] = useState<SettingsPage>(null);
+  
+  const handleNavigateToSettings = (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies') => {
+    setActiveSettingsPage(page);
+  };
+  
+  const handleCloseSettings = () => {
+    setActiveSettingsPage(null);
+  };
+  
+  const handleLogout = () => {
+    window.location.href = '/api/logout';
+  };
   
   // Persist current view to localStorage
   useEffect(() => {
@@ -953,6 +976,40 @@ export default function App() {
     await refetchSpaces();
   };
 
+  // Render settings pages when active
+  if (activeSettingsPage) {
+    const settingsPageContent = () => {
+      switch (activeSettingsPage) {
+        case 'profile':
+          return <ProfilePage onBack={handleCloseSettings} />;
+        case 'settings':
+          return (
+            <SettingsPage 
+              onBack={handleCloseSettings}
+              onNavigate={(page) => setActiveSettingsPage(page)}
+            />
+          );
+        case 'preferences':
+          return <PreferencesPage onBack={handleCloseSettings} />;
+        case 'notifications':
+          return <NotificationsPage onBack={handleCloseSettings} />;
+        case 'billing':
+          return <BillingPage onBack={handleCloseSettings} />;
+        case 'companies':
+          return <CompanyManagementPage onBack={handleCloseSettings} />;
+        default:
+          return null;
+      }
+    };
+    
+    return (
+      <div className="min-h-screen bg-[#0A0E1A]">
+        {settingsPageContent()}
+        <Toaster position="bottom-right" theme="dark" />
+      </div>
+    );
+  }
+
   // Switch between views
   if (currentView === 'data') {
     return (
@@ -1025,6 +1082,9 @@ export default function App() {
           onCreateFolder={handleCreateFolder}
           onUpdateSheetAnalysis={handleUpdateSheetAnalysis}
           onTopLevelViewChange={handleViewChange}
+          user={user}
+          onNavigateToSettings={handleNavigateToSettings}
+          onLogout={handleLogout}
         />
       </>
     );

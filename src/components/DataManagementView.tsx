@@ -112,14 +112,14 @@ const initialMockProjects: Project[] = [
 interface DataManagementViewProps {
   onBackToCapture: () => void;
   onAddDataCapture?: (projectId: string, folderId: string) => void;
-  spaces: Project[]; // ⚠️ SYNCED FROM APP.TSX - Renamed from projects
-  currentSpaceId?: string | null; // ⚠️ NEW: Current active Space for Space-scoped architecture
-  onSpaceChange?: (spaceId: string) => void; // ⚠️ NEW: Handle Space switching
-  onCreateBlankSpace?: () => Promise<string>; // ⚠️ NEW: Create blank Space (returns spaceId)
+  spaces: Project[];
+  currentSpaceId?: string | null;
+  onSpaceChange?: (spaceId: string) => void;
+  onCreateBlankSpace?: () => Promise<string>;
   onCreateSpace: (data: { name: string; description: string; goals: string; instructions: string }) => void;
   onUpdateSpace: (spaceId: string, data: { name: string; goals: string; instructions: string }) => void;
   onDeleteSpace: (spaceId: string) => void;
-  onUpdateTags?: (spaceId: string, tags: any[]) => void; // ⚠️ NEW: Handle Space-level tag updates
+  onUpdateTags?: (spaceId: string, tags: any[]) => void;
   onUpdateFolder: (spaceId: string, folderId: string, name: string) => void;
   onDeleteFolder: (spaceId: string, folderId: string) => void;
   onCreateFolder: (spaceId: string, name: string) => void;
@@ -132,14 +132,23 @@ interface DataManagementViewProps {
       llmProvider?: { id: string; name: string };
       schedule?: { frequency: string; time: string };
     }
-  ) => void; // ⚠️ SYNCED WITH CaptureOptionsModal analysis settings
-  onTopLevelViewChange?: (view: 'capture' | 'data' | 'changelogs' | 'insights') => void; // ⚠️ NEW: Handle top-level view changes
+  ) => void;
+  onTopLevelViewChange?: (view: 'capture' | 'data' | 'changelogs' | 'insights') => void;
+  user?: {
+    id: string;
+    email?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    profileImageUrl?: string | null;
+  } | null;
+  onNavigateToSettings?: (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies') => void;
+  onLogout?: () => void;
 }
 
 export function DataManagementView({ 
   onBackToCapture, 
   onAddDataCapture,
-  spaces, // ⚠️ SYNCED FROM APP.TSX - Renamed from projects
+  spaces,
   currentSpaceId,
   onSpaceChange,
   onCreateBlankSpace,
@@ -152,6 +161,9 @@ export function DataManagementView({
   onCreateFolder,
   onUpdateSheetAnalysis,
   onTopLevelViewChange,
+  user,
+  onNavigateToSettings,
+  onLogout,
 }: DataManagementViewProps) {
   // Use spaces as projects for backward compatibility
   const projects = spaces;
@@ -261,6 +273,9 @@ export function DataManagementView({
           onViewChange={handleViewChange}
           onBackToCapture={onBackToCapture}
           externalCollapseControl={sidebarCollapsed}
+          user={user}
+          onNavigateToSettings={onNavigateToSettings}
+          onLogout={onLogout}
         />
 
         {/* Main Content */}
