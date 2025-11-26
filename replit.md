@@ -188,8 +188,13 @@ CaptureInsight now includes a Chrome extension that enables screenshot capture d
 ### Key Features
 - **Floating Toolbar**: Draggable toolbar injected into any webpage
 - **Tab Capture**: Screenshot the current visible tab
+- **File Upload**: Upload local images for analysis
+- **Link Capture**: Save web links for reference
+- **Destination Picker**: Select target space for captures (fetches from /api/spaces)
+- **Tags Picker**: Multi-select tags for organization (fetches from /api/spaces/:spaceId/tags)
+- **LLM Selection**: Choose Gemini 2.5 Pro, Flash, or skip analysis
 - **Cookie-based Auth**: Uses existing Replit Auth session cookies
-- **AI Analysis**: Automatic screenshot analysis with Gemini (if configured)
+- **AI Analysis**: Configurable screenshot analysis with Gemini model choice
 - **Backend Integration**: Saves captures as sheets linked to insights
 
 ### Installation (Development)
@@ -203,10 +208,12 @@ CaptureInsight now includes a Chrome extension that enables screenshot capture d
 5. The CaptureInsight extension icon will appear in your toolbar
 
 ### Extension API Endpoint
-- `POST /api/captures` - Upload screenshot from extension
+- `POST /api/captures` - Upload capture from extension
   - Requires authentication (session cookies)
-  - Creates a sheet (stores screenshot data) and an insight
-  - Optionally runs AI analysis on the captured screenshot
+  - Accepts: `{ dataUrl?, sourceUrl?, metadata, spaceId?, tags?, analyze?, llmModel? }`
+  - Supports screenshot uploads (dataUrl) or link-only captures (sourceUrl)
+  - Creates a sheet and linked insight with optional tag associations
+  - AI analysis controlled by `analyze` (boolean) and `llmModel` ('gemini-pro'|'gemini-flash')
 
 ### Build Commands
 ```bash
