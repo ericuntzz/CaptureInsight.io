@@ -1,4 +1,34 @@
-import { D as DEFAULT_API_URL, S as STORAGE_KEYS, M as MessageType, A as API_ENDPOINTS } from '../chunks/constants-CBz2pEEC.js';
+var MessageType = /* @__PURE__ */ ((MessageType2) => {
+  MessageType2["CAPTURE_REQUEST"] = "CAPTURE_REQUEST";
+  MessageType2["CAPTURE_RESPONSE"] = "CAPTURE_RESPONSE";
+  MessageType2["AUTH_STATUS_REQUEST"] = "AUTH_STATUS_REQUEST";
+  MessageType2["AUTH_STATUS_RESPONSE"] = "AUTH_STATUS_RESPONSE";
+  MessageType2["OPEN_POPUP"] = "OPEN_POPUP";
+  MessageType2["TOGGLE_TOOLBAR"] = "TOGGLE_TOOLBAR";
+  MessageType2["UPLOAD_SCREENSHOT"] = "UPLOAD_SCREENSHOT";
+  MessageType2["UPLOAD_RESPONSE"] = "UPLOAD_RESPONSE";
+  MessageType2["GET_CURRENT_TAB"] = "GET_CURRENT_TAB";
+  MessageType2["TAB_INFO"] = "TAB_INFO";
+  return MessageType2;
+})(MessageType || {});
+
+typeof chrome !== "undefined" && chrome.runtime ? chrome.runtime.getURL("") : "https://captureinsight.replit.dev";
+const DEFAULT_API_URL = "https://ae16f8db-b279-4904-a814-a24b3f29eff4-00-8wubmfb2t7hb.kirk.replit.dev";
+const STORAGE_KEYS = {
+  API_BASE_URL: "apiBaseUrl",
+  LAST_SPACE: "lastSpace",
+  LAST_PROJECT: "lastProject",
+  TOOLBAR_POSITION: "toolbarPosition",
+  TOOLBAR_VISIBLE: "toolbarVisible",
+  USER_PREFERENCES: "userPreferences"
+};
+const API_ENDPOINTS = {
+  AUTH_STATUS: "/api/auth/user",
+  UPLOAD_SCREENSHOT: "/api/captures",
+  SPACES: "/api/spaces",
+  PROJECTS: "/api/projects",
+  TAGS: "/api/tags"
+};
 
 async function getImageDimensions(dataUrl) {
   try {

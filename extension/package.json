@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "prebuild": "node scripts/generate-icons.js",
-    "build": "vite build && npm run postbuild",
+    "build": "npm run build:popup && npm run build:background && npm run build:content && npm run postbuild",
+    "build:popup": "vite build --config vite.config.popup.ts",
+    "build:background": "vite build --config vite.config.background.ts",
+    "build:content": "vite build --config vite.config.content.ts",
     "postbuild": "cp manifest.json dist-extension/ && cp -r public/icons dist-extension/ && cp src/content/styles.css dist-extension/content/",
     "dev": "vite build --watch",
     "type-check": "tsc --noEmit"
