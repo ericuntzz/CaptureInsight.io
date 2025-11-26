@@ -210,8 +210,8 @@ export function ProjectBrowser({
   };
 
   // ⚠️ CRITICAL: Get current Space for Space-scoped architecture
-  // Only show folders from the current Space - use fallback to first project if not found
-  const currentSpace = (currentSpaceId && projects.find(p => p.id === currentSpaceId)) || projects[0];
+  // Only show folders from the current Space
+  const currentSpace = currentSpaceId ? projects.find(p => p.id === currentSpaceId) : projects[0];
   const foldersToDisplay = currentSpace?.folders || [];
 
   // Handle create blank Space with auto-edit
@@ -232,71 +232,19 @@ export function ProjectBrowser({
       transition={{ duration: 0.3, ease: 'easeInOut' }}
       className="bg-[#1A1F2E] h-full flex flex-col"
     >
-      {/* Space Header - Original design with name + settings gear */}
+      {/* Space Switcher */}
       <div className="px-2 pt-4 pb-2">
-        {!isCollapsed ? (
-          <div className="flex items-center justify-between">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[rgba(255,107,53,0.1)] transition-colors text-white max-w-[180px]">
-                  <Sparkles className="w-4 h-4 text-[#FF6B35] flex-shrink-0" />
-                  <span className="text-sm font-medium truncate">
-                    {currentSpace?.name || 'Select a Space'}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-[#9CA3AF] flex-shrink-0" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 bg-[#2D3B4E] border-[rgba(255,107,53,0.2)]">
-                {projects.map((space) => (
-                  <DropdownMenuItem
-                    key={space.id}
-                    onClick={() => onSpaceChange?.(space.id)}
-                    className={`text-white hover:bg-[rgba(255,107,53,0.1)] cursor-pointer ${
-                      space.id === currentSpace?.id ? 'bg-[rgba(255,107,53,0.15)]' : ''
-                    }`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 mr-2 text-[#FF6B35]" />
-                    <span className="truncate">{space.name}</span>
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator className="bg-[rgba(255,107,53,0.1)]" />
-                <DropdownMenuItem
-                  onClick={() => setShowCreateProject(true)}
-                  className="text-[#FF6B35] hover:bg-[rgba(255,107,53,0.1)] cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5 mr-2" />
-                  Create New Space
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => currentSpace && setProjectSettingsDialog(currentSpace)}
-                  className="p-1.5 rounded hover:bg-[rgba(255,107,53,0.1)] text-[#6B7280] hover:text-white transition-colors"
-                >
-                  <SettingsIcon className="w-4 h-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
-                Space Settings
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button 
-                onClick={handleProjectsClick}
-                className="w-full flex justify-center p-2 text-[#FF6B35]"
-              >
-                <Sparkles className="w-5 h-5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
-              {currentSpace?.name || 'Spaces'}
-            </TooltipContent>
-          </Tooltip>
+        {onSpaceChange && (
+          <SpaceSwitcher
+            spaces={projects}
+            currentSpaceId={currentSpaceId || null}
+            onSpaceChange={onSpaceChange}
+            onCreateSpace={onCreateProject}
+            onUpdateSpace={onUpdateProject}
+            onDeleteSpace={onDeleteProject}
+            onUpdateTags={onUpdateTags}
+            isCollapsed={isCollapsed}
+          />
         )}
       </div>
 
@@ -343,10 +291,10 @@ export function ProjectBrowser({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={() => onBackToCapture?.()}
-              className={`w-full flex items-center rounded-lg transition-all mb-2 group p-3 ${isCollapsed ? 'justify-center' : ''} text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white`}
+              onClick={onBackToCapture}
+              className={`w-full flex items-center rounded-lg transition-all mb-2 text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white group p-3 ${isCollapsed ? 'justify-center' : ''}`}
             >
-              <Camera className={`w-4 h-4 flex-shrink-0 ${isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
+              <Plus className={`w-4 h-4 flex-shrink-0 ${isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
               <AnimatePresence>
                 {!isCollapsed && (
                   <motion.span 
@@ -356,7 +304,7 @@ export function ProjectBrowser({
                     transition={{ duration: 0.2 }}
                     className="text-sm whitespace-nowrap overflow-hidden ml-3"
                   >
-                    + Upload
+                    Upload
                   </motion.span>
                 )}
               </AnimatePresence>
@@ -440,211 +388,8 @@ export function ProjectBrowser({
         {/* AI Assistant Button - REMOVED: Now using Canvas mode for AI interactions */}
       </div>
 
-      {/* Folders Tree - Only shown when Files view is active */}
-      {activeView === 'data' && !isCollapsed && (
-        <div className="flex-1 overflow-y-auto px-2">
-          {/* Folders Header with Add Button */}
-          <div className="flex items-center justify-between mb-2 px-1">
-            <span className="text-xs text-[#6B7280] uppercase tracking-wide">Folders</span>
-            {currentSpace && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => handleStartCreateFolder(currentSpace.id)}
-                    className="p-1 rounded hover:bg-[rgba(255,107,53,0.1)] text-[#6B7280] hover:text-[#FF6B35] transition-colors"
-                  >
-                    <FolderPlus className="w-3.5 h-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
-                  New Folder
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-
-          {/* Folder List */}
-          {foldersToDisplay.length === 0 ? (
-            <div className="text-center py-4">
-              <p className="text-[#6B7280] text-sm">No folders yet</p>
-              {currentSpace && (
-                <button
-                  onClick={() => handleStartCreateFolder(currentSpace.id)}
-                  className="mt-2 text-xs text-[#FF6B35] hover:underline"
-                >
-                  Create your first folder
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {foldersToDisplay.map((folder: FolderType) => (
-                <div key={folder.id}>
-                  {/* Folder Row */}
-                  <div
-                    className={`group flex items-center rounded-lg transition-all hover:bg-[rgba(255,107,53,0.1)] ${
-                      expandedFolders.has(folder.id) ? 'bg-[rgba(255,107,53,0.05)]' : ''
-                    }`}
-                  >
-                    {/* Expand/Collapse Toggle */}
-                    <button
-                      onClick={() => toggleFolder(folder.id)}
-                      className="p-2 text-[#6B7280] hover:text-white"
-                    >
-                      {expandedFolders.has(folder.id) ? (
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      ) : (
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-
-                    {/* Folder Icon & Name */}
-                    {editingFolder?.folderId === folder.id ? (
-                      <div className="flex-1 flex items-center gap-1 pr-2">
-                        <input
-                          ref={inputRef}
-                          type="text"
-                          value={editingFolder?.name || ''}
-                          onChange={(e) => editingFolder && setEditingFolder({ ...editingFolder, name: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEditFolder();
-                            if (e.key === 'Escape') handleCancelEditFolder();
-                          }}
-                          className="flex-1 bg-[#2D3B4E] text-white text-sm px-2 py-1 rounded border border-[rgba(255,107,53,0.3)] focus:outline-none focus:border-[#FF6B35]"
-                        />
-                        <button onClick={handleSaveEditFolder} className="p-1 text-green-400 hover:text-green-300">
-                          <Check className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={handleCancelEditFolder} className="p-1 text-red-400 hover:text-red-300">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex-1 flex items-center gap-2 py-2 text-[#9CA3AF] hover:text-white cursor-pointer" onClick={() => toggleFolder(folder.id)}>
-                          {expandedFolders.has(folder.id) ? (
-                            <FolderOpen className="w-4 h-4 text-[#FF6B35]" />
-                          ) : (
-                            <Folder className="w-4 h-4" />
-                          )}
-                          <span className="text-sm truncate">{folder.name}</span>
-                          <span className="text-xs text-[#6B7280]">({folder.sheets?.length || 0})</span>
-                        </div>
-
-                        {/* Folder Actions */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="p-1.5 opacity-0 group-hover:opacity-100 text-[#6B7280] hover:text-white transition-opacity">
-                              <MoreVertical className="w-3.5 h-3.5" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.2)]">
-                            <DropdownMenuItem
-                              onClick={() => currentSpace && handleStartEditFolder(currentSpace.id, folder.id, folder.name)}
-                              className="text-white hover:bg-[rgba(255,107,53,0.1)] cursor-pointer"
-                            >
-                              <Edit2 className="w-3.5 h-3.5 mr-2" />
-                              Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator className="bg-[rgba(255,107,53,0.1)]" />
-                            <DropdownMenuItem
-                              onClick={() => setShowDeleteConfirm(folder.id)}
-                              className="text-red-400 hover:bg-[rgba(255,107,53,0.1)] cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Delete Confirmation */}
-                  {showDeleteConfirm === folder.id && (
-                    <div className="ml-6 p-2 bg-[#2D3B4E] rounded-lg border border-red-500/30 mb-1">
-                      <p className="text-xs text-[#9CA3AF] mb-2">Delete "{folder.name}"?</p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => currentSpace && handleDeleteFolder(currentSpace.id, folder.id)}
-                          className="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          onClick={() => setShowDeleteConfirm(null)}
-                          className="px-2 py-1 text-xs bg-[#1A1F2E] text-[#9CA3AF] rounded hover:bg-[#252B3B]"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Sheets List (when folder expanded) */}
-                  <AnimatePresence>
-                    {expandedFolders.has(folder.id) && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="ml-6 overflow-hidden"
-                      >
-                        {folder.sheets && folder.sheets.length > 0 ? (
-                          folder.sheets.map((sheet: Sheet) => (
-                            <button
-                              key={sheet.id}
-                              onClick={() => currentSpace && onSelectSheet(currentSpace.id, folder.id, sheet.id)}
-                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors ${
-                                selectedSheet === sheet.id
-                                  ? 'bg-[rgba(255,107,53,0.2)] text-[#FF6B35]'
-                                  : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
-                              }`}
-                            >
-                              <FileSpreadsheet className="w-3.5 h-3.5" />
-                              <span className="truncate">{sheet.name}</span>
-                            </button>
-                          ))
-                        ) : (
-                          <p className="text-xs text-[#6B7280] px-2 py-1.5 italic">No files yet</p>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Create Folder Input */}
-          {creatingFolder && currentSpace?.id === creatingFolder.projectId && (
-            <div className="mt-2 flex items-center gap-1 px-1">
-              <FolderPlus className="w-4 h-4 text-[#FF6B35]" />
-              <input
-                ref={createInputRef}
-                type="text"
-                value={creatingFolder.name}
-                onChange={(e) => setCreatingFolder({ ...creatingFolder, name: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveCreateFolder();
-                  if (e.key === 'Escape') handleCancelCreateFolder();
-                }}
-                className="flex-1 bg-[#2D3B4E] text-white text-sm px-2 py-1 rounded border border-[rgba(255,107,53,0.3)] focus:outline-none focus:border-[#FF6B35]"
-              />
-              <button onClick={handleSaveCreateFolder} className="p-1 text-green-400 hover:text-green-300">
-                <Check className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={handleCancelCreateFolder} className="p-1 text-red-400 hover:text-red-300">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Spacer when not showing folders */}
-      {(activeView !== 'data' || isCollapsed) && <div className="flex-1" />}
+      {/* Spacer - Removed folders section */}
+      <div className="flex-1" />
 
       {/* Footer */}
       <div className="px-2 py-4">

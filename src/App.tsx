@@ -66,34 +66,31 @@ export default function App() {
   const router = useRouter();
   
   // Initialize view from URL or localStorage
-  // Default is now 'insights' since capture functionality is handled by Chrome extension
   const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights'>(() => {
     if (typeof window !== 'undefined') {
       // First try to get view from URL
       const viewFromUrl = getCurrentView(window.location.pathname);
       
-      // If we have a saved view, prefer it (unless URL explicitly points to a specific route)
+      // If URL indicates a specific view (not root), use it
+      if (viewFromUrl !== 'capture' || window.location.pathname === '/') {
+        return viewFromUrl;
+      }
+      
+      // Otherwise, check localStorage as fallback
       const savedView = localStorage.getItem('captureinsight_current_view');
-      if (savedView && ['data', 'changelogs', 'insights'].includes(savedView) && window.location.pathname === '/') {
+      if (savedView && ['capture', 'data', 'changelogs', 'insights'].includes(savedView)) {
         return savedView as 'capture' | 'data' | 'changelogs' | 'insights';
       }
       
       return viewFromUrl;
     }
-    return 'insights';
+    return 'capture';
   });
   
   // Persist current view to localStorage
   useEffect(() => {
     localStorage.setItem('captureinsight_current_view', currentView);
   }, [currentView]);
-  
-  // Redirect '/' to '/insights' on initial load
-  useEffect(() => {
-    if (window.location.pathname === '/' && currentView === 'insights') {
-      router.replace(buildRoute.insights());
-    }
-  }, []);
   
   // Sync URL with current view when router changes (back/forward navigation)
   useEffect(() => {
@@ -956,8 +953,8 @@ export default function App() {
     await refetchSpaces();
   };
 
-  // Switch between views - All non-capture views go through DataManagementView for consistent sidebar
-  if (currentView === 'data' || currentView === 'changelogs' || currentView === 'insights') {
+  // Switch between views
+  if (currentView === 'data') {
     return (
       <>
         <DataManagementView 
@@ -967,7 +964,6 @@ export default function App() {
           currentSpaceId={currentSpaceId}
           onSpaceChange={handleSpaceChange}
           onCreateBlankSpace={handleCreateBlankSpace}
-          initialActiveView={currentView === 'data' ? 'data' : currentView === 'insights' ? 'insights' : 'changelogs'}
           onCreateSpace={async (data) => {
             try {
               await createSpaceMutation.mutateAsync({
@@ -1031,6 +1027,33 @@ export default function App() {
           onTopLevelViewChange={handleViewChange}
         />
       </>
+    );
+  } else if (currentView === 'changelogs') {
+    return (
+      <ChangeLogsView 
+        spaces={spaces}
+        currentSpaceId={currentSpaceId}
+        onUpdateTags={handleUpdateSpaceTags}
+        onCaptureNewAsset={() => {
+          setCurrentView('capture');
+          toast.info('Create a new capture to link to your change log');
+        }}
+      />
+    );
+  } else if (currentView === 'insights') {
+    return (
+      <InsightsView 
+        spaces={spaces}
+        currentSpaceId={currentSpaceId}
+        onNavigateToCapture={(insightId) => {
+          // Navigate to capture view and show floating toolbar
+          setCurrentView('capture');
+          setShowToolbar(true);
+          if (insightId) {
+            toast.info('Capture data to link to your new insight');
+          }
+        }}
+      />
     );
   }
 

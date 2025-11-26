@@ -584,331 +584,6 @@
     /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "12", cy: "12", r: "9", fill: "transparent", stroke: checked ? "#FF6B35" : "#9CA3AF" }),
     checked && /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "12", cy: "12", r: "5", fill: "#FF6B35" })
   ] });
-  const TrashIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "14", height: "14", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 6h18" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" })
-  ] });
-  const BlurEditor = ({
-    imageDataUrl,
-    blurAreas,
-    onBlurAreasChange,
-    onApply,
-    onCancel
-  }) => {
-    const containerRef = reactExports.useRef(null);
-    reactExports.useRef(null);
-    const [isDrawing, setIsDrawing] = reactExports.useState(false);
-    const [startPoint, setStartPoint] = reactExports.useState(null);
-    const [currentRect, setCurrentRect] = reactExports.useState(null);
-    const [imageLoaded, setImageLoaded] = reactExports.useState(false);
-    const [imageDimensions, setImageDimensions] = reactExports.useState({ width: 0, height: 0 });
-    const [scale, setScale] = reactExports.useState(1);
-    const imageRef = reactExports.useRef(null);
-    reactExports.useEffect(() => {
-      const img = new Image();
-      img.onload = () => {
-        imageRef.current = img;
-        setImageDimensions({ width: img.width, height: img.height });
-        const maxWidth = window.innerWidth * 0.8;
-        const maxHeight = window.innerHeight * 0.7;
-        const scaleX = maxWidth / img.width;
-        const scaleY = maxHeight / img.height;
-        setScale(Math.min(scaleX, scaleY, 1));
-        setImageLoaded(true);
-      };
-      img.src = imageDataUrl;
-    }, [imageDataUrl]);
-    const getRelativeCoords = (e) => {
-      if (!containerRef.current) return { x: 0, y: 0 };
-      const rect = containerRef.current.getBoundingClientRect();
-      return {
-        x: (e.clientX - rect.left) / scale,
-        y: (e.clientY - rect.top) / scale
-      };
-    };
-    const handleMouseDown = (e) => {
-      if (e.button !== 0) return;
-      const coords = getRelativeCoords(e);
-      setIsDrawing(true);
-      setStartPoint(coords);
-      setCurrentRect(null);
-    };
-    const handleMouseMove = (e) => {
-      if (!isDrawing || !startPoint) return;
-      const coords = getRelativeCoords(e);
-      const x = Math.min(startPoint.x, coords.x);
-      const y = Math.min(startPoint.y, coords.y);
-      const width = Math.abs(coords.x - startPoint.x);
-      const height = Math.abs(coords.y - startPoint.y);
-      setCurrentRect({ x, y, width, height });
-    };
-    const handleMouseUp = () => {
-      if (isDrawing && currentRect && currentRect.width > 10 && currentRect.height > 10) {
-        const newArea = {
-          id: `blur-${Date.now()}`,
-          ...currentRect
-        };
-        onBlurAreasChange([...blurAreas, newArea]);
-      }
-      setIsDrawing(false);
-      setStartPoint(null);
-      setCurrentRect(null);
-    };
-    const handleDeleteArea = (id) => {
-      onBlurAreasChange(blurAreas.filter((area) => area.id !== id));
-    };
-    const applyBlurToCanvas = async () => {
-      return new Promise((resolve) => {
-        if (!imageRef.current) {
-          resolve(imageDataUrl);
-          return;
-        }
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          resolve(imageDataUrl);
-          return;
-        }
-        canvas.width = imageDimensions.width;
-        canvas.height = imageDimensions.height;
-        ctx.drawImage(imageRef.current, 0, 0);
-        blurAreas.forEach((area) => {
-          const x = Math.round(area.x);
-          const y = Math.round(area.y);
-          const w = Math.round(area.width);
-          const h = Math.round(area.height);
-          if (w > 0 && h > 0 && x >= 0 && y >= 0 && x + w <= canvas.width && y + h <= canvas.height) {
-            const imageData = ctx.getImageData(x, y, w, h);
-            const data = imageData.data;
-            const pixelSize = Math.max(8, Math.min(w, h) / 10);
-            for (let py = 0; py < h; py += pixelSize) {
-              for (let px = 0; px < w; px += pixelSize) {
-                let r = 0, g = 0, b = 0, count = 0;
-                for (let dy = 0; dy < pixelSize && py + dy < h; dy++) {
-                  for (let dx = 0; dx < pixelSize && px + dx < w; dx++) {
-                    const i = ((py + dy) * w + (px + dx)) * 4;
-                    r += data[i];
-                    g += data[i + 1];
-                    b += data[i + 2];
-                    count++;
-                  }
-                }
-                r = Math.round(r / count);
-                g = Math.round(g / count);
-                b = Math.round(b / count);
-                for (let dy = 0; dy < pixelSize && py + dy < h; dy++) {
-                  for (let dx = 0; dx < pixelSize && px + dx < w; dx++) {
-                    const i = ((py + dy) * w + (px + dx)) * 4;
-                    data[i] = r;
-                    data[i + 1] = g;
-                    data[i + 2] = b;
-                  }
-                }
-              }
-            }
-            ctx.putImageData(imageData, x, y);
-          }
-        });
-        resolve(canvas.toDataURL("image/png"));
-      });
-    };
-    const handleApply = async () => {
-      const blurredDataUrl = await applyBlurToCanvas();
-      onApply(blurredDataUrl);
-    };
-    if (!imageLoaded) {
-      return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.9)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 2147483647
-      }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { color: "#fff", fontSize: "16px" }, children: "Loading image..." }) });
-    }
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: {
-      position: "fixed",
-      inset: 0,
-      backgroundColor: "rgba(0, 0, 0, 0.9)",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 2147483647,
-      padding: "20px"
-    }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: {
-        backgroundColor: "#1A1F2E",
-        borderRadius: "12px",
-        padding: "16px",
-        marginBottom: "16px",
-        display: "flex",
-        alignItems: "center",
-        gap: "16px"
-      }, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(EyeOffIcon, {}),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#fff", fontSize: "14px", fontWeight: 500 }, children: "Draw rectangles over sensitive data to blur it" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#9CA3AF", fontSize: "12px" }, children: [
-          "(",
-          blurAreas.length,
-          " area",
-          blurAreas.length !== 1 ? "s" : "",
-          " selected)"
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          ref: containerRef,
-          style: {
-            position: "relative",
-            width: imageDimensions.width * scale,
-            height: imageDimensions.height * scale,
-            cursor: "crosshair",
-            borderRadius: "8px",
-            overflow: "hidden",
-            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.5)"
-          },
-          onMouseDown: handleMouseDown,
-          onMouseMove: handleMouseMove,
-          onMouseUp: handleMouseUp,
-          onMouseLeave: handleMouseUp,
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "img",
-              {
-                src: imageDataUrl,
-                alt: "Screenshot to blur",
-                style: {
-                  width: "100%",
-                  height: "100%",
-                  display: "block",
-                  pointerEvents: "none"
-                }
-              }
-            ),
-            blurAreas.map((area) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                style: {
-                  position: "absolute",
-                  left: area.x * scale,
-                  top: area.y * scale,
-                  width: area.width * scale,
-                  height: area.height * scale,
-                  backgroundColor: "rgba(59, 130, 246, 0.3)",
-                  border: "2px solid #3B82F6",
-                  borderRadius: "4px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                },
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "button",
-                    {
-                      onClick: (e) => {
-                        e.stopPropagation();
-                        handleDeleteArea(area.id);
-                      },
-                      style: {
-                        position: "absolute",
-                        top: "-10px",
-                        right: "-10px",
-                        width: "24px",
-                        height: "24px",
-                        borderRadius: "50%",
-                        backgroundColor: "#EF4444",
-                        border: "none",
-                        color: "#fff",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center"
-                      },
-                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(TrashIcon, {})
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: {
-                    backgroundColor: "rgba(59, 130, 246, 0.8)",
-                    color: "#fff",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    fontSize: "11px",
-                    fontWeight: 500,
-                    pointerEvents: "none"
-                  }, children: "BLUR" })
-                ]
-              },
-              area.id
-            )),
-            currentRect && /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                style: {
-                  position: "absolute",
-                  left: currentRect.x * scale,
-                  top: currentRect.y * scale,
-                  width: currentRect.width * scale,
-                  height: currentRect.height * scale,
-                  backgroundColor: "rgba(59, 130, 246, 0.2)",
-                  border: "2px dashed #3B82F6",
-                  borderRadius: "4px",
-                  pointerEvents: "none"
-                }
-              }
-            )
-          ]
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: {
-        display: "flex",
-        gap: "12px",
-        marginTop: "16px"
-      }, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            onClick: onCancel,
-            style: {
-              padding: "10px 24px",
-              backgroundColor: "transparent",
-              border: "1px solid rgba(255, 107, 53, 0.3)",
-              borderRadius: "8px",
-              color: "#9CA3AF",
-              fontSize: "14px",
-              fontWeight: 500,
-              cursor: "pointer"
-            },
-            children: "Cancel"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "button",
-          {
-            onClick: handleApply,
-            style: {
-              padding: "10px 24px",
-              backgroundColor: "#FF6B35",
-              border: "none",
-              borderRadius: "8px",
-              color: "#fff",
-              fontSize: "14px",
-              fontWeight: 500,
-              cursor: "pointer"
-            },
-            children: [
-              "Apply Blur (",
-              blurAreas.length,
-              ")"
-            ]
-          }
-        )
-      ] })
-    ] });
-  };
   const ToolButton = ({
     icon,
     label,
@@ -1112,11 +787,7 @@
     const [uploadedDataUrl, setUploadedDataUrl] = reactExports.useState(null);
     const [uploadedMetadata, setUploadedMetadata] = reactExports.useState(null);
     const [storedLink, setStoredLink] = reactExports.useState(null);
-    const [showBlurEditor, setShowBlurEditor] = reactExports.useState(false);
-    const [blurAreas, setBlurAreas] = reactExports.useState([]);
-    const [blurredDataUrl, setBlurredDataUrl] = reactExports.useState(null);
     const toolbarRef = reactExports.useRef(null);
-    const currentImageDataUrl = blurredDataUrl || capturedData?.dataUrl || uploadedDataUrl;
     const hasContent = !!(capturedData || uploadedDataUrl || storedLink);
     const closeAllPopups = reactExports.useCallback(() => {
       setShowLinkPopup(false);
@@ -1162,12 +833,6 @@
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [closeAllPopups]);
-    reactExports.useEffect(() => {
-      if (capturedData?.dataUrl) {
-        setBlurAreas([]);
-        setBlurredDataUrl(null);
-      }
-    }, [capturedData?.dataUrl]);
     const isWorking = status === "capturing" || status === "uploading";
     const fetchSpaces = reactExports.useCallback(async () => {
       setLoadingSpaces(true);
@@ -1258,8 +923,6 @@
               mode: CaptureMode.TAB,
               dimensions: { width: 0, height: 0 }
             });
-            setBlurAreas([]);
-            setBlurredDataUrl(null);
             console.log("[CaptureInsight] File uploaded and converted to dataUrl:", file.name);
           };
           reader.readAsDataURL(file);
@@ -1275,16 +938,8 @@
         setLinkUrl("");
       }
     };
-    const handleBlurApply = (newBlurredDataUrl) => {
-      setBlurredDataUrl(newBlurredDataUrl);
-      setShowBlurEditor(false);
-      console.log("[CaptureInsight] Blur applied to image");
-    };
-    const handleBlurCancel = () => {
-      setShowBlurEditor(false);
-    };
     const handleFinalCapture = async () => {
-      const dataUrl = blurredDataUrl || capturedData?.dataUrl || uploadedDataUrl;
+      const dataUrl = capturedData?.dataUrl || uploadedDataUrl;
       const metadata = capturedData?.metadata || uploadedMetadata;
       if (!dataUrl && !storedLink) {
         onStatusChange("error", "No content to upload");
@@ -1334,8 +989,6 @@
           setUploadedMetadata(null);
           setStoredLink(null);
           setSelectedTags([]);
-          setBlurAreas([]);
-          setBlurredDataUrl(null);
           onClearCapturedData();
           setTimeout(() => {
             onStatusChange("idle", "");
@@ -1548,15 +1201,9 @@
               ToolButton,
               {
                 icon: /* @__PURE__ */ jsxRuntimeExports.jsx(EyeOffIcon, {}),
-                label: blurAreas.length > 0 ? `${blurAreas.length} blur area${blurAreas.length !== 1 ? "s" : ""}` : "Blur Sensitive Data",
-                onClick: () => {
-                  if (currentImageDataUrl) {
-                    setShowBlurEditor(true);
-                  }
-                },
-                variant: "setting",
-                hasValue: blurAreas.length > 0,
-                disabled: !currentImageDataUrl
+                label: "Blur Sensitive Data",
+                onClick: () => console.log("Blur toggle"),
+                variant: "setting"
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { position: "relative" }, children: [
@@ -1761,17 +1408,7 @@
             color: "#fff",
             whiteSpace: "nowrap",
             boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)"
-          }, children: statusMessage }),
-          showBlurEditor && currentImageDataUrl && /* @__PURE__ */ jsxRuntimeExports.jsx(
-            BlurEditor,
-            {
-              imageDataUrl: currentImageDataUrl,
-              blurAreas,
-              onBlurAreasChange: setBlurAreas,
-              onApply: handleBlurApply,
-              onCancel: handleBlurCancel
-            }
-          )
+          }, children: statusMessage })
         ]
       }
     );
