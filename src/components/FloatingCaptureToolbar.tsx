@@ -21,15 +21,16 @@
  * ============================================================================
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Square, Scan, Link2, Upload, Camera, FolderOpen, ArrowLeft, ChevronDown, Brain, Clock, Zap, Calendar, Check, Plus, Trash2, EyeOff, Database, Tag as TagIcon, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Project } from './ProjectBrowser';
 import { Badge } from './ui/badge';
-import { Tag, mockTags, TAG_COLORS } from '../data/insightsData';
+import { Tag, TAG_COLORS } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
+import { useTags, useCreateTag } from '../hooks/useTags';
 
 interface LLMProvider {
   id: string;
@@ -129,8 +130,20 @@ export function FloatingCaptureToolbar({
   const [menuView, setMenuView] = useState<'projects' | 'folders'>('projects');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   
-  // NEW: Tags state
-  const [tags, setTags] = useState<Tag[]>(mockTags);
+  // NEW: Tags state - fetch real tags from API
+  const currentSpaceId = defaultDestination?.spaceId || null;
+  const { data: rawTags = [], isLoading: tagsLoading, isError: tagsError } = useTags(currentSpaceId);
+  const createTagMutation = useCreateTag();
+  
+  // Convert API tags to UI format with date conversion
+  const tags: Tag[] = useMemo(() => {
+    if (!rawTags || !Array.isArray(rawTags)) return [];
+    return rawTags.map((tag: any) => ({
+      ...tag,
+      createdAt: tag.createdAt instanceof Date ? tag.createdAt : new Date(tag.createdAt),
+    }));
+  }, [rawTags]);
+  
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [newTagName, setNewTagName] = useState('');
@@ -406,6 +419,10 @@ export function FloatingCaptureToolbar({
               label="Tags"
               isActive={showTagsPopup}
               onClick={() => {
+                if (!currentSpaceId) {
+                  toast.error('Please select a destination first to manage tags');
+                  return;
+                }
                 setShowPulseGlow(false);
                 setShowTagsPopup(!showTagsPopup);
                 setShowDestinationPopup(false);
@@ -415,12 +432,15 @@ export function FloatingCaptureToolbar({
               }}
               hasValue={selectedTags.length > 0}
               showPulseGlow={false}
+              disabled={!currentSpaceId}
             >
               <TagsPopup
                 isOpen={showTagsPopup}
                 tags={tags}
                 selectedTags={selectedTags}
                 onTagsChange={setSelectedTags}
+                isLoading={tagsLoading}
+                hasError={tagsError}
                 onCreateTag={(name, color) => {
                   // Use spaceId from defaultDestination for proper space scoping
                   const spaceId = defaultDestination?.spaceId || null;
@@ -429,17 +449,19 @@ export function FloatingCaptureToolbar({
                     return;
                   }
                   
-                  const newTag: Tag = {
-                    id: `tag-${Date.now()}`,
-                    name,
-                    color,
-                    createdAt: new Date(),
-                    createdBy: user?.firstName || user?.email || 'Anonymous',
-                    spaceId, // Added: Properly scope tag to current space
-                  };
-                  setTags(prev => [...prev, newTag]);
-                  setSelectedTags(prev => [...prev, newTag.id]);
-                  toast.success(`Tag "${name}" created!`);
+                  // Create tag via API
+                  createTagMutation.mutate(
+                    { spaceId, name, color },
+                    {
+                      onSuccess: (newTag: any) => {
+                        setSelectedTags(prev => [...prev, newTag.id]);
+                        toast.success(`Tag "${name}" created!`);
+                      },
+                      onError: () => {
+                        toast.error('Failed to create tag');
+                      },
+                    }
+                  );
                 }}
                 onClose={() => setShowTagsPopup(false)}
               />
@@ -1060,9 +1082,11 @@ interface TagsPopupProps {
   onTagsChange: (tags: string[]) => void;
   onCreateTag: (name: string, color: string) => void;
   onClose: () => void;
+  isLoading?: boolean;
+  hasError?: boolean;
 }
 
-function TagsPopup({ isOpen, tags, selectedTags, onTagsChange, onCreateTag, onClose }: TagsPopupProps) {
+function TagsPopup({ isOpen, tags, selectedTags, onTagsChange, onCreateTag, onClose, isLoading = false, hasError = false }: TagsPopupProps) {
   const [isCreatingTag, setIsCreatingTag] = React.useState(false);
   const [newTagName, setNewTagName] = React.useState('');
   const [newTagColor, setNewTagColor] = React.useState(TAG_COLORS[0]);
@@ -1077,21 +1101,40 @@ function TagsPopup({ isOpen, tags, selectedTags, onTagsChange, onCreateTag, onCl
       className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-[280px] bg-[rgba(26,31,46,0.98)] backdrop-blur-xl border border-[rgba(255,107,53,0.3)] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden z-[110]"
     >
       <div className="p-3">
-        {/* Tag Selection */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-xs text-[#9CA3AF]">Select Tags</label>
-            <button
-              onClick={() => setIsCreatingTag(true)}
-              className="flex items-center gap-1.5 px-2 py-1 bg-[rgba(255,107,53,0.1)] hover:bg-[rgba(255,107,53,0.2)] border border-[rgba(255,107,53,0.3)] rounded-lg text-[#FF6B35] text-xs transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Tag
-            </button>
+        {/* Error State */}
+        {hasError && (
+          <div className="mb-3 p-2 bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] rounded-lg">
+            <p className="text-red-400 text-xs">Unable to load tags. Please try again.</p>
           </div>
+        )}
+        
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-4">
+            <div className="w-5 h-5 border-2 border-[#FF6B35] border-t-transparent rounded-full animate-spin" />
+            <span className="ml-2 text-[#9CA3AF] text-xs">Loading tags...</span>
+          </div>
+        )}
+        
+        {/* Tag Selection - only show when not loading */}
+        {!isLoading && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs text-[#9CA3AF]">Select Tags</label>
+              <button
+                onClick={() => setIsCreatingTag(true)}
+                className="flex items-center gap-1.5 px-2 py-1 bg-[rgba(255,107,53,0.1)] hover:bg-[rgba(255,107,53,0.2)] border border-[rgba(255,107,53,0.3)] rounded-lg text-[#FF6B35] text-xs transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Tag
+              </button>
+            </div>
           
-          <div className="flex flex-wrap gap-2">
-            {tags.map(tag => (
+            <div className="flex flex-wrap gap-2">
+              {tags.length === 0 && !hasError && (
+                <p className="text-[#6B7280] text-xs">No tags yet. Create one to get started.</p>
+              )}
+              {tags.map(tag => (
               <TagBadge
                 key={tag.id}
                 tag={tag}
@@ -1107,9 +1150,10 @@ function TagsPopup({ isOpen, tags, selectedTags, onTagsChange, onCreateTag, onCl
             ))}
           </div>
         </div>
+        )}
 
         {/* Create New Tag */}
-        {isCreatingTag && (
+        {!isLoading && isCreatingTag && (
           <div className="mt-3">
             <div className="flex items-center gap-2">
               <label className="block text-xs text-[#9CA3AF]">New Tag Name</label>
@@ -1155,21 +1199,23 @@ function TagsPopup({ isOpen, tags, selectedTags, onTagsChange, onCreateTag, onCl
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-2 mt-3">
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-sm text-[#9CA3AF] hover:text-white transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white rounded-lg text-sm hover:shadow-lg transition-all"
-          >
-            <Check className="w-4 h-4" />
-            <span>Save Tags</span>
-          </button>
-        </div>
+        {!isLoading && (
+          <div className="flex items-center justify-end gap-2 mt-3">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-sm text-[#9CA3AF] hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onClose}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white rounded-lg text-sm hover:shadow-lg transition-all"
+            >
+              <Check className="w-4 h-4" />
+              <span>Save Tags</span>
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>
   );

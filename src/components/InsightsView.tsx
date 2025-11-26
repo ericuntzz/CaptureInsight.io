@@ -57,8 +57,9 @@ export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: Insi
   const currentSpace = spaces.find((s) => s.id === currentSpaceId);
   
   // Fetch insights from API with date conversion
-  const { data: rawInsights = [], isLoading: insightsLoading } = useInsights(currentSpaceId);
+  const { data: rawInsights = [], isLoading: insightsLoading, isError: insightsError } = useInsights(currentSpaceId);
   const insights: Insight[] = useMemo(() => {
+    if (!rawInsights || !Array.isArray(rawInsights)) return [];
     return rawInsights.map((insight: any) => ({
       ...insight,
       dateCreated: insight.dateCreated instanceof Date ? insight.dateCreated : new Date(insight.dateCreated),
@@ -70,8 +71,9 @@ export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: Insi
   }, [rawInsights]);
 
   // Fetch tags from API with date conversion
-  const { data: rawTags = [], isLoading: tagsLoading } = useTags(currentSpaceId);
+  const { data: rawTags = [], isLoading: tagsLoading, isError: tagsError } = useTags(currentSpaceId);
   const tags: Tag[] = useMemo(() => {
+    if (!rawTags || !Array.isArray(rawTags)) return [];
     return rawTags.map((tag: any) => ({
       ...tag,
       createdAt: tag.createdAt instanceof Date ? tag.createdAt : new Date(tag.createdAt),
@@ -399,8 +401,37 @@ export function InsightsView({ spaces, currentSpaceId, onCollapseSidebar }: Insi
     );
   }
 
+  // Show inline error banner if any data failed to load (but continue to show partial UI)
+  const hasDataError = insightsError || tagsError;
+
   return (
     <div className="h-full bg-[#0A0E1A] flex flex-col">
+      {/* Error Banner - shows when there's a data loading error */}
+      {hasDataError && (
+        <div className="flex-shrink-0 bg-[rgba(239,68,68,0.1)] border-b border-[rgba(239,68,68,0.3)] px-6 py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 bg-[rgba(239,68,68,0.2)] rounded-full flex items-center justify-center">
+              <X className="w-4 h-4 text-red-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-red-400 text-sm">
+                {insightsError && tagsError 
+                  ? 'Unable to load insights and tags. Please check your connection and try again.'
+                  : insightsError 
+                  ? 'Unable to load insights. Please check your connection and try again.'
+                  : 'Unable to load tags. Tag filtering may not work correctly.'}
+              </p>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-3 py-1 bg-[rgba(239,68,68,0.2)] hover:bg-[rgba(239,68,68,0.3)] text-red-400 rounded-lg text-sm transition-colors"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="flex-shrink-0 px-6 py-4">
         <div className="border-b border-[#1A1F2E] pb-4">
