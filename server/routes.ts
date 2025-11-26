@@ -117,6 +117,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put('/api/spaces/:id/ai-settings', isAuthenticated, requireSpaceOwner('id'), async (req: any, res) => {
+    try {
+      const { consentGiven, piiFilterEnabled, piiFilterPatterns, dataProcessingAllowed } = req.body;
+      
+      const aiSettings: any = {};
+      
+      if (typeof consentGiven === 'boolean') {
+        aiSettings.consentGiven = consentGiven;
+        if (consentGiven) {
+          aiSettings.consentDate = new Date().toISOString();
+        }
+      }
+      
+      if (typeof piiFilterEnabled === 'boolean') {
+        aiSettings.piiFilterEnabled = piiFilterEnabled;
+      }
+      
+      if (Array.isArray(piiFilterPatterns)) {
+        aiSettings.piiFilterPatterns = piiFilterPatterns;
+      }
+      
+      if (typeof dataProcessingAllowed === 'boolean') {
+        aiSettings.dataProcessingAllowed = dataProcessingAllowed;
+      }
+
+      const existingSettings = req.space.aiSettings || {};
+      const mergedSettings = { ...existingSettings, ...aiSettings };
+      
+      const space = await storage.updateSpace(req.params.id, { aiSettings: mergedSettings });
+      
+      if (!space) {
+        return res.status(404).json({ message: "Space not found" });
+      }
+      
+      res.json({ 
+        message: "AI settings updated successfully",
+        aiSettings: space.aiSettings 
+      });
+    } catch (error) {
+      console.error("Error updating AI settings:", error);
+      res.status(500).json({ message: "Failed to update AI settings" });
+    }
+  });
+
+  app.get('/api/spaces/:id/ai-settings', isAuthenticated, requireSpaceOwner('id'), async (req: any, res) => {
+    try {
+      res.json({ 
+        aiSettings: req.space.aiSettings || {
+          consentGiven: false,
+          piiFilterEnabled: true,
+          piiFilterPatterns: getAvailablePIIPatterns(),
+          dataProcessingAllowed: false,
+        }
+      });
+    } catch (error) {
+      console.error("Error getting AI settings:", error);
+      res.status(500).json({ message: "Failed to get AI settings" });
+    }
+  });
+
   // ==================== FOLDERS ====================
   app.get('/api/spaces/:spaceId/folders', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {

@@ -64,6 +64,13 @@ export const spaces = pgTable("spaces", {
   goals: text("goals"),
   instructions: text("instructions"),
   ownerId: varchar("owner_id").references(() => users.id),
+  aiSettings: jsonb("ai_settings").$type<{
+    consentGiven?: boolean;
+    consentDate?: string;
+    piiFilterEnabled?: boolean;
+    piiFilterPatterns?: string[];
+    dataProcessingAllowed?: boolean;
+  }>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
