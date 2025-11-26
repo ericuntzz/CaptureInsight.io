@@ -449,9 +449,10 @@ function CanvasInsightCard({ insight, tags, onUpdateInsight, insightId, chatMess
   // Local state for title to prevent cursor jumping (sync on blur)
   const [localTitle, setLocalTitle] = useState(insight.title);
   
-  // Sync local title when insight changes from external source (e.g., data refresh)
+  // Sync local title and notes when insight changes from external source (e.g., data refresh)
   React.useEffect(() => {
     setLocalTitle(insight.title);
+    setNotes(insight.summary);
   }, [insight.id]); // Only sync when switching to a different insight
 
   // Guard against undefined tags - API may return null/undefined
@@ -464,6 +465,20 @@ function CanvasInsightCard({ insight, tags, onUpdateInsight, insightId, chatMess
       onUpdateInsight(insightId, { title: localTitle });
     }
   };
+  
+  // Auto-save notes with debounce (save 1 second after user stops typing)
+  React.useEffect(() => {
+    // Skip if notes haven't changed from the original
+    if (notes === insight.summary) return;
+    
+    const saveTimeout = setTimeout(() => {
+      if (onUpdateInsight) {
+        onUpdateInsight(insightId, { summary: notes });
+      }
+    }, 1000); // 1 second debounce
+    
+    return () => clearTimeout(saveTimeout);
+  }, [notes, insightId, onUpdateInsight, insight.summary]);
 
   const handleRegenerateAISummary = () => {
     setIsRegenerating(true);
