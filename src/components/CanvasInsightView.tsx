@@ -257,22 +257,6 @@ function CanvasAIChat({
     
     const messageContent = aiChatInput.trim();
     
-    // Auto-generate title from first message
-    if (chatMessages.length === 0 && onUpdateInsight) {
-      let autoTitle = messageContent;
-      
-      // Truncate if too long
-      if (autoTitle.length > 50) {
-        autoTitle = autoTitle.substring(0, 47) + '...';
-      }
-      
-      // Capitalize first letter if needed
-      autoTitle = autoTitle.charAt(0).toUpperCase() + autoTitle.slice(1);
-      
-      onUpdateInsight(insight.id, { title: autoTitle });
-      toast.success('Title auto-generated from your message');
-    }
-    
     setAiChatInput('');
     
     // Send message using the hook
