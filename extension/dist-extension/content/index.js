@@ -530,61 +530,178 @@
   const TOOLBAR_DEFAULTS = {
     POSITION: { x: 20, y: 20 }};
 
-  const ScanIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+  const ScanIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 7V5a2 2 0 0 1 2-2h2" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M17 3h2a2 2 0 0 1 2 2v2" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M21 17v2a2 2 0 0 1-2 2h-2" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M7 21H5a2 2 0 0 1-2-2v-2" })
   ] });
-  const SquareIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2", ry: "2" }) });
-  const UploadIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+  const SquareIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2", ry: "2" }) });
+  const UploadIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("polyline", { points: "17 8 12 3 7 8" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("line", { x1: "12", y1: "3", x2: "12", y2: "15" })
   ] });
-  const LinkIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+  const LinkIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" })
   ] });
-  const ZapIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("polygon", { points: "13 2 3 14 12 14 11 22 21 10 12 10 13 2" }) });
-  const DatabaseIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+  const ZapIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("polygon", { points: "13 2 3 14 12 14 11 22 21 10 12 10 13 2" }) });
+  const DatabaseIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("ellipse", { cx: "12", cy: "5", rx: "9", ry: "3" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" })
   ] });
-  const CheckIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("polyline", { points: "20 6 9 17 4 12" }) });
-  const LoaderIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: { animation: "spin 1s linear infinite" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M21 12a9 9 0 1 1-6.219-8.56" }) });
-  const ToolButton = ({ icon, label, onClick, active = false, disabled = false, color = "#9CA3AF" }) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "button",
-    {
-      onClick,
-      disabled,
-      title: label,
-      style: {
+  const LoaderIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: { animation: "spin 1s linear infinite" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M21 12a9 9 0 1 1-6.219-8.56" }) });
+  const FolderIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" }) });
+  const TagIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M7 7h.01" })
+  ] });
+  const SparklesIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M5 3v4" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M19 17v4" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 5h4" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M17 19h4" })
+  ] });
+  const BrainIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" })
+  ] });
+  const EyeOffIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M9.88 9.88a3 3 0 1 0 4.24 4.24" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("line", { x1: "2", y1: "2", x2: "22", y2: "22" })
+  ] });
+  const CheckIcon = () => /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsxRuntimeExports.jsx("polyline", { points: "20 6 9 17 4 12" }) });
+  const ToolButton = ({
+    icon,
+    label,
+    onClick,
+    active = false,
+    disabled = false,
+    variant = "default",
+    hasValue = false,
+    showTooltip = true,
+    count
+  }) => {
+    const [isHovered, setIsHovered] = reactExports.useState(false);
+    const getStyles = () => {
+      const base = {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        width: "44px",
-        height: "44px",
-        backgroundColor: active ? "rgba(255, 107, 53, 0.15)" : "transparent",
-        border: active ? "1.5px solid rgba(255, 107, 53, 0.4)" : "1.5px solid transparent",
+        width: "40px",
+        height: "40px",
+        border: "none",
         borderRadius: "10px",
         cursor: disabled ? "not-allowed" : "pointer",
-        color: active ? "#FF6B35" : color,
-        opacity: disabled ? 0.5 : 1,
+        opacity: disabled ? 0.4 : 1,
         transition: "all 0.15s ease",
-        padding: 0
-      },
-      children: icon
-    }
-  );
-  const FloatingToolbar = ({ onCapture, status, statusMessage }) => {
+        padding: 0,
+        position: "relative"
+      };
+      if (variant === "primary") {
+        return {
+          ...base,
+          backgroundColor: "#FF6B35",
+          color: "#fff",
+          width: count ? "48px" : "40px"
+        };
+      }
+      if (variant === "dashboard") {
+        return {
+          ...base,
+          backgroundColor: "transparent",
+          color: "#FF6B35"
+        };
+      }
+      if (variant === "capture" && active) {
+        return {
+          ...base,
+          backgroundColor: "rgba(255, 107, 53, 0.15)",
+          border: "1.5px solid rgba(255, 107, 53, 0.4)",
+          color: "#FF6B35"
+        };
+      }
+      if (variant === "setting") {
+        return {
+          ...base,
+          backgroundColor: hasValue ? "rgba(255, 107, 53, 0.1)" : active ? "rgba(255, 107, 53, 0.15)" : "transparent",
+          border: hasValue ? "1px solid rgba(255, 107, 53, 0.3)" : active ? "1.5px solid rgba(255, 107, 53, 0.4)" : "1px solid transparent",
+          color: hasValue || active ? "#FF6B35" : "#9CA3AF"
+        };
+      }
+      return {
+        ...base,
+        backgroundColor: active ? "rgba(255, 107, 53, 0.15)" : "transparent",
+        border: active ? "1.5px solid rgba(255, 107, 53, 0.4)" : "1px solid transparent",
+        color: active ? "#FF6B35" : "#9CA3AF"
+      };
+    };
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { position: "relative" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "button",
+        {
+          onClick,
+          disabled,
+          style: getStyles(),
+          onMouseEnter: () => setIsHovered(true),
+          onMouseLeave: () => setIsHovered(false),
+          children: [
+            icon,
+            count !== void 0 && count > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: {
+              position: "absolute",
+              top: "-4px",
+              right: "-4px",
+              backgroundColor: "#fff",
+              color: "#FF6B35",
+              fontSize: "10px",
+              fontWeight: 600,
+              width: "16px",
+              height: "16px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }, children: count })
+          ]
+        }
+      ),
+      showTooltip && isHovered && !disabled && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
+        position: "absolute",
+        bottom: "100%",
+        left: "50%",
+        transform: "translateX(-50%)",
+        marginBottom: "8px",
+        padding: "6px 10px",
+        backgroundColor: "rgba(45, 59, 78, 0.95)",
+        borderRadius: "6px",
+        fontSize: "11px",
+        color: "#fff",
+        whiteSpace: "nowrap",
+        zIndex: 100
+      }, children: label })
+    ] });
+  };
+  const FloatingToolbar = ({ onCapture, status, statusMessage, onOpenDashboard }) => {
     const [position, setPosition] = reactExports.useState(TOOLBAR_DEFAULTS.POSITION);
     const [isDragging, setIsDragging] = reactExports.useState(false);
     const [dragOffset, setDragOffset] = reactExports.useState({ x: 0, y: 0 });
-    const [activeButton, setActiveButton] = reactExports.useState(null);
+    const [activeCapture, setActiveCapture] = reactExports.useState(null);
+    const [hasContent, setHasContent] = reactExports.useState(false);
+    const [showLinkPopup, setShowLinkPopup] = reactExports.useState(false);
+    const [linkUrl, setLinkUrl] = reactExports.useState("");
+    const [showApiTooltip, setShowApiTooltip] = reactExports.useState(false);
+    const [selectedDestination, setSelectedDestination] = reactExports.useState(null);
+    const [selectedTags, setSelectedTags] = reactExports.useState([]);
+    const [selectedLlm, setSelectedLlm] = reactExports.useState(null);
+    const toolbarRef = reactExports.useRef(null);
     const handleMouseDown = reactExports.useCallback((e) => {
       if (e.target.closest("button")) return;
+      if (e.target.closest(".popup-content")) return;
       setIsDragging(true);
       setDragOffset({
         x: e.clientX - position.x,
@@ -611,33 +728,67 @@
         document.removeEventListener("mouseup", handleMouseUp);
       };
     }, [isDragging, dragOffset]);
+    reactExports.useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (toolbarRef.current && !toolbarRef.current.contains(event.target)) {
+          setShowLinkPopup(false);
+        }
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
     const isWorking = status === "capturing" || status === "uploading";
     const handleCaptureClick = (mode, buttonId) => {
       if (isWorking) return;
-      setActiveButton(buttonId);
+      setActiveCapture(buttonId);
       onCapture(mode);
     };
     const handleUploadClick = () => {
       if (isWorking) return;
-      setActiveButton("upload");
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = async (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          setHasContent(true);
+          console.log("[CaptureInsight] File selected:", file.name);
+        }
+      };
+      input.click();
     };
-    const handleLinkClick = () => {
-      if (isWorking) return;
-      setActiveButton("link");
+    const handleLinkSubmit = () => {
+      if (linkUrl.trim()) {
+        setHasContent(true);
+        setShowLinkPopup(false);
+        console.log("[CaptureInsight] Link added:", linkUrl);
+        setLinkUrl("");
+      }
+    };
+    const handleFinalCapture = () => {
+      console.log("[CaptureInsight] Final capture with settings:", {
+        destination: selectedDestination,
+        tags: selectedTags,
+        llm: selectedLlm
+      });
     };
     reactExports.useEffect(() => {
-      if (status === "idle" && activeButton) {
-        const timer = setTimeout(() => setActiveButton(null), 100);
-        return () => clearTimeout(timer);
-      }
       if (status === "success") {
-        const timer = setTimeout(() => setActiveButton(null), 2e3);
+        setHasContent(true);
+        const timer = setTimeout(() => {
+          setActiveCapture(null);
+        }, 2e3);
         return () => clearTimeout(timer);
       }
-    }, [status, activeButton]);
+      if (status === "idle" && activeCapture) {
+        const timer = setTimeout(() => setActiveCapture(null), 100);
+        return () => clearTimeout(timer);
+      }
+    }, [status, activeCapture]);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
       {
+        ref: toolbarRef,
         className: "captureinsight-toolbar",
         style: {
           position: "fixed",
@@ -646,14 +797,14 @@
           zIndex: 2147483647,
           display: "flex",
           alignItems: "center",
-          gap: "4px",
-          padding: "6px 10px",
+          gap: "2px",
+          padding: "8px 10px",
           backgroundColor: "rgba(26, 31, 46, 0.98)",
           backdropFilter: "blur(16px)",
           WebkitBackdropFilter: "blur(16px)",
           borderRadius: "14px",
-          border: "1px solid rgba(255, 107, 53, 0.25)",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.1)",
+          border: "1px solid rgba(26, 31, 46, 0.98)",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
           cursor: isDragging ? "grabbing" : "grab",
           userSelect: "none",
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
@@ -669,21 +820,23 @@
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             ToolButton,
             {
-              icon: isWorking && activeButton === "selection" ? /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(ScanIcon, {}),
-              label: "Capture Selection",
+              icon: isWorking && activeCapture === "selection" ? /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(ScanIcon, {}),
+              label: "Capture Selected Portion",
               onClick: () => handleCaptureClick(CaptureMode.SELECTION, "selection"),
-              active: activeButton === "selection",
-              disabled: isWorking
+              active: activeCapture === "selection",
+              disabled: isWorking,
+              variant: "capture"
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             ToolButton,
             {
-              icon: isWorking && activeButton === "tab" ? /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(SquareIcon, {}),
-              label: "Capture Full Tab",
+              icon: isWorking && activeCapture === "tab" ? /* @__PURE__ */ jsxRuntimeExports.jsx(LoaderIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(SquareIcon, {}),
+              label: "Capture Selected Window",
               onClick: () => handleCaptureClick(CaptureMode.TAB, "tab"),
-              active: activeButton === "tab",
-              disabled: isWorking
+              active: activeCapture === "tab",
+              disabled: isWorking,
+              variant: "capture"
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -692,44 +845,189 @@
               icon: /* @__PURE__ */ jsxRuntimeExports.jsx(UploadIcon, {}),
               label: "Upload File",
               onClick: handleUploadClick,
-              active: activeButton === "upload",
               disabled: isWorking
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            ToolButton,
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { position: "relative" }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToolButton,
+              {
+                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(LinkIcon, {}),
+                label: "Insert Share Link",
+                onClick: () => setShowLinkPopup(!showLinkPopup),
+                active: showLinkPopup,
+                disabled: isWorking,
+                showTooltip: !showLinkPopup
+              }
+            ),
+            showLinkPopup && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                className: "popup-content",
+                style: {
+                  position: "absolute",
+                  bottom: "100%",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  marginBottom: "12px",
+                  width: "280px",
+                  backgroundColor: "rgba(26, 31, 46, 0.98)",
+                  backdropFilter: "blur(16px)",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(255, 107, 53, 0.2)",
+                  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
+                  padding: "12px",
+                  zIndex: 110
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "10px", color: "#9CA3AF", marginBottom: "8px", textTransform: "uppercase" }, children: "Add URL" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "input",
+                    {
+                      type: "url",
+                      placeholder: "https://example.com",
+                      value: linkUrl,
+                      onChange: (e) => setLinkUrl(e.target.value),
+                      onKeyDown: (e) => e.key === "Enter" && handleLinkSubmit(),
+                      style: {
+                        width: "100%",
+                        padding: "10px 12px",
+                        backgroundColor: "#0A0E1A",
+                        border: "1px solid rgba(255, 107, 53, 0.2)",
+                        borderRadius: "8px",
+                        color: "#fff",
+                        fontSize: "13px",
+                        outline: "none",
+                        marginBottom: "8px"
+                      }
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      onClick: handleLinkSubmit,
+                      style: {
+                        width: "100%",
+                        padding: "8px",
+                        backgroundColor: "#FF6B35",
+                        border: "none",
+                        borderRadius: "8px",
+                        color: "#fff",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        cursor: "pointer"
+                      },
+                      children: "Add Link"
+                    }
+                  )
+                ]
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
             {
-              icon: /* @__PURE__ */ jsxRuntimeExports.jsx(LinkIcon, {}),
-              label: "Add Link",
-              onClick: handleLinkClick,
-              active: activeButton === "link",
-              disabled: isWorking
+              style: { position: "relative" },
+              onMouseEnter: () => setShowApiTooltip(true),
+              onMouseLeave: () => setShowApiTooltip(false),
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ToolButton,
+                  {
+                    icon: /* @__PURE__ */ jsxRuntimeExports.jsx(ZapIcon, {}),
+                    label: "Connect via API",
+                    onClick: () => {
+                    },
+                    disabled: true
+                  }
+                ),
+                showApiTooltip && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
+                  position: "absolute",
+                  bottom: "100%",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  marginBottom: "8px",
+                  padding: "6px 10px",
+                  backgroundColor: "rgba(45, 59, 78, 0.95)",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  color: "#fff",
+                  whiteSpace: "nowrap",
+                  zIndex: 100
+                }, children: "API Link Coming Soon" })
+              ]
             }
           ),
+          hasContent && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
+              width: "1px",
+              height: "24px",
+              backgroundColor: "rgba(255, 107, 53, 0.2)",
+              margin: "0 4px"
+            } }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToolButton,
+              {
+                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(EyeOffIcon, {}),
+                label: "Blur Sensitive Data",
+                onClick: () => console.log("Blur toggle"),
+                variant: "setting"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToolButton,
+              {
+                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(FolderIcon, {}),
+                label: "Save To",
+                onClick: () => console.log("Open destination picker"),
+                variant: "setting",
+                hasValue: !!selectedDestination
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToolButton,
+              {
+                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(TagIcon, {}),
+                label: "Tags",
+                onClick: () => console.log("Open tags picker"),
+                variant: "setting",
+                hasValue: selectedTags.length > 0
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ToolButton,
+              {
+                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(SparklesIcon, {}),
+                label: "Send to LLM",
+                onClick: () => console.log("Open LLM picker"),
+                variant: "setting",
+                hasValue: !!selectedLlm
+              }
+            )
+          ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
             width: "1px",
-            height: "28px",
+            height: "24px",
             backgroundColor: "rgba(255, 107, 53, 0.2)",
             margin: "0 4px"
           } }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             ToolButton,
             {
-              icon: /* @__PURE__ */ jsxRuntimeExports.jsx(ZapIcon, {}),
-              label: "Quick Actions",
-              onClick: () => {
-              },
-              disabled: isWorking
+              icon: status === "success" ? /* @__PURE__ */ jsxRuntimeExports.jsx(CheckIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(DatabaseIcon, {}),
+              label: "View Dashboard",
+              onClick: onOpenDashboard,
+              variant: "dashboard"
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
+          hasContent && /* @__PURE__ */ jsxRuntimeExports.jsx(
             ToolButton,
             {
-              icon: status === "success" ? /* @__PURE__ */ jsxRuntimeExports.jsx(CheckIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(DatabaseIcon, {}),
-              label: "Open Dashboard",
-              onClick: () => window.open(window.location.origin, "_blank"),
-              active: status === "success",
-              color: status === "success" ? "#22c55e" : "#FF6B35"
+              icon: /* @__PURE__ */ jsxRuntimeExports.jsx(BrainIcon, {}),
+              label: "Capture Data",
+              onClick: handleFinalCapture,
+              variant: "primary",
+              count: 1
             }
           ),
           statusMessage && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
@@ -811,13 +1109,17 @@
         setStatusMessage(error instanceof Error ? error.message : "Unknown error");
       }
     }, []);
+    const handleOpenDashboard = reactExports.useCallback(() => {
+      chrome.runtime.sendMessage({ type: "OPEN_DASHBOARD" });
+    }, []);
     if (!visible) return null;
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       FloatingToolbar,
       {
         onCapture: handleCapture,
         status,
-        statusMessage
+        statusMessage,
+        onOpenDashboard: handleOpenDashboard
       }
     );
   };
@@ -847,10 +1149,13 @@
       pointer-events: auto;
     }
     button:hover:not(:disabled) {
-      background-color: rgba(255, 107, 53, 0.1) !important;
+      filter: brightness(1.1);
     }
     button:active:not(:disabled) {
       transform: scale(0.95);
+    }
+    input:focus {
+      border-color: rgba(255, 107, 53, 0.5) !important;
     }
   `;
     shadowRoot.appendChild(styleSheet);
