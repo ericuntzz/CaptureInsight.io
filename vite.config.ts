@@ -66,8 +66,11 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
-        changeOrigin: true,
+        changeOrigin: false,
         secure: false,
+        headers: {
+          'X-Forwarded-Host': process.env.REPLIT_DEV_DOMAIN || 'localhost:5000',
+        },
       },
     },
   },
