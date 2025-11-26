@@ -23,6 +23,15 @@ import {
   type BatchEmbeddingResult,
 } from "./openai";
 
+import {
+  filterPII,
+  filterPIIFromData,
+  filterPIIFromMessages,
+  getAvailablePIIPatterns,
+  type PIIFilterOptions,
+  type PIIFilterResult,
+} from "./piiFilter";
+
 import { storage } from "../storage";
 
 export {
@@ -36,7 +45,13 @@ export {
   cosineSimilarity,
   isOpenAIConfigured,
   getEmbeddingDimensions,
+  filterPII,
+  filterPIIFromData,
+  filterPIIFromMessages,
+  getAvailablePIIPatterns,
 };
+
+export type { PIIFilterOptions, PIIFilterResult };
 
 export type {
   ScreenshotAnalysisResult,
@@ -52,15 +67,20 @@ export type {
 export interface AnalyzeCaptureOptions {
   context?: string;
   spaceGoals?: string;
+  piiFilter?: PIIFilterOptions;
 }
 
 export type AnalyzeCaptureResult = ScreenshotAnalysisResult | DataAnalysisResult;
+
+export type AnalyzeCaptureResultWithPII = (ScreenshotAnalysisResult | DataAnalysisResult) & {
+  piiRedacted?: { count: number; types: string[] };
+};
 
 export async function analyzeCapture(
   type: "screenshot" | "data",
   content: string | any[],
   options?: AnalyzeCaptureOptions
-): Promise<AnalyzeCaptureResult> {
+): Promise<AnalyzeCaptureResultWithPII> {
   if (!isGeminiConfigured()) {
     throw new Error("Gemini AI is not configured. Please check AI_INTEGRATIONS_GEMINI_BASE_URL and AI_INTEGRATIONS_GEMINI_API_KEY environment variables.");
   }
@@ -69,16 +89,28 @@ export async function analyzeCapture(
     ? `${options?.context || ""}\n\nSpace Goals: ${options.spaceGoals}`
     : options?.context;
 
+  let piiRedacted: { count: number; types: string[] } | undefined;
+
   if (type === "screenshot") {
     if (typeof content !== "string") {
       throw new Error("Screenshot content must be a base64 string");
     }
-    return analyzeScreenshot(content, contextWithGoals);
+    const result = await analyzeScreenshot(content, contextWithGoals);
+    return { ...result, piiRedacted };
   } else {
     if (!Array.isArray(content)) {
       throw new Error("Data content must be an array");
     }
-    return analyzeData(content, contextWithGoals);
+    
+    let dataToAnalyze = content;
+    if (options?.piiFilter?.enabled) {
+      const filtered = filterPIIFromData(content, options.piiFilter);
+      dataToAnalyze = filtered.data;
+      piiRedacted = { count: filtered.redactedCount, types: filtered.redactedTypes };
+    }
+    
+    const result = await analyzeData(dataToAnalyze, contextWithGoals);
+    return { ...result, piiRedacted };
   }
 }
 
@@ -180,6 +212,7 @@ export interface RagChatOptions {
   spaceGoals?: string;
   additionalContext?: string;
   useRag?: boolean;
+  piiFilter?: PIIFilterOptions;
 }
 
 export interface ChatCitation {
@@ -192,10 +225,11 @@ export interface ChatCitation {
 export interface RagChatResponse extends ChatResponse {
   citations?: ChatCitation[];
   retrievedContext?: SimilarityResult[];
+  piiRedacted?: { count: number; types: string[] };
 }
 
 export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
-  const { messages, spaceId, spaceGoals, additionalContext, useRag = true } = options;
+  const { messages, spaceId, spaceGoals, additionalContext, useRag = true, piiFilter } = options;
   
   if (!isGeminiConfigured()) {
     throw new Error("Gemini AI is not configured");
@@ -204,9 +238,17 @@ export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
   let ragContext: SimilarityResult[] = [];
   let contextString = additionalContext || "";
   const citations: ChatCitation[] = [];
+  let piiRedacted: { count: number; types: string[] } | undefined;
 
-  if (useRag && spaceId && isOpenAIConfigured() && messages.length > 0) {
-    const lastUserMessage = messages.filter(m => m.role === "user").pop();
+  let messagesToSend = messages;
+  if (piiFilter?.enabled) {
+    const filtered = filterPIIFromMessages(messages, piiFilter);
+    messagesToSend = filtered.messages;
+    piiRedacted = { count: filtered.redactedCount, types: filtered.redactedTypes };
+  }
+
+  if (useRag && spaceId && isOpenAIConfigured() && messagesToSend.length > 0) {
+    const lastUserMessage = messagesToSend.filter(m => m.role === "user").pop();
     if (lastUserMessage) {
       try {
         ragContext = await searchSimilar(lastUserMessage.content, spaceId, 5);
@@ -224,13 +266,24 @@ export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
             });
           });
           
-          const relevantContent = relevantResults
+          let relevantContent = relevantResults
             .map(r => {
               const entityLabel = r.entityType === "insight" ? "Insight" : "Data Sheet";
               const name = r.metadata?.title || r.metadata?.name || "";
               return `[${entityLabel}: ${name}]\n${r.content}`;
             })
             .join("\n\n---\n\n");
+          
+          if (piiFilter?.enabled && relevantContent) {
+            const filteredContext = filterPII(relevantContent, piiFilter);
+            relevantContent = filteredContext.text;
+            if (piiRedacted) {
+              piiRedacted.count += filteredContext.redactedCount;
+              filteredContext.redactedTypes.forEach(t => {
+                if (!piiRedacted!.types.includes(t)) piiRedacted!.types.push(t);
+              });
+            }
+          }
           
           if (relevantContent) {
             contextString = contextString 
@@ -244,11 +297,12 @@ export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
     }
   }
 
-  const result = await geminiChat(messages, contextString, spaceGoals);
+  const result = await geminiChat(messagesToSend, contextString, spaceGoals);
   
   return {
     ...result,
     citations: citations.length > 0 ? citations : undefined,
     retrievedContext: ragContext.length > 0 ? ragContext : undefined,
+    piiRedacted,
   };
 }

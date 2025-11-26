@@ -10,6 +10,7 @@ import {
   isGeminiConfigured,
   isOpenAIConfigured,
   searchSimilar,
+  getAvailablePIIPatterns,
   type ChatMessage,
 } from "./ai";
 import {
@@ -546,16 +547,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/ai/status', isAuthenticated, async (req: any, res) => {
     try {
       const status = getAIStatus();
-      res.json(status);
+      res.json({
+        ...status,
+        piiFilter: {
+          available: true,
+          patterns: getAvailablePIIPatterns(),
+        },
+      });
     } catch (error) {
       console.error("Error getting AI status:", error);
       res.status(500).json({ message: "Failed to get AI status" });
     }
   });
 
+  app.get('/api/ai/pii-patterns', isAuthenticated, async (req: any, res) => {
+    try {
+      const patterns = getAvailablePIIPatterns();
+      res.json({ 
+        patterns,
+        description: {
+          email: "Email addresses (e.g., user@example.com)",
+          phone_us: "US phone numbers (e.g., 555-123-4567)",
+          phone_intl: "International phone numbers (e.g., +1234567890)",
+          ssn: "Social Security Numbers (e.g., 123-45-6789)",
+          credit_card: "Credit card numbers (16-digit)",
+          credit_card_formatted: "Formatted credit cards (1234-5678-9012-3456)",
+          ip_address: "IP addresses (e.g., 192.168.1.1)",
+          api_key: "API keys and tokens",
+          bearer_token: "Bearer authentication tokens",
+          jwt: "JSON Web Tokens",
+          aws_key: "AWS access keys",
+          private_key: "Private key blocks",
+          password_field: "Password fields (password=xxx)",
+          date_of_birth: "Date of birth fields",
+        }
+      });
+    } catch (error) {
+      console.error("Error getting PII patterns:", error);
+      res.status(500).json({ message: "Failed to get PII patterns" });
+    }
+  });
+
   app.post('/api/ai/analyze', isAuthenticated, async (req: any, res) => {
     try {
-      const { type, content, context, spaceGoals } = req.body;
+      const { type, content, context, spaceGoals, piiFilter } = req.body;
 
       if (!type || !content) {
         return res.status(400).json({ message: "Missing required fields: type and content" });
@@ -571,7 +606,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const result = await analyzeCapture(type, content, { context, spaceGoals });
+      const result = await analyzeCapture(type, content, { 
+        context, 
+        spaceGoals,
+        piiFilter: piiFilter ? {
+          enabled: piiFilter.enabled === true,
+          patterns: piiFilter.patterns,
+        } : undefined,
+      });
       res.json(result);
     } catch (error) {
       console.error("Error analyzing content:", error);
@@ -584,7 +626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ai/chat', isAuthenticated, async (req: any, res) => {
     try {
-      const { messages, context, spaceGoals, spaceId, useRag } = req.body;
+      const { messages, context, spaceGoals, spaceId, useRag, piiFilter } = req.body;
 
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({ message: "Messages must be an array" });
@@ -607,6 +649,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         spaceGoals,
         additionalContext: context,
         useRag: useRag !== false,
+        piiFilter: piiFilter ? {
+          enabled: piiFilter.enabled === true,
+          patterns: piiFilter.patterns,
+        } : undefined,
       });
       res.json(result);
     } catch (error) {
