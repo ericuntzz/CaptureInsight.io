@@ -173,14 +173,20 @@ const ContentApp: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState('');
 
   useEffect(() => {
-    const handleMessage = (message: ToggleToolbarMessage) => {
+    console.log('[CaptureInsight] Content script message listener registered');
+    
+    const handleMessage = (message: ToggleToolbarMessage, sender: chrome.runtime.MessageSender, sendResponse: (response: unknown) => void) => {
+      console.log('[CaptureInsight] Message received:', message);
       if (message.type === MessageType.TOGGLE_TOOLBAR) {
+        console.log('[CaptureInsight] Setting visible to:', message.visible);
         setVisible(message.visible);
         if (message.visible) {
           setStatus('idle');
           setStatusMessage('');
         }
+        sendResponse({ success: true });
       }
+      return true;
     };
 
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -304,4 +310,4 @@ if (document.readyState === 'loading') {
   initContentScript();
 }
 
-console.log('CaptureInsight content script loaded');
+console.log('[CaptureInsight] Content script loaded on:', window.location.href);

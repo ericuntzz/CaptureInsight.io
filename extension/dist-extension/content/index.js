@@ -143,14 +143,19 @@ const ContentApp = () => {
   const [status, setStatus] = reactExports.useState("idle");
   const [statusMessage, setStatusMessage] = reactExports.useState("");
   reactExports.useEffect(() => {
-    const handleMessage = (message) => {
+    console.log("[CaptureInsight] Content script message listener registered");
+    const handleMessage = (message, sender, sendResponse) => {
+      console.log("[CaptureInsight] Message received:", message);
       if (message.type === MessageType.TOGGLE_TOOLBAR) {
+        console.log("[CaptureInsight] Setting visible to:", message.visible);
         setVisible(message.visible);
         if (message.visible) {
           setStatus("idle");
           setStatusMessage("");
         }
+        sendResponse({ success: true });
       }
+      return true;
     };
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => {
@@ -254,5 +259,5 @@ if (document.readyState === "loading") {
 } else {
   initContentScript();
 }
-console.log("CaptureInsight content script loaded");
+console.log("[CaptureInsight] Content script loaded on:", window.location.href);
 //# sourceMappingURL=index.js.map
