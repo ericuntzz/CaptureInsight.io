@@ -22,6 +22,30 @@ import {
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
+  // Space ownership validation middleware
+  const requireSpaceOwner = (paramName: string = 'spaceId') => {
+    return async (req: any, res: any, next: any) => {
+      try {
+        const spaceId = req.params[paramName];
+        const space = await storage.getSpace(spaceId);
+        
+        if (!space) {
+          return res.status(404).json({ message: "Space not found" });
+        }
+        
+        if (space.ownerId !== req.user.claims.sub) {
+          return res.status(403).json({ message: "Forbidden: you do not have access to this space" });
+        }
+        
+        req.space = space;
+        next();
+      } catch (error) {
+        console.error("Error in requireSpaceOwner middleware:", error);
+        res.status(500).json({ message: "Failed to validate space access" });
+      }
+    };
+  };
+
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
@@ -57,20 +81,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/spaces/:id', isAuthenticated, async (req: any, res) => {
+  app.get('/api/spaces/:id', isAuthenticated, requireSpaceOwner('id'), async (req: any, res) => {
     try {
-      const space = await storage.getSpace(req.params.id);
-      if (!space) {
-        return res.status(404).json({ message: "Space not found" });
-      }
-      res.json(space);
+      res.json(req.space);
     } catch (error) {
       console.error("Error fetching space:", error);
       res.status(500).json({ message: "Failed to fetch space" });
     }
   });
 
-  app.put('/api/spaces/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/spaces/:id', isAuthenticated, requireSpaceOwner('id'), async (req: any, res) => {
     try {
       const space = await storage.updateSpace(req.params.id, req.body);
       if (!space) {
@@ -83,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/spaces/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/spaces/:id', isAuthenticated, requireSpaceOwner('id'), async (req: any, res) => {
     try {
       const deleted = await storage.deleteSpace(req.params.id);
       if (!deleted) {
@@ -97,7 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== FOLDERS ====================
-  app.get('/api/spaces/:spaceId/folders', isAuthenticated, async (req: any, res) => {
+  app.get('/api/spaces/:spaceId/folders', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const folders = await storage.getFolders(req.params.spaceId);
       res.json(folders);
@@ -107,7 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/spaces/:spaceId/folders', isAuthenticated, async (req: any, res) => {
+  app.post('/api/spaces/:spaceId/folders', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const folder = await storage.createFolder({ ...req.body, spaceId: req.params.spaceId });
       res.status(201).json(folder);
@@ -144,7 +164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== SHEETS ====================
-  app.get('/api/spaces/:spaceId/sheets', isAuthenticated, async (req: any, res) => {
+  app.get('/api/spaces/:spaceId/sheets', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const sheets = await storage.getSheets(req.params.spaceId);
       res.json(sheets);
@@ -164,7 +184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/spaces/:spaceId/sheets', isAuthenticated, async (req: any, res) => {
+  app.post('/api/spaces/:spaceId/sheets', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const sheet = await storage.createSheet({ ...req.body, spaceId: req.params.spaceId, createdBy: userId });
@@ -215,7 +235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== TAGS ====================
-  app.get('/api/spaces/:spaceId/tags', isAuthenticated, async (req: any, res) => {
+  app.get('/api/spaces/:spaceId/tags', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const tags = await storage.getTags(req.params.spaceId);
       res.json(tags);
@@ -225,7 +245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/spaces/:spaceId/tags', isAuthenticated, async (req: any, res) => {
+  app.post('/api/spaces/:spaceId/tags', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const tag = await storage.createTag({ ...req.body, spaceId: req.params.spaceId, createdBy: userId });
@@ -302,7 +322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== INSIGHTS ====================
-  app.get('/api/spaces/:spaceId/insights', isAuthenticated, async (req: any, res) => {
+  app.get('/api/spaces/:spaceId/insights', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const insights = await storage.getInsights(req.params.spaceId);
       res.json(insights);
@@ -312,7 +332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/spaces/:spaceId/insights', isAuthenticated, async (req: any, res) => {
+  app.post('/api/spaces/:spaceId/insights', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const insight = await storage.createInsight({ ...req.body, spaceId: req.params.spaceId, createdBy: userId });
@@ -501,7 +521,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== CHANGE LOGS ====================
-  app.get('/api/spaces/:spaceId/change-logs', isAuthenticated, async (req: any, res) => {
+  app.get('/api/spaces/:spaceId/change-logs', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const logs = await storage.getChangeLogs(req.params.spaceId);
       res.json(logs);
@@ -511,7 +531,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/spaces/:spaceId/change-logs', isAuthenticated, async (req: any, res) => {
+  app.post('/api/spaces/:spaceId/change-logs', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const log = await storage.createChangeLog({ ...req.body, spaceId: req.params.spaceId, createdBy: userId });
@@ -677,14 +697,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/embeddings/reindex-space/:spaceId', isAuthenticated, async (req: any, res) => {
+  app.post('/api/embeddings/reindex-space/:spaceId', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const { spaceId } = req.params;
-
-      const space = await storage.getSpace(spaceId);
-      if (!space) {
-        return res.status(404).json({ message: "Space not found" });
-      }
 
       if (!isOpenAIConfigured()) {
         return res.status(503).json({ 
@@ -746,6 +761,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const isLinkOnly = !dataUrl && !!sourceUrl;
+
+      // Validate space ownership if spaceId is explicitly provided
+      if (spaceId) {
+        const space = await storage.getSpace(spaceId);
+        if (!space) {
+          return res.status(404).json({ message: "Space not found" });
+        }
+        if (space.ownerId !== userId) {
+          return res.status(403).json({ message: "Forbidden: you do not have access to this space" });
+        }
+      }
 
       // Get or create a default space if none provided
       let targetSpaceId = spaceId;
