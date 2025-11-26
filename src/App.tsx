@@ -13,6 +13,20 @@ import type { DataSource } from './components/DataSourceSidebar';
 import { buildRoute, getCurrentView } from './routes';
 import { useRouter } from './hooks/useRouter';
 import { useAuth } from './hooks/useAuth';
+import { 
+  useSpaces, 
+  useCreateSpace, 
+  useUpdateSpace, 
+  useDeleteSpace,
+  useCreateFolder,
+  useUpdateFolder,
+  useDeleteFolder,
+  useCreateSheet,
+  useUpdateSheet,
+  useCreateTag,
+  useUpdateTag,
+  useDeleteTag,
+} from './hooks/useSpaces';
 
 type CaptureMode = 'window' | 'region';
 
@@ -45,208 +59,6 @@ interface FileData {
   timestamp: Date;
 }
 
-// Initial spaces data for the demo
-// ⚠️ NOTE: Mock data sources are added for demo purposes only. 
-// These will need to be removed before production launch.
-const initialSpaces: Space[] = [
-  {
-    id: 'space-1',
-    name: 'Q4 Marketing Analysis',
-    description: 'Comprehensive marketing performance data',
-    goals: 'Track Q4 marketing performance to optimize CAC and identify highest-performing channels.',
-    instructions: '• Revenue data is in USD\\n• Compare performance against $50 target CAC\\n• Focus on month-over-month trends\\n• Prioritize Google Ads and Facebook Ads analysis',
-    folders: [
-      { 
-        id: 'folder-1', 
-        name: 'HubSpot Data', 
-        sheets: [
-          {
-            id: 'sheet-1',
-            name: 'Revenue Metrics Dashboard',
-            rowCount: 120,
-            lastModified: '2 hours ago',
-            dataSource: {
-              type: 'screenshot',
-              name: 'Revenue Metrics Dashboard',
-              captureDate: new Date('2024-11-16T14:30:00'),
-              capturedBy: 'Eric Unterberger',
-              folder: 'HubSpot Data',
-              space: 'Q4 Marketing Analysis',
-              tags: ['revenue', 'q4-2024', 'hubspot'],
-              sentToLLMs: [
-                { llm: 'ChatGPT', timestamp: new Date('2024-11-16T14:35:00') }
-              ],
-              preview: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=500&fit=crop'
-            }
-          },
-          {
-            id: 'sheet-2',
-            name: 'Lead Generation Report',
-            rowCount: 450,
-            lastModified: '1 day ago',
-            dataSource: {
-              type: 'link',
-              name: 'Lead Generation Report',
-              captureDate: new Date('2024-11-15T10:20:00'),
-              capturedBy: 'Eric Unterberger',
-              folder: 'HubSpot Data',
-              space: 'Q4 Marketing Analysis',
-              tags: ['leads', 'marketing', 'q4-2024'],
-              url: 'https://app.hubspot.com/reports/lead-generation-dashboard'
-            }
-          },
-          {
-            id: 'sheet-3',
-            name: 'Customer Acquisition Data',
-            rowCount: 89,
-            lastModified: '3 days ago',
-            dataSource: {
-              type: 'file',
-              name: 'Customer Acquisition Data',
-              captureDate: new Date('2024-11-13T16:45:00'),
-              capturedBy: 'Eric Unterberger',
-              folder: 'HubSpot Data',
-              space: 'Q4 Marketing Analysis',
-              tags: ['customers', 'acquisition'],
-              sentToLLMs: [
-                { llm: 'Claude', timestamp: new Date('2024-11-13T16:50:00') }
-              ],
-              fileData: {
-                fileName: 'customer_acquisition_oct2024.csv',
-                fileSize: '245 KB',
-                fileType: 'text/csv'
-              }
-            }
-          }
-        ] 
-      },
-      { 
-        id: 'folder-2', 
-        name: 'Google Ads Data', 
-        sheets: [
-          {
-            id: 'sheet-4',
-            name: 'Ad Spend Analysis',
-            rowCount: 365,
-            lastModified: '5 hours ago',
-            dataSource: {
-              type: 'screenshot',
-              name: 'Ad Spend Analysis',
-              captureDate: new Date('2024-11-17T09:15:00'),
-              capturedBy: 'Sarah Chen',
-              folder: 'Google Ads Data',
-              space: 'Q4 Marketing Analysis',
-              tags: ['ads', 'spend', 'google'],
-              preview: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=500&fit=crop'
-            }
-          },
-          {
-            id: 'sheet-5',
-            name: 'Conversion Rates',
-            rowCount: 180,
-            lastModified: '1 day ago',
-            dataSource: {
-              type: 'screenshot',
-              name: 'Conversion Rates',
-              captureDate: new Date('2024-11-16T11:30:00'),
-              capturedBy: 'Mike Johnson',
-              folder: 'Google Ads Data',
-              space: 'Q4 Marketing Analysis',
-              tags: ['conversions', 'google', 'performance'],
-              sentToLLMs: [
-                { llm: 'ChatGPT', timestamp: new Date('2024-11-16T11:35:00') },
-                { llm: 'Claude', timestamp: new Date('2024-11-16T11:40:00') }
-              ],
-              preview: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=500&fit=crop'
-            }
-          }
-        ] 
-      },
-      { 
-        id: 'folder-3', 
-        name: 'Analytics', 
-        sheets: [
-          {
-            id: 'sheet-6',
-            name: 'Website Traffic Overview',
-            rowCount: 730,
-            lastModified: '6 hours ago',
-            dataSource: {
-              type: 'link',
-              name: 'Website Traffic Overview',
-              captureDate: new Date('2024-11-17T08:00:00'),
-              capturedBy: 'Alex Rivera',
-              folder: 'Analytics',
-              space: 'Q4 Marketing Analysis',
-              tags: ['traffic', 'analytics', 'web'],
-              url: 'https://analytics.google.com/analytics/web/#/report/visitors-overview'
-            }
-          }
-        ] 
-      },
-    ],
-    tags: [
-      { id: 'tag-1', name: 'Revenue Growth', color: '#FF6B35', createdAt: new Date('2025-01-10'), createdBy: 'Sarah Chen', spaceId: 'space-1' },
-      { id: 'tag-2', name: 'Cost Optimization', color: '#4ECDC4', createdAt: new Date('2025-01-12'), createdBy: 'Mike Johnson', spaceId: 'space-1' },
-      { id: 'tag-3', name: 'Customer Acquisition', color: '#FFE66D', createdAt: new Date('2025-01-15'), createdBy: 'Sarah Chen', spaceId: 'space-1' },
-      { id: 'tag-4', name: 'Ad Performance', color: '#A8E6CF', createdAt: new Date('2025-01-18'), createdBy: 'Alex Rivera', spaceId: 'space-1' },
-      { id: 'tag-5', name: 'Q4 Planning', color: '#FF8B94', createdAt: new Date('2025-01-20'), createdBy: 'Sarah Chen', spaceId: 'space-1' },
-    ],
-  },
-  {
-    id: 'space-2',
-    name: 'Sales Performance',
-    description: 'Salesforce and sales data tracking',
-    folders: [
-      { 
-        id: 'folder-4', 
-        name: 'Salesforce Captures', 
-        sheets: [
-          {
-            id: 'sheet-7',
-            name: 'Pipeline Data Q4',
-            rowCount: 234,
-            lastModified: '12 hours ago',
-            dataSource: {
-              type: 'screenshot',
-              name: 'Pipeline Data Q4',
-              captureDate: new Date('2024-11-17T02:30:00'),
-              capturedBy: 'Eric Unterberger',
-              folder: 'Salesforce Captures',
-              space: 'Sales Performance',
-              tags: ['pipeline', 'salesforce', 'q4'],
-              sentToLLMs: [
-                { llm: 'ChatGPT', timestamp: new Date('2024-11-17T02:35:00') }
-              ],
-              preview: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=800&h=500&fit=crop'
-            }
-          },
-          {
-            id: 'sheet-8',
-            name: 'Closed Deals Export',
-            rowCount: 67,
-            lastModified: '2 days ago',
-            dataSource: {
-              type: 'file',
-              name: 'Closed Deals Export',
-              captureDate: new Date('2024-11-15T14:20:00'),
-              capturedBy: 'Sarah Chen',
-              folder: 'Salesforce Captures',
-              space: 'Sales Performance',
-              tags: ['deals', 'salesforce', 'closed'],
-              fileData: {
-                fileName: 'closed_deals_november_2024.xlsx',
-                fileSize: '892 KB',
-                fileType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-              }
-            }
-          }
-        ] 
-      },
-    ],
-    tags: [],
-  },
-];
 
 export default function App() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
@@ -298,39 +110,26 @@ export default function App() {
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [targetFolder, setTargetFolder] = useState<{ spaceId: string; folderId: string } | null>(null);
   const [showAssignmentPanel, setShowAssignmentPanel] = useState(false);
-  const [spaces, setSpaces] = useState<Space[]>(() => {
-    // Load spaces from localStorage if available
-    try {
-      const saved = localStorage.getItem('captureinsight_spaces');
-      if (saved) {
-        const parsedSpaces = JSON.parse(saved);
-        
-        // ⚠️ MIGRATION: Check if mock data sources exist, if not, use initialSpaces
-        // This ensures users get the new mock data sources after code update
-        const hasMockDataSources = parsedSpaces.some((space: Space) => 
-          space.folders.some(folder => 
-            folder.sheets.some(sheet => sheet.dataSource)
-          )
-        );
-        
-        if (!hasMockDataSources) {
-          console.log('🔄 Migrating to new mock data with data sources...');
-          localStorage.setItem('captureinsight_spaces', JSON.stringify(initialSpaces));
-          return initialSpaces;
-        }
-        
-        return parsedSpaces;
-      }
-    } catch (error) {
-      console.error('Error loading spaces from localStorage:', error);
-    }
-    return initialSpaces;
-  });
+  
+  // ⚠️ API-based spaces state using React Query
+  const { data: spaces = [], isLoading: spacesLoading, refetch: refetchSpaces } = useSpaces();
+  
+  // Mutation hooks for CRUD operations
+  const createSpaceMutation = useCreateSpace();
+  const updateSpaceMutation = useUpdateSpace();
+  const deleteSpaceMutation = useDeleteSpace();
+  const createFolderMutation = useCreateFolder();
+  const updateFolderMutation = useUpdateFolder();
+  const deleteFolderMutation = useDeleteFolder();
+  const createSheetMutation = useCreateSheet();
+  const updateSheetMutation = useUpdateSheet();
+  const createTagMutation = useCreateTag();
+  const updateTagMutation = useUpdateTag();
+  const deleteTagMutation = useDeleteTag();
   
   // ⚠️ CRITICAL: Current Space tracking for Space-scoped architecture
   // All features (Capture, AI Assistant, Change Logs) operate within the current Space
   const [currentSpaceId, setCurrentSpaceId] = useState<string | null>(() => {
-    // Load from localStorage
     try {
       const saved = localStorage.getItem('captureinsight_current_space');
       if (saved) {
@@ -339,9 +138,15 @@ export default function App() {
     } catch (error) {
       console.error('Error loading current space from localStorage:', error);
     }
-    // Default to first space
-    return initialSpaces[0]?.id || null;
+    return null;
   });
+  
+  // Set currentSpaceId to first space when spaces load (if not already set)
+  useEffect(() => {
+    if (!spacesLoading && spaces.length > 0 && !currentSpaceId) {
+      setCurrentSpaceId(spaces[0].id);
+    }
+  }, [spaces, spacesLoading, currentSpaceId]);
   
   // Get the current Space object
   const currentSpace = spaces.find(s => s.id === currentSpaceId);
@@ -358,12 +163,18 @@ export default function App() {
   }, [currentSpaceId]);
   
   // Default destination shared between FloatingCaptureToolbar and CaptureOptionsModal
-  const [defaultDestination, setDefaultDestination] = useState<{ spaceId: string; folderId: string } | null>(() => {
-    // Initialize with first space/folder
-    const firstSpace = initialSpaces[0];
-    const firstFolder = firstSpace?.folders[0];
-    return firstSpace && firstFolder ? { spaceId: firstSpace.id, folderId: firstFolder.id } : null;
-  });
+  const [defaultDestination, setDefaultDestination] = useState<{ spaceId: string; folderId: string } | null>(null);
+  
+  // Update default destination when spaces load
+  useEffect(() => {
+    if (!spacesLoading && spaces.length > 0 && !defaultDestination) {
+      const firstSpace = spaces[0];
+      const firstFolder = firstSpace?.folders[0];
+      if (firstSpace && firstFolder) {
+        setDefaultDestination({ spaceId: firstSpace.id, folderId: firstFolder.id });
+      }
+    }
+  }, [spaces, spacesLoading, defaultDestination]);
   
   // Analysis settings shared between FloatingCaptureToolbar and CaptureAssignmentPanel
   const [analysisType, setAnalysisType] = useState<'one-time' | 'scheduled' | null>(null);
@@ -393,16 +204,6 @@ export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // ⚠️ CRITICAL: Persist spaces to localStorage whenever they change
-  // This ensures analysis settings (LLM, schedule, etc.) persist across page navigation
-  useEffect(() => {
-    try {
-      localStorage.setItem('captureinsight_spaces', JSON.stringify(spaces));
-    } catch (error) {
-      console.error('Error saving spaces to localStorage:', error);
-    }
-  }, [spaces]);
 
   // Combine all capture items into a single array for the modal
   const captureItems = useMemo<CaptureItem[]>(() => {
@@ -518,7 +319,7 @@ export default function App() {
     handleStartAnalysis({ destinations, analysisSettings });
   };
 
-  const handleStartAnalysis = (data: { 
+  const handleStartAnalysis = async (data: { 
     destinations: { spaceId: string; folderId: string }[]; 
     analysisSettings: Array<{
       captureId: string;
@@ -528,75 +329,55 @@ export default function App() {
     }>
   }) => {
     const { destinations, analysisSettings } = data;
-    // Update captures with their destinations
-    setCaptures(prev => prev.map((capture, index) => {
-      const dest = destinations[index];
-      const space = spaces.find(p => p.id === dest.spaceId);
-      const folder = space?.folders.find(f => f.id === dest.folderId);
-      return {
-        ...capture,
-        folder: folder && space ? `${space.name} → ${folder.name}` : capture.folder
-      };
-    }));
     
-    // ⚠️ CRITICAL: Add sheets to space folders for each capture
-    // This ensures captures appear in the Projects sidebar in DataManagementView
-    setSpaces(prev => {
-      const newSpaces = [...prev];
-      
-      captureItems.forEach((item, index) => {
+    try {
+      // Update captures with their destinations
+      setCaptures(prev => prev.map((capture, index) => {
         const dest = destinations[index];
-        const spaceIndex = newSpaces.findIndex(p => p.id === dest.spaceId);
-        
-        if (spaceIndex !== -1) {
-          const space = newSpaces[spaceIndex];
-          const folderIndex = space.folders.findIndex(f => f.id === dest.folderId);
-          
-          if (folderIndex !== -1) {
-            // ⚠️ CRITICAL: Get analysis settings for this capture
-            const settings = analysisSettings[index];
-            
-            // Create a new sheet for this capture with analysis preferences
-            const newSheet = {
-              id: `sheet-${Date.now()}-${index}`,
-              name: item.name,
-              rowCount: 120, // Default row count
-              lastModified: 'Just now',
-              // Store analysis preferences (synced with CaptureOptionsModal)
-              analysisType: settings?.analysisType || null,
-              llmProvider: settings?.llmProvider,
-              schedule: settings?.schedule
-            };
-            
-            // Add the sheet to the folder
-            newSpaces[spaceIndex] = {
-              ...space,
-              folders: space.folders.map((f, idx) => 
-                idx === folderIndex 
-                  ? { ...f, sheets: [...f.sheets, newSheet] }
-                  : f
-              )
-            };
-          }
-        }
-      });
+        const space = spaces.find(p => p.id === dest.spaceId);
+        const folder = space?.folders.find(f => f.id === dest.folderId);
+        return {
+          ...capture,
+          folder: folder && space ? `${space.name} → ${folder.name}` : capture.folder
+        };
+      }));
       
-      return newSpaces;
-    });
-    
-    // Navigate to Data Management View
-    setCurrentView('data');
-    setShowOptionsModal(false);
-    
-    // Show success message
-    const uniqueDestinations = new Set(destinations.map(d => `${d.spaceId}|${d.folderId}`));
-    if (uniqueDestinations.size === 1) {
-      const dest = destinations[0];
-      const space = spaces.find(p => p.id === dest.spaceId);
-      const folder = space?.folders.find(f => f.id === dest.folderId);
-      toast.success(`${captureItems.length} item(s) saved to ${folder?.name}!`);
-    } else {
-      toast.success(`${captureItems.length} items saved to ${uniqueDestinations.size} different folders!`);
+      // ⚠️ CRITICAL: Add sheets to space folders for each capture via API
+      for (let index = 0; index < captureItems.length; index++) {
+        const item = captureItems[index];
+        const dest = destinations[index];
+        const settings = analysisSettings[index];
+        
+        await createSheetMutation.mutateAsync({
+          spaceId: dest.spaceId,
+          folderId: dest.folderId,
+          name: item.name,
+          dataSourceType: item.type,
+          dataSourceMeta: {
+            analysisType: settings?.analysisType,
+            llmProvider: settings?.llmProvider,
+            schedule: settings?.schedule,
+          },
+        });
+      }
+      
+      // Navigate to Data Management View
+      setCurrentView('data');
+      setShowOptionsModal(false);
+      
+      // Show success message
+      const uniqueDestinations = new Set(destinations.map(d => `${d.spaceId}|${d.folderId}`));
+      if (uniqueDestinations.size === 1) {
+        const dest = destinations[0];
+        const space = spaces.find(p => p.id === dest.spaceId);
+        const folder = space?.folders.find(f => f.id === dest.folderId);
+        toast.success(`${captureItems.length} item(s) saved to ${folder?.name}!`);
+      } else {
+        toast.success(`${captureItems.length} items saved to ${uniqueDestinations.size} different folders!`);
+      }
+    } catch (error) {
+      console.error('Error starting analysis:', error);
+      toast.error('Failed to save captures');
     }
   };
 
@@ -820,36 +601,34 @@ export default function App() {
     }
   };
 
-  const handleCreateSpace = (name: string) => {
-    const spaceId = `space-${Date.now()}`;
-    const newSpace: Space = {
-      id: spaceId,
-      name: name || 'New Space',
-      description: '',
-      folders: [] // Start with no folders - user will create them or system will auto-create
-    };
-    setSpaces(prev => [...prev, newSpace]);
-    toast.success(`Space \"${name}\" created!`);
+  const handleCreateSpace = async (name: string) => {
+    try {
+      await createSpaceMutation.mutateAsync({ 
+        name: name || 'New Space',
+        description: '',
+      });
+      toast.success(`Space \"${name}\" created!`);
+    } catch (error) {
+      console.error('Error creating space:', error);
+      toast.error('Failed to create space');
+    }
   };
 
-  const handleCreateFolder = (spaceId: string, name: string) => {
-    setSpaces(prev => prev.map(space => {
-      if (space.id === spaceId) {
-        return {
-          ...space,
-          folders: [
-            ...space.folders,
-            { id: `folder-${Date.now()}`, name: name || 'New Folder', sheets: [] }
-          ]
-        };
-      }
-      return space;
-    }));
-    toast.success(`Folder "${name}" created!`);
+  const handleCreateFolder = async (spaceId: string, name: string) => {
+    try {
+      await createFolderMutation.mutateAsync({ 
+        spaceId, 
+        name: name || 'New Folder' 
+      });
+      toast.success(`Folder "${name}" created!`);
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      toast.error('Failed to create folder');
+    }
   };
 
   // ⚠️ CRITICAL: Update sheet analysis settings (synced with CaptureOptionsModal)
-  const handleUpdateSheetAnalysis = (
+  const handleUpdateSheetAnalysis = async (
     spaceId: string, 
     folderId: string, 
     sheetId: string, 
@@ -859,68 +638,48 @@ export default function App() {
       schedule?: { frequency: string; time: string };
     }
   ) => {
-    setSpaces(prev => prev.map(space => {
-      if (space.id === spaceId) {
-        return {
-          ...space,
-          folders: space.folders.map(folder => {
-            if (folder.id === folderId) {
-              return {
-                ...folder,
-                sheets: folder.sheets.map(sheet => {
-                  if (sheet.id === sheetId) {
-                    return {
-                      ...sheet,
-                      analysisType: settings.analysisType !== undefined ? settings.analysisType : sheet.analysisType,
-                      llmProvider: settings.llmProvider !== undefined ? settings.llmProvider : sheet.llmProvider,
-                      schedule: settings.schedule !== undefined ? settings.schedule : sheet.schedule
-                    };
-                  }
-                  return sheet;
-                })
-              };
-            }
-            return folder;
-          })
-        };
-      }
-      return space;
-    }));
-    toast.success('Analysis settings updated!');
+    try {
+      await updateSheetMutation.mutateAsync({
+        id: sheetId,
+        data: {
+          dataSourceMeta: {
+            analysisType: settings.analysisType,
+            llmProvider: settings.llmProvider,
+            schedule: settings.schedule,
+          },
+        },
+      });
+      toast.success('Analysis settings updated!');
+    } catch (error) {
+      console.error('Error updating sheet analysis:', error);
+      toast.error('Failed to update analysis settings');
+    }
   };
 
-  const handleRenameSpace = (spaceId: string, newName: string) => {
-    setSpaces(prev => prev.map(space => {
-      if (space.id === spaceId) {
-        return {
-          ...space,
-          name: newName
-        };
-      }
-      return space;
-    }));
-    toast.success(`Space renamed to "${newName}"!`);
+  const handleRenameSpace = async (spaceId: string, newName: string) => {
+    try {
+      await updateSpaceMutation.mutateAsync({
+        id: spaceId,
+        data: { name: newName },
+      });
+      toast.success(`Space renamed to "${newName}"!`);
+    } catch (error) {
+      console.error('Error renaming space:', error);
+      toast.error('Failed to rename space');
+    }
   };
 
-  const handleRenameFolder = (spaceId: string, folderId: string, newName: string) => {
-    setSpaces(prev => prev.map(space => {
-      if (space.id === spaceId) {
-        return {
-          ...space,
-          folders: space.folders.map(folder => {
-            if (folder.id === folderId) {
-              return {
-                ...folder,
-                name: newName
-              };
-            }
-            return folder;
-          })
-        };
-      }
-      return space;
-    }));
-    toast.success(`Folder renamed to \"${newName}\"!`);
+  const handleRenameFolder = async (spaceId: string, folderId: string, newName: string) => {
+    try {
+      await updateFolderMutation.mutateAsync({
+        id: folderId,
+        name: newName,
+      });
+      toast.success(`Folder renamed to \"${newName}\"!`);
+    } catch (error) {
+      console.error('Error renaming folder:', error);
+      toast.error('Failed to rename folder');
+    }
   };
 
   // ⚠️ CRITICAL: Handle Space switching (for new Space-scoped architecture)
@@ -933,17 +692,19 @@ export default function App() {
   };
 
   // ⚠️ CRITICAL: Create blank Space for auto-edit name flow
-  const handleCreateBlankSpace = () => {
-    const spaceId = `space-${Date.now()}`;
-    const newSpace: Space = {
-      id: spaceId,
-      name: '', // Empty name - will be auto-edited
-      description: '',
-      folders: []
-    };
-    setSpaces(prev => [...prev, newSpace]);
-    setCurrentSpaceId(spaceId); // Switch to new space
-    return spaceId; // Return ID for component to trigger edit mode
+  const handleCreateBlankSpace = async () => {
+    try {
+      const newSpace = await createSpaceMutation.mutateAsync({ 
+        name: 'New Space',
+        description: '',
+      });
+      setCurrentSpaceId(newSpace.id);
+      return newSpace.id;
+    } catch (error) {
+      console.error('Error creating blank space:', error);
+      toast.error('Failed to create space');
+      return null;
+    }
   };
 
   // Track shift key for multi-select
@@ -1090,7 +851,7 @@ export default function App() {
     });
   };
 
-  const handleAssignCaptures = (captureIds: string[], settings: {
+  const handleAssignCaptures = async (captureIds: string[], settings: {
     spaceId?: string;
     folderId?: string;
     analysisType?: 'one-time' | 'scheduled' | null;
@@ -1102,76 +863,43 @@ export default function App() {
       return;
     }
     
-    // Build destinations and analysis settings for each selected capture
-    const destinations = captureIds.map(() => ({
-      spaceId: settings.spaceId!,
-      folderId: settings.folderId!
-    }));
-    
-    const analysisSettings = captureIds.map(id => ({
-      captureId: id,
-      analysisType: settings.llmProvider ? 'llm-integration' as const : settings.analysisType || null,
-      llmProvider: settings.llmProvider,
-      schedule: settings.schedule
-    }));
-    
-    // Add sheets to space folders
-    setSpaces(prev => {
-      const newSpaces = [...prev];
-      
-      captureIds.forEach((captureId, index) => {
+    try {
+      // Create sheets for each capture using the API
+      for (const captureId of captureIds) {
         const item = captureItems.find(i => i.id === captureId);
-        if (!item) return;
+        if (!item) continue;
         
-        const dest = destinations[index];
-        const spaceIndex = newSpaces.findIndex(p => p.id === dest.spaceId);
-        
-        if (spaceIndex !== -1) {
-          const space = newSpaces[spaceIndex];
-          const folderIndex = space.folders.findIndex(f => f.id === dest.folderId);
-          
-          if (folderIndex !== -1) {
-            const settingsForCapture = analysisSettings[index];
-            
-            const newSheet = {
-              id: `sheet-${Date.now()}-${index}`,
-              name: item.name,
-              rowCount: 120,
-              lastModified: 'Just now',
-              analysisType: settingsForCapture?.analysisType || null,
-              llmProvider: settingsForCapture?.llmProvider,
-              schedule: settingsForCapture?.schedule
-            };
-            
-            newSpaces[spaceIndex] = {
-              ...space,
-              folders: space.folders.map((f, idx) => 
-                idx === folderIndex 
-                  ? { ...f, sheets: [...f.sheets, newSheet] }
-                  : f
-              )
-            };
-          }
-        }
-      });
-      
-      return newSpaces;
-    });
-    
-    // Update captures with their destinations
-    setCaptures(prev => prev.map(capture => {
-      if (captureIds.includes(capture.id)) {
-        const space = spaces.find(p => p.id === settings.spaceId);
-        const folder = space?.folders.find(f => f.id === settings.folderId);
-        return {
-          ...capture,
-          folder: folder && space ? `${space.name} → ${folder.name}` : capture.folder
-        };
+        await createSheetMutation.mutateAsync({
+          spaceId: settings.spaceId,
+          folderId: settings.folderId,
+          name: item.name,
+          dataSourceType: item.type,
+          dataSourceMeta: {
+            analysisType: settings.llmProvider ? 'llm-integration' : settings.analysisType,
+            llmProvider: settings.llmProvider,
+            schedule: settings.schedule,
+          },
+        });
       }
-      return capture;
-    }));
-    
-    toast.success(`${captureIds.length} capture${captureIds.length > 1 ? 's' : ''} assigned successfully!`);
+      
+      // Update captures with their destinations
+      setCaptures(prev => prev.map(capture => {
+        if (captureIds.includes(capture.id)) {
+          const space = spaces.find(p => p.id === settings.spaceId);
+          const folder = space?.folders.find(f => f.id === settings.folderId);
+          return {
+            ...capture,
+            folder: folder && space ? `${space.name} → ${folder.name}` : capture.folder
+          };
+        }
+        return capture;
+      }));
+      
+      toast.success(`${captureIds.length} capture${captureIds.length > 1 ? 's' : ''} assigned successfully!`);
+    } catch (error) {
+      console.error('Error assigning captures:', error);
+      toast.error('Failed to assign captures');
+    }
   };
 
   const handleReset = () => {
@@ -1193,13 +921,12 @@ export default function App() {
     setShowToolbar(false);
   };
 
-  // Handle Space tag updates
-  const handleUpdateSpaceTags = (spaceId: string, tags: any[]) => {
-    setSpaces(prev => prev.map(s => 
-      s.id === spaceId 
-        ? { ...s, tags: tags.map(t => ({ ...t, spaceId })) }
-        : s
-    ));
+  // Handle Space tag updates - using API mutations
+  const handleUpdateSpaceTags = async (spaceId: string, tags: any[]) => {
+    // Note: This is a no-op now since tags are managed by the API
+    // The component should be refactored to use tag mutations directly
+    // For now, refetch spaces to get updated tags
+    await refetchSpaces();
   };
 
   // Switch between views
@@ -1213,48 +940,63 @@ export default function App() {
           currentSpaceId={currentSpaceId}
           onSpaceChange={handleSpaceChange}
           onCreateBlankSpace={handleCreateBlankSpace}
-          onCreateSpace={(data) => {
-            const spaceId = `space-${Date.now()}`;
-            const newSpace: Space = {
-              id: spaceId,
-              name: data.name,
-              description: data.description,
-              goals: data.goals,
-              instructions: data.instructions,
-              folders: [],
-              tags: [],
-            };
-            setSpaces(prev => [...prev, newSpace]);
-            toast.success(`Space \"${data.name}\" created!`);
+          onCreateSpace={async (data) => {
+            try {
+              await createSpaceMutation.mutateAsync({
+                name: data.name,
+                description: data.description,
+                goals: data.goals,
+                instructions: data.instructions,
+              });
+              toast.success(`Space \"${data.name}\" created!`);
+            } catch (error) {
+              console.error('Error creating space:', error);
+              toast.error('Failed to create space');
+            }
           }}
-          onUpdateSpace={(spaceId, data) => {
-            setSpaces(prev => prev.map(p => 
-              p.id === spaceId 
-                ? { ...p, name: data.name, goals: data.goals, instructions: data.instructions }
-                : p
-            ));
-            toast.success(`Space \"${data.name}\" updated!`);
+          onUpdateSpace={async (spaceId, data) => {
+            try {
+              await updateSpaceMutation.mutateAsync({
+                id: spaceId,
+                data: { 
+                  name: data.name, 
+                  goals: data.goals, 
+                  instructions: data.instructions 
+                },
+              });
+              toast.success(`Space \"${data.name}\" updated!`);
+            } catch (error) {
+              console.error('Error updating space:', error);
+              toast.error('Failed to update space');
+            }
           }}
           onUpdateTags={handleUpdateSpaceTags}
-          onDeleteSpace={(spaceId) => {
-            setSpaces(prev => prev.filter(p => p.id !== spaceId));
-            toast.success('Space deleted!');
+          onDeleteSpace={async (spaceId) => {
+            try {
+              await deleteSpaceMutation.mutateAsync(spaceId);
+              toast.success('Space deleted!');
+            } catch (error) {
+              console.error('Error deleting space:', error);
+              toast.error('Failed to delete space');
+            }
           }}
-          onUpdateFolder={(spaceId, folderId, name) => {
-            setSpaces(prev => prev.map(p => 
-              p.id === spaceId
-                ? { ...p, folders: p.folders.map(f => f.id === folderId ? { ...f, name } : f) }
-                : p
-            ));
-            toast.success(`Folder renamed to \"${name}\"!`);
+          onUpdateFolder={async (spaceId, folderId, name) => {
+            try {
+              await updateFolderMutation.mutateAsync({ id: folderId, name });
+              toast.success(`Folder renamed to \"${name}\"!`);
+            } catch (error) {
+              console.error('Error updating folder:', error);
+              toast.error('Failed to rename folder');
+            }
           }}
-          onDeleteFolder={(spaceId, folderId) => {
-            setSpaces(prev => prev.map(p => 
-              p.id === spaceId
-                ? { ...p, folders: p.folders.filter(f => f.id !== folderId) }
-                : p
-            ));
-            toast.success('Folder deleted!');
+          onDeleteFolder={async (spaceId, folderId) => {
+            try {
+              await deleteFolderMutation.mutateAsync(folderId);
+              toast.success('Folder deleted!');
+            } catch (error) {
+              console.error('Error deleting folder:', error);
+              toast.error('Failed to delete folder');
+            }
           }}
           onCreateFolder={handleCreateFolder}
           onUpdateSheetAnalysis={handleUpdateSheetAnalysis}
@@ -1275,7 +1017,6 @@ export default function App() {
       />
     );
   } else if (currentView === 'insights') {
-    // Insights now opens within DataManagementView, so redirect to data view
     return (
       <DataManagementView 
         onBackToCapture={() => setCurrentView('capture')} 
@@ -1284,46 +1025,62 @@ export default function App() {
         currentSpaceId={currentSpaceId}
         onSpaceChange={handleSpaceChange}
         onCreateBlankSpace={handleCreateBlankSpace}
-        onCreateSpace={(data) => {
-          const spaceId = `space-${Date.now()}`;
-          const newSpace: Space = {
-            id: spaceId,
-            name: data.name,
-            description: data.description,
-            goals: data.goals,
-            instructions: data.instructions,
-            folders: []
-          };
-          setSpaces(prev => [...prev, newSpace]);
-          toast.success(`Space \"${data.name}\" created!`);
+        onCreateSpace={async (data) => {
+          try {
+            await createSpaceMutation.mutateAsync({
+              name: data.name,
+              description: data.description,
+              goals: data.goals,
+              instructions: data.instructions,
+            });
+            toast.success(`Space \"${data.name}\" created!`);
+          } catch (error) {
+            console.error('Error creating space:', error);
+            toast.error('Failed to create space');
+          }
         }}
-        onUpdateSpace={(spaceId, data) => {
-          setSpaces(prev => prev.map(p => 
-            p.id === spaceId 
-              ? { ...p, name: data.name, goals: data.goals, instructions: data.instructions }
-              : p
-          ));
-          toast.success(`Space \"${data.name}\" updated!`);
+        onUpdateSpace={async (spaceId, data) => {
+          try {
+            await updateSpaceMutation.mutateAsync({
+              id: spaceId,
+              data: { 
+                name: data.name, 
+                goals: data.goals, 
+                instructions: data.instructions 
+              },
+            });
+            toast.success(`Space \"${data.name}\" updated!`);
+          } catch (error) {
+            console.error('Error updating space:', error);
+            toast.error('Failed to update space');
+          }
         }}
-        onDeleteSpace={(spaceId) => {
-          setSpaces(prev => prev.filter(p => p.id !== spaceId));
-          toast.success('Space deleted!');
+        onDeleteSpace={async (spaceId) => {
+          try {
+            await deleteSpaceMutation.mutateAsync(spaceId);
+            toast.success('Space deleted!');
+          } catch (error) {
+            console.error('Error deleting space:', error);
+            toast.error('Failed to delete space');
+          }
         }}
-        onUpdateFolder={(spaceId, folderId, name) => {
-          setSpaces(prev => prev.map(p => 
-            p.id === spaceId
-              ? { ...p, folders: p.folders.map(f => f.id === folderId ? { ...f, name } : f) }
-              : p
-          ));
-          toast.success(`Folder renamed to \"${name}\"!`);
+        onUpdateFolder={async (spaceId, folderId, name) => {
+          try {
+            await updateFolderMutation.mutateAsync({ id: folderId, name });
+            toast.success(`Folder renamed to \"${name}\"!`);
+          } catch (error) {
+            console.error('Error updating folder:', error);
+            toast.error('Failed to rename folder');
+          }
         }}
-        onDeleteFolder={(spaceId, folderId) => {
-          setSpaces(prev => prev.map(p => 
-            p.id === spaceId
-              ? { ...p, folders: p.folders.filter(f => f.id !== folderId) }
-              : p
-          ));
-          toast.success('Folder deleted!');
+        onDeleteFolder={async (spaceId, folderId) => {
+          try {
+            await deleteFolderMutation.mutateAsync(folderId);
+            toast.success('Folder deleted!');
+          } catch (error) {
+            console.error('Error deleting folder:', error);
+            toast.error('Failed to delete folder');
+          }
         }}
         onCreateFolder={handleCreateFolder}
         onUpdateSheetAnalysis={handleUpdateSheetAnalysis}

@@ -1,13 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Sparkles, ExternalLink, Copy, ThumbsUp, ThumbsDown, Download, RefreshCw, MoreHorizontal, Tag as TagIcon, Check, X, AlertCircle, LogIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Tag, mockTags, Insight } from '../data/insightsData';
+import { Tag, Insight } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
 import { TagSelector } from './TagSelector';
 import { CreateInsightCard } from './CreateInsightCard';
 import { toast } from 'sonner';
 import { copyToClipboard } from '../utils/clipboard';
 import { useAuth } from '../hooks/useAuth';
+import { useTags, useCreateTag } from '../hooks/useTags';
 
 interface Message {
   id: string;
@@ -75,12 +76,23 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
   const [aiError, setAiError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Fetch tags from real API
+  const { data: tagsData = [] } = useTags(spaceId);
+  const createTagMutation = useCreateTag();
+
+  // Convert API data to Tag type (handle Date string -> Date conversion)
+  const tags: Tag[] = useMemo(() => {
+    return tagsData.map((tag: any) => ({
+      ...tag,
+      createdAt: tag.createdAt instanceof Date ? tag.createdAt : new Date(tag.createdAt),
+    }));
+  }, [tagsData]);
+
   // Tagging state
   const [showTagChatButton, setShowTagChatButton] = useState(false);
   const [isTagSelectionMode, setIsTagSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [showTagSelector, setShowTagSelector] = useState(false);
-  const [tags, setTags] = useState<Tag[]>(mockTags);
   const [showCreateInsightPrompt, setShowCreateInsightPrompt] = useState(false);
   const [showInsightCreationCard, setShowInsightCreationCard] = useState(false);
   const [pendingTagId, setPendingTagId] = useState<string | null>(null);
@@ -222,15 +234,22 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
   };
 
   const handleCreateTag = (name: string, color: string) => {
-    const newTag: Tag = {
-      id: `tag-${Date.now()}`,
-      name,
-      color,
-      createdAt: new Date(),
-      createdBy: 'Current User', // TODO: Replace with actual user
-    };
-    setTags(prev => [...prev, newTag]);
-    toast.success(`Tag "${name}" created!`);
+    if (!spaceId) {
+      toast.error('Please select a space first to create tags.');
+      return;
+    }
+
+    createTagMutation.mutate(
+      { spaceId, name, color },
+      {
+        onSuccess: () => {
+          toast.success(`Tag "${name}" created!`);
+        },
+        onError: (error) => {
+          toast.error(`Failed to create tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        },
+      }
+    );
   };
 
   const handleCreateInsightYes = () => {

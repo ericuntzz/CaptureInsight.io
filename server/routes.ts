@@ -63,8 +63,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/spaces', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const spaces = await storage.getSpaces(userId);
-      res.json(spaces);
+      const spacesData = await storage.getSpaces(userId);
+      
+      const spacesWithNested = await Promise.all(
+        spacesData.map(async (space) => {
+          const [foldersData, tagsData, sheetsData] = await Promise.all([
+            storage.getFolders(space.id),
+            storage.getTags(space.id),
+            storage.getSheets(space.id),
+          ]);
+          
+          const foldersWithSheets = foldersData.map((folder) => ({
+            ...folder,
+            sheets: sheetsData
+              .filter((sheet) => sheet.folderId === folder.id)
+              .map((sheet) => ({
+                id: sheet.id,
+                name: sheet.name,
+                rowCount: sheet.rowCount || 0,
+                lastModified: sheet.lastModified
+                  ? new Date(sheet.lastModified).toISOString()
+                  : "Never",
+                dataSourceType: sheet.dataSourceType,
+                dataSourceMeta: sheet.dataSourceMeta,
+              })),
+          }));
+          
+          return {
+            ...space,
+            folders: foldersWithSheets,
+            tags: tagsData.map((tag) => ({
+              id: tag.id,
+              name: tag.name,
+              color: tag.color,
+              createdAt: tag.createdAt,
+              createdBy: tag.createdBy,
+              spaceId: tag.spaceId,
+            })),
+          };
+        })
+      );
+      
+      res.json(spacesWithNested);
     } catch (error) {
       console.error("Error fetching spaces:", error);
       res.status(500).json({ message: "Failed to fetch spaces" });
