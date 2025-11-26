@@ -3,6 +3,7 @@
       "version": "0.1.0",
       "private": true,
       "dependencies": {
+            "@google/genai": "^1.30.0",
             "@neondatabase/serverless": "^1.0.2",
             "@radix-ui/react-accordion": "^1.2.3",
             "@radix-ui/react-alert-dialog": "^1.1.6",
@@ -58,6 +59,8 @@
             "next-themes": "^0.4.6",
             "openai": "^6.9.1",
             "openid-client": "^6.8.1",
+            "p-limit": "^7.2.0",
+            "p-retry": "^7.1.0",
             "passport": "^0.7.0",
             "react": "^18.3.1",
             "react-day-picker": "^8.10.1",

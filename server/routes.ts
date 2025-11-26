@@ -2,6 +2,14 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import {
+  analyzeCapture,
+  chat,
+  extractInsights,
+  getAIStatus,
+  isGeminiConfigured,
+  type ChatMessage,
+} from "./ai";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -503,6 +511,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating change log:", error);
       res.status(500).json({ message: "Failed to create change log" });
+    }
+  });
+
+  // ==================== AI ENDPOINTS ====================
+  app.get('/api/ai/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const status = getAIStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("Error getting AI status:", error);
+      res.status(500).json({ message: "Failed to get AI status" });
+    }
+  });
+
+  app.post('/api/ai/analyze', isAuthenticated, async (req: any, res) => {
+    try {
+      const { type, content, context, spaceGoals } = req.body;
+
+      if (!type || !content) {
+        return res.status(400).json({ message: "Missing required fields: type and content" });
+      }
+
+      if (type !== 'screenshot' && type !== 'data') {
+        return res.status(400).json({ message: "Type must be 'screenshot' or 'data'" });
+      }
+
+      if (!isGeminiConfigured()) {
+        return res.status(503).json({ 
+          message: "AI service not configured. Gemini integration is required." 
+        });
+      }
+
+      const result = await analyzeCapture(type, content, { context, spaceGoals });
+      res.json(result);
+    } catch (error) {
+      console.error("Error analyzing content:", error);
+      res.status(500).json({ 
+        message: "Failed to analyze content",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post('/api/ai/chat', isAuthenticated, async (req: any, res) => {
+    try {
+      const { messages, context, spaceGoals } = req.body;
+
+      if (!messages || !Array.isArray(messages)) {
+        return res.status(400).json({ message: "Messages must be an array" });
+      }
+
+      if (!isGeminiConfigured()) {
+        return res.status(503).json({ 
+          message: "AI service not configured. Gemini integration is required." 
+        });
+      }
+
+      const chatMessages: ChatMessage[] = messages.map((m: any) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const result = await chat(chatMessages, context, spaceGoals);
+      res.json(result);
+    } catch (error) {
+      console.error("Error in AI chat:", error);
+      res.status(500).json({ 
+        message: "Failed to process chat",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post('/api/ai/extract-insights', isAuthenticated, async (req: any, res) => {
+    try {
+      const { content, spaceGoals } = req.body;
+
+      if (!content) {
+        return res.status(400).json({ message: "Content is required" });
+      }
+
+      if (!isGeminiConfigured()) {
+        return res.status(503).json({ 
+          message: "AI service not configured. Gemini integration is required." 
+        });
+      }
+
+      const result = await extractInsights(content, spaceGoals);
+      res.json(result);
+    } catch (error) {
+      console.error("Error extracting insights:", error);
+      res.status(500).json({ 
+        message: "Failed to extract insights",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
