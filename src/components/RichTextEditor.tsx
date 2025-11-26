@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Mention from '@tiptap/extension-mention';
@@ -63,6 +63,11 @@ export function RichTextEditor({
   placeholder = 'Add your notes here...',
   disabled = false 
 }: RichTextEditorProps) {
+  // Track if the update is coming from user typing (to prevent feedback loop)
+  const isInternalUpdate = useRef(false);
+  // Track the last content we set to avoid unnecessary updates
+  const lastExternalContent = useRef(content);
+  
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -135,6 +140,8 @@ export function RichTextEditor({
     ],
     content,
     onUpdate: ({ editor }) => {
+      // Mark this as an internal update to prevent useEffect from resetting content
+      isInternalUpdate.current = true;
       const html = editor.getHTML();
       onChange(html);
       
@@ -152,6 +159,11 @@ export function RichTextEditor({
         });
         onCommentCountChange(commentCount);
       }
+      
+      // Reset the flag after a brief delay (after React state updates)
+      requestAnimationFrame(() => {
+        isInternalUpdate.current = false;
+      });
     },
     editorProps: {
       attributes: {
@@ -160,8 +172,10 @@ export function RichTextEditor({
     },
   });
 
+  // Only update editor content when it's an external change (not from user typing)
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
+    if (editor && !isInternalUpdate.current && content !== lastExternalContent.current) {
+      lastExternalContent.current = content;
       editor.commands.setContent(content);
     }
   }, [content, editor]);
