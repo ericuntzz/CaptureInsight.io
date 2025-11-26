@@ -47,6 +47,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
   };
 
+  // Entity-level ownership validation middleware factory
+  // Prevents cross-tenant access by validating that the requesting user owns the space containing the entity
+  const requireEntityOwner = (entityType: 'folder' | 'sheet' | 'tag' | 'insight', paramName: string = 'id') => {
+    return async (req: any, res: any, next: any) => {
+      try {
+        const entityId = req.params[paramName];
+        let entity: any;
+        let entityName: string;
+
+        // Load the entity based on type
+        switch (entityType) {
+          case 'folder':
+            entity = await storage.getFolder(entityId);
+            entityName = 'Folder';
+            break;
+          case 'sheet':
+            entity = await storage.getSheet(entityId);
+            entityName = 'Sheet';
+            break;
+          case 'tag':
+            entity = await storage.getTag(entityId);
+            entityName = 'Tag';
+            break;
+          case 'insight':
+            entity = await storage.getInsight(entityId);
+            entityName = 'Insight';
+            break;
+          default:
+            return res.status(500).json({ message: "Invalid entity type" });
+        }
+
+        if (!entity) {
+          return res.status(404).json({ message: `${entityName} not found` });
+        }
+
+        // Resolve the space and verify ownership
+        const space = await storage.getSpace(entity.spaceId);
+        if (!space) {
+          return res.status(404).json({ message: "Space not found" });
+        }
+
+        if (space.ownerId !== req.user.claims.sub) {
+          return res.status(403).json({ message: "Forbidden: you do not have access to this resource" });
+        }
+
+        // Attach entity and space to request for handler use
+        req.entity = entity;
+        req.space = space;
+        next();
+      } catch (error) {
+        console.error(`Error in requireEntityOwner middleware (${entityType}):`, error);
+        res.status(500).json({ message: "Failed to validate resource access" });
+      }
+    };
+  };
+
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
@@ -238,7 +294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/folders/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/folders/:id', isAuthenticated, requireEntityOwner('folder'), async (req: any, res) => {
     try {
       const folder = await storage.updateFolder(req.params.id, req.body);
       if (!folder) {
@@ -251,7 +307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/folders/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/folders/:id', isAuthenticated, requireEntityOwner('folder'), async (req: any, res) => {
     try {
       const deleted = await storage.deleteFolder(req.params.id);
       if (!deleted) {
@@ -275,7 +331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/folders/:folderId/sheets', isAuthenticated, async (req: any, res) => {
+  app.get('/api/folders/:folderId/sheets', isAuthenticated, requireEntityOwner('folder', 'folderId'), async (req: any, res) => {
     try {
       const sheets = await storage.getSheetsByFolder(req.params.folderId);
       res.json(sheets);
@@ -296,20 +352,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/sheets/:id', isAuthenticated, async (req: any, res) => {
+  app.get('/api/sheets/:id', isAuthenticated, requireEntityOwner('sheet'), async (req: any, res) => {
     try {
-      const sheet = await storage.getSheet(req.params.id);
-      if (!sheet) {
-        return res.status(404).json({ message: "Sheet not found" });
-      }
-      res.json(sheet);
+      res.json(req.entity);
     } catch (error) {
       console.error("Error fetching sheet:", error);
       res.status(500).json({ message: "Failed to fetch sheet" });
     }
   });
 
-  app.put('/api/sheets/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/sheets/:id', isAuthenticated, requireEntityOwner('sheet'), async (req: any, res) => {
     try {
       const sheet = await storage.updateSheet(req.params.id, req.body);
       if (!sheet) {
@@ -322,7 +374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/sheets/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/sheets/:id', isAuthenticated, requireEntityOwner('sheet'), async (req: any, res) => {
     try {
       const deleted = await storage.deleteSheet(req.params.id);
       if (!deleted) {
@@ -357,7 +409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/tags/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/tags/:id', isAuthenticated, requireEntityOwner('tag'), async (req: any, res) => {
     try {
       const tag = await storage.updateTag(req.params.id, req.body);
       if (!tag) {
@@ -370,7 +422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/tags/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/tags/:id', isAuthenticated, requireEntityOwner('tag'), async (req: any, res) => {
     try {
       const deleted = await storage.deleteTag(req.params.id);
       if (!deleted) {
@@ -444,20 +496,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/insights/:id', isAuthenticated, async (req: any, res) => {
+  app.get('/api/insights/:id', isAuthenticated, requireEntityOwner('insight'), async (req: any, res) => {
     try {
-      const insight = await storage.getInsight(req.params.id);
-      if (!insight) {
-        return res.status(404).json({ message: "Insight not found" });
-      }
-      res.json(insight);
+      res.json(req.entity);
     } catch (error) {
       console.error("Error fetching insight:", error);
       res.status(500).json({ message: "Failed to fetch insight" });
     }
   });
 
-  app.put('/api/insights/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/insights/:id', isAuthenticated, requireEntityOwner('insight'), async (req: any, res) => {
     try {
       const insight = await storage.updateInsight(req.params.id, req.body);
       if (!insight) {
@@ -470,7 +518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/insights/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/insights/:id', isAuthenticated, requireEntityOwner('insight'), async (req: any, res) => {
     try {
       const deleted = await storage.deleteInsight(req.params.id);
       if (!deleted) {
@@ -484,7 +532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Insight sources
-  app.get('/api/insights/:insightId/sources', isAuthenticated, async (req: any, res) => {
+  app.get('/api/insights/:insightId/sources', isAuthenticated, requireEntityOwner('insight', 'insightId'), async (req: any, res) => {
     try {
       const sources = await storage.getInsightSources(req.params.insightId);
       res.json(sources);
@@ -494,7 +542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/insights/:insightId/sources', isAuthenticated, async (req: any, res) => {
+  app.post('/api/insights/:insightId/sources', isAuthenticated, requireEntityOwner('insight', 'insightId'), async (req: any, res) => {
     try {
       const source = await storage.createInsightSource({ ...req.body, insightId: req.params.insightId });
       res.status(201).json(source);
@@ -518,7 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Insight comments
-  app.get('/api/insights/:insightId/comments', isAuthenticated, async (req: any, res) => {
+  app.get('/api/insights/:insightId/comments', isAuthenticated, requireEntityOwner('insight', 'insightId'), async (req: any, res) => {
     try {
       const comments = await storage.getInsightComments(req.params.insightId);
       res.json(comments);
@@ -528,7 +576,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/insights/:insightId/comments', isAuthenticated, async (req: any, res) => {
+  app.post('/api/insights/:insightId/comments', isAuthenticated, requireEntityOwner('insight', 'insightId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const comment = await storage.createInsightComment({ ...req.body, insightId: req.params.insightId, authorId: userId });
