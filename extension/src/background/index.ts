@@ -220,8 +220,23 @@ async function handleUploadScreenshot(message: ExtensionMessage) {
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab.id || !tab.url) return;
   
-  if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('edge://')) {
-    console.log('Cannot inject into browser internal pages');
+  const isRestrictedPage = 
+    tab.url.startsWith('chrome://') || 
+    tab.url.startsWith('chrome-extension://') || 
+    tab.url.startsWith('chrome-search://') ||
+    tab.url.startsWith('edge://') ||
+    tab.url.startsWith('about:') ||
+    tab.url === '' ||
+    tab.url === 'about:blank';
+  
+  if (isRestrictedPage) {
+    console.log('Cannot inject into browser internal pages:', tab.url);
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon-128.png',
+      title: 'CaptureInsight',
+      message: 'Please navigate to a website first (e.g., google.com). The toolbar cannot run on browser pages.'
+    });
     return;
   }
   
@@ -245,7 +260,7 @@ chrome.action.onClicked.addListener(async (tab) => {
         files: ['content/styles.css']
       });
       
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       await chrome.tabs.sendMessage(tab.id, {
         type: MessageType.TOGGLE_TOOLBAR,
@@ -254,6 +269,12 @@ chrome.action.onClicked.addListener(async (tab) => {
       console.log('Content script injected and toolbar shown');
     } catch (injectError) {
       console.error('Failed to inject content script:', injectError);
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon-128.png',
+        title: 'CaptureInsight',
+        message: 'Could not load on this page. Try refreshing or navigate to a different website.'
+      });
     }
   }
 });
