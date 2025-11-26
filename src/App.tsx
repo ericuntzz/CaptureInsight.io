@@ -64,12 +64,35 @@ interface FileData {
 export default function App() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
+  
+  // Initialize view from URL or localStorage
   const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights'>(() => {
-    // Initialize view from URL
-    return getCurrentView(router.pathname);
+    if (typeof window !== 'undefined') {
+      // First try to get view from URL
+      const viewFromUrl = getCurrentView(window.location.pathname);
+      
+      // If URL indicates a specific view (not root), use it
+      if (viewFromUrl !== 'capture' || window.location.pathname === '/') {
+        return viewFromUrl;
+      }
+      
+      // Otherwise, check localStorage as fallback
+      const savedView = localStorage.getItem('captureinsight_current_view');
+      if (savedView && ['capture', 'data', 'changelogs', 'insights'].includes(savedView)) {
+        return savedView as 'capture' | 'data' | 'changelogs' | 'insights';
+      }
+      
+      return viewFromUrl;
+    }
+    return 'capture';
   });
   
-  // Sync URL with current view
+  // Persist current view to localStorage
+  useEffect(() => {
+    localStorage.setItem('captureinsight_current_view', currentView);
+  }, [currentView]);
+  
+  // Sync URL with current view when router changes (back/forward navigation)
   useEffect(() => {
     const viewFromUrl = getCurrentView(router.pathname);
     if (viewFromUrl !== currentView) {

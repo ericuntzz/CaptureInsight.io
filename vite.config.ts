@@ -2,9 +2,45 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'path';
+import type { Connect } from 'vite';
+
+// History API fallback middleware for SPA routing
+function historyApiFallback(): Connect.NextHandleFunction {
+  return (req, res, next) => {
+    // Only handle GET requests
+    if (req.method !== 'GET') {
+      return next();
+    }
+    
+    const url = req.url || '/';
+    
+    // Skip API routes, static assets, and Vite internals
+    if (
+      url.startsWith('/api/') ||
+      url.startsWith('/@') ||
+      url.startsWith('/node_modules/') ||
+      url.includes('.') // Has file extension (likely static asset)
+    ) {
+      return next();
+    }
+    
+    // Rewrite to index.html for SPA routes
+    req.url = '/index.html';
+    next();
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'spa-fallback',
+      configureServer(server) {
+        // Add history API fallback before Vite's default middleware
+        server.middlewares.use(historyApiFallback());
+      },
+    },
+  ],
   appType: 'spa',
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
