@@ -2,7 +2,8 @@
 
 export const ROUTES = {
   // Main views
-  CAPTURE: '/',
+  HOME: '/',
+  CAPTURE: '/capture',
   DATA: '/data',
   CHANGE_LOGS: '/changelogs',
   INSIGHTS: '/insights',
@@ -47,7 +48,7 @@ export const buildRoute = {
 
 // Parse URL parameters
 export const parseRoute = {
-  isCapture: (pathname: string) => pathname === '/',
+  isCapture: (pathname: string) => pathname === '/capture',
   isData: (pathname: string) => pathname.startsWith('/data'),
   isChangeLogs: (pathname: string) => pathname.startsWith('/changelogs'),
   isInsights: (pathname: string) => pathname.startsWith('/insights'),
@@ -87,9 +88,12 @@ export const parseRoute = {
 };
 
 // Get current view from pathname
+// Default is now 'insights' since capture functionality is handled by Chrome extension
+// Root path '/' and any unknown path defaults to 'insights'
 export const getCurrentView = (pathname: string): 'capture' | 'data' | 'changelogs' | 'insights' => {
+  if (parseRoute.isCapture(pathname)) return 'capture';
   if (parseRoute.isData(pathname)) return 'data';
   if (parseRoute.isChangeLogs(pathname)) return 'changelogs';
   if (parseRoute.isInsights(pathname)) return 'insights';
-  return 'capture';
+  return 'insights';
 };

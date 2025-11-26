@@ -66,31 +66,34 @@ export default function App() {
   const router = useRouter();
   
   // Initialize view from URL or localStorage
+  // Default is now 'insights' since capture functionality is handled by Chrome extension
   const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights'>(() => {
     if (typeof window !== 'undefined') {
       // First try to get view from URL
       const viewFromUrl = getCurrentView(window.location.pathname);
       
-      // If URL indicates a specific view (not root), use it
-      if (viewFromUrl !== 'capture' || window.location.pathname === '/') {
-        return viewFromUrl;
-      }
-      
-      // Otherwise, check localStorage as fallback
+      // If we have a saved view, prefer it (unless URL explicitly points to a specific route)
       const savedView = localStorage.getItem('captureinsight_current_view');
-      if (savedView && ['capture', 'data', 'changelogs', 'insights'].includes(savedView)) {
+      if (savedView && ['data', 'changelogs', 'insights'].includes(savedView) && window.location.pathname === '/') {
         return savedView as 'capture' | 'data' | 'changelogs' | 'insights';
       }
       
       return viewFromUrl;
     }
-    return 'capture';
+    return 'insights';
   });
   
   // Persist current view to localStorage
   useEffect(() => {
     localStorage.setItem('captureinsight_current_view', currentView);
   }, [currentView]);
+  
+  // Redirect '/' to '/insights' on initial load
+  useEffect(() => {
+    if (window.location.pathname === '/' && currentView === 'insights') {
+      router.replace(buildRoute.insights());
+    }
+  }, []);
   
   // Sync URL with current view when router changes (back/forward navigation)
   useEffect(() => {
