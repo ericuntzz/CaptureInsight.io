@@ -175,7 +175,7 @@ export function UserAccountMenu({
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white group p-3"
+          className="w-full h-10 flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white group px-3"
           title={userName}
         >
           <div className="w-5 h-5 rounded-full bg-gradient-to-br from-[#FF6B35] to-[#FFA07A] flex items-center justify-center text-white text-[9px] group-hover:ring-2 group-hover:ring-[#FF6B35] flex-shrink-0">
@@ -205,7 +205,7 @@ export function UserAccountMenu({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white group p-3"
+        className="w-full h-10 flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white group px-3"
       >
         <div className="w-5 h-5 rounded-full bg-gradient-to-br from-[#FF6B35] to-[#FFA07A] flex items-center justify-center text-white text-[9px] flex-shrink-0">
           {userInitials}

@@ -69,7 +69,7 @@ export function SpaceSwitcher({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center rounded-lg transition-all group p-3 bg-[rgba(26,31,46,0.6)] hover:bg-[rgba(255,107,53,0.1)] border border-[rgba(255,107,53,0.15)]"
+        className="w-full h-10 flex items-center rounded-lg transition-all group px-3 bg-[rgba(26,31,46,0.6)] hover:bg-[rgba(255,107,53,0.1)] border border-[rgba(255,107,53,0.15)]"
         title={currentSpace?.name || 'Select Space'}
       >
         <Layers className="w-4 h-4 text-[#FF6B35] flex-shrink-0" />

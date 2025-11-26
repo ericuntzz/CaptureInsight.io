@@ -270,7 +270,7 @@ export function ProjectBrowser({
           <TooltipTrigger asChild>
             <button
               onClick={() => onViewChange?.('insights')}
-              className={`w-full flex items-center rounded-lg transition-all mb-2 group p-3 ${
+              className={`w-full h-10 flex items-center rounded-lg transition-all mb-2 group px-3 ${
                 activeView === 'insights'
                   ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
                   : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
@@ -304,7 +304,7 @@ export function ProjectBrowser({
           <TooltipTrigger asChild>
             <button
               onClick={onBackToCapture}
-              className="w-full flex items-center rounded-lg transition-all mb-2 text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white group p-3"
+              className="w-full h-10 flex items-center rounded-lg transition-all mb-2 text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white group px-3"
             >
               <Plus className={`w-4 h-4 flex-shrink-0 ${isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
               <AnimatePresence>
@@ -334,7 +334,7 @@ export function ProjectBrowser({
           <TooltipTrigger asChild>
             <button
               onClick={() => onViewChange?.('changelogs')}
-              className={`w-full flex items-center rounded-lg transition-all mb-2 group p-3 ${
+              className={`w-full h-10 flex items-center rounded-lg transition-all mb-2 group px-3 ${
                 activeView === 'changelogs'
                   ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
                   : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
@@ -368,7 +368,7 @@ export function ProjectBrowser({
           <TooltipTrigger asChild>
             <button
               onClick={() => onViewChange?.('data')}
-              className={`w-full flex items-center rounded-lg transition-all mb-2 group p-3 ${
+              className={`w-full h-10 flex items-center rounded-lg transition-all mb-2 group px-3 ${
                 activeView === 'data'
                   ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
                   : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
@@ -410,7 +410,7 @@ export function ProjectBrowser({
           <TooltipTrigger asChild>
             <button 
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="w-full flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white mb-1 group p-3"
+              className="w-full h-10 flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white mb-1 group px-3"
             >
               {isCollapsed ? (
                 <ChevronsRight className="w-4 h-4 flex-shrink-0 group-hover:text-[#FF6B35]" />
@@ -441,7 +441,7 @@ export function ProjectBrowser({
         {/* Support */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <button className="w-full flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white mb-1 group p-3">
+            <button className="w-full h-10 flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white mb-1 group px-3">
               <HelpCircle className={`w-4 h-4 flex-shrink-0 ${isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
               <AnimatePresence>
                 {!isCollapsed && (
@@ -468,7 +468,7 @@ export function ProjectBrowser({
         {/* What's New? */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <button className="w-full flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white mb-1 group p-3">
+            <button className="w-full h-10 flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white mb-1 group px-3">
               <Gift className={`w-4 h-4 flex-shrink-0 ${isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
               <AnimatePresence>
                 {!isCollapsed && (
