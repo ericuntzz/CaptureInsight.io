@@ -8,6 +8,7 @@ import { DataManagementView } from './components/DataManagementView';
 import { WelcomeOverlay } from './components/WelcomeOverlay';
 import { toast, Toaster } from 'sonner';
 import { ChangeLogsView } from './components/ChangeLogsView';
+import { InsightsView } from './components/InsightsView';
 import { Space } from './components/SpaceBrowser';
 import type { DataSource } from './components/DataSourceSidebar';
 import { buildRoute, getCurrentView } from './routes';
@@ -1018,73 +1019,9 @@ export default function App() {
     );
   } else if (currentView === 'insights') {
     return (
-      <DataManagementView 
-        onBackToCapture={() => setCurrentView('capture')} 
-        onAddDataCapture={handleAddDataCapture}
+      <InsightsView 
         spaces={spaces}
         currentSpaceId={currentSpaceId}
-        onSpaceChange={handleSpaceChange}
-        onCreateBlankSpace={handleCreateBlankSpace}
-        onCreateSpace={async (data) => {
-          try {
-            await createSpaceMutation.mutateAsync({
-              name: data.name,
-              description: data.description,
-              goals: data.goals,
-              instructions: data.instructions,
-            });
-            toast.success(`Space \"${data.name}\" created!`);
-          } catch (error) {
-            console.error('Error creating space:', error);
-            toast.error('Failed to create space');
-          }
-        }}
-        onUpdateSpace={async (spaceId, data) => {
-          try {
-            await updateSpaceMutation.mutateAsync({
-              id: spaceId,
-              data: { 
-                name: data.name, 
-                goals: data.goals, 
-                instructions: data.instructions 
-              },
-            });
-            toast.success(`Space \"${data.name}\" updated!`);
-          } catch (error) {
-            console.error('Error updating space:', error);
-            toast.error('Failed to update space');
-          }
-        }}
-        onDeleteSpace={async (spaceId) => {
-          try {
-            await deleteSpaceMutation.mutateAsync(spaceId);
-            toast.success('Space deleted!');
-          } catch (error) {
-            console.error('Error deleting space:', error);
-            toast.error('Failed to delete space');
-          }
-        }}
-        onUpdateFolder={async (spaceId, folderId, name) => {
-          try {
-            await updateFolderMutation.mutateAsync({ id: folderId, name });
-            toast.success(`Folder renamed to \"${name}\"!`);
-          } catch (error) {
-            console.error('Error updating folder:', error);
-            toast.error('Failed to rename folder');
-          }
-        }}
-        onDeleteFolder={async (spaceId, folderId) => {
-          try {
-            await deleteFolderMutation.mutateAsync(folderId);
-            toast.success('Folder deleted!');
-          } catch (error) {
-            console.error('Error deleting folder:', error);
-            toast.error('Failed to delete folder');
-          }
-        }}
-        onCreateFolder={handleCreateFolder}
-        onUpdateSheetAnalysis={handleUpdateSheetAnalysis}
-        onTopLevelViewChange={handleViewChange}
       />
     );
   }

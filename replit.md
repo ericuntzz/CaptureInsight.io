@@ -301,6 +301,25 @@ Located in `src/hooks/`:
 - `useTags.ts` - Tags CRUD, usage stats
 - `useAuth.ts` - Authentication state
 
+## Bug Fixes (November 26, 2025 - Latest)
+
+### InsightsView Navigation Fix
+- **Issue**: Clicking "Insights" in sidebar showed blank page
+- **Root Cause**: App.tsx was rendering DataManagementView instead of InsightsView for the insights route
+- **Fix**: Added missing InsightsView import and corrected the routing logic in App.tsx
+
+### FloatingCaptureToolbar Tags Integration
+- Fixed tags popup to use real API data via `useTags(currentSpaceId)` hook
+- Added loading, error, and empty state handling in TagsPopup
+- Tags button disabled when no destination is selected
+- Tag creation properly scoped to selected space
+
+### InsightsView Error Handling
+- Added isError flags for both insights and tags queries
+- Implemented partial UI rendering with inline error banner
+- Users see whatever data loaded successfully even if one query fails
+- Added Refresh button for easy retry
+
 ## Future Phases
 - **Phase 7**: Desktop application (Electron/Tauri) for system-wide floating toolbar
 - **Phase 8**: Advanced analytics and reporting features
