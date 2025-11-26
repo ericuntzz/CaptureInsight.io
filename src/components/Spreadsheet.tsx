@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Share2, Download, Settings, Copy, Eye, EyeOff, WrapText, ArrowUpAZ, ArrowDownAZ, Plus } from 'lucide-react';
-import { marketingData } from '../data/mockData';
 import { toast } from 'sonner';
 
 interface Sheet {
@@ -86,7 +85,8 @@ export function Spreadsheet({
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [rowHeights, setRowHeights] = useState<Record<number, number>>({});
   const [resizing, setResizing] = useState<{ type: 'column' | 'row', index: number | string, startPos: number, startSize: number } | null>(null);
-  const [data, setData] = useState(marketingData);
+  const [data, setData] = useState<Record<string, any>[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [isMetaKeyPressed, setIsMetaKeyPressed] = useState(false);
   const [quickCopyPosition, setQuickCopyPosition] = useState<{ x: number; y: number } | null>(null);
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
@@ -103,6 +103,37 @@ export function Spreadsheet({
   const [dropTarget, setDropTarget] = useState<{ type: 'row' | 'column'; index: number | string } | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const [sortState, setSortState] = useState<Record<string, 'asc' | 'desc' | null>>({});
+
+  // Fetch sheet data when currentSheetId changes
+  useEffect(() => {
+    if (!currentSheetId) {
+      setData([]);
+      return;
+    }
+    
+    setIsLoading(true);
+    fetch(`/api/sheets/${currentSheetId}`, { credentials: 'include' })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Failed to fetch sheet data');
+        }
+        return res.json();
+      })
+      .then(sheet => {
+        if (sheet.data && Array.isArray(sheet.data)) {
+          setData(sheet.data);
+        } else {
+          setData([]);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching sheet data:', err);
+        setData([]);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [currentSheetId]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -839,7 +870,24 @@ export function Spreadsheet({
         >
           <table className="w-full border-collapse" style={{ minWidth: columns.reduce((sum, col) => sum + getColumnWidth(col.key), 0) }}>
             <tbody>
-              {data.map((row, rowIndex) => (
+              {isLoading && (
+                <tr>
+                  <td colSpan={columns.length} className="text-center py-12 text-[#64748B]">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-[#FF6B35] border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading data...</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {!isLoading && data.length === 0 && (
+                <tr>
+                  <td colSpan={columns.length} className="text-center py-12 text-[#64748B]">
+                    {currentSheetId ? 'No data in this sheet' : 'Select a sheet to view data'}
+                  </td>
+                </tr>
+              )}
+              {!isLoading && data.map((row, rowIndex) => (
                 <tr
                   key={rowIndex}
                   style={{ height: getRowHeight(rowIndex) }}
