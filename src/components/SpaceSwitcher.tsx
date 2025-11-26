@@ -70,7 +70,7 @@ export function SpaceSwitcher({
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center bg-[rgba(26,31,46,0.6)] hover:bg-[rgba(255,107,53,0.1)] border border-[rgba(255,107,53,0.15)] transition-colors rounded-lg p-3"
+          className="w-full h-[42px] flex items-center bg-[rgba(26,31,46,0.6)] hover:bg-[rgba(255,107,53,0.1)] border border-[rgba(255,107,53,0.15)] transition-colors rounded-lg px-3"
           title={currentSpace?.name || 'Select Space'}
         >
           <Layers className="w-4 h-4 text-[#FF6B35] flex-shrink-0" />
@@ -157,11 +157,11 @@ export function SpaceSwitcher({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full p-3 flex items-center gap-2 bg-[rgba(26,31,46,0.6)] hover:bg-[rgba(255,107,53,0.1)] border border-[rgba(255,107,53,0.15)] rounded-lg transition-colors"
+        className="w-full h-[42px] px-3 flex items-center gap-2 bg-[rgba(26,31,46,0.6)] hover:bg-[rgba(255,107,53,0.1)] border border-[rgba(255,107,53,0.15)] rounded-lg transition-colors"
       >
         <Layers className="w-4 h-4 text-[#FF6B35] flex-shrink-0" />
         <div className="flex-1 min-w-0 text-left">
-          <span className="text-sm text-white truncate block">
+          <span className="text-sm text-white truncate block leading-none">
             {currentSpace?.name || 'Select a Space'}
           </span>
         </div>
