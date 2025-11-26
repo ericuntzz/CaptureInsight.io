@@ -1,7 +1,7 @@
 import { c as clientExports, j as jsxRuntimeExports, r as reactExports } from '../chunks/client-CMJDEr7s.js';
 import { M as MessageType, T as TOOLBAR_DEFAULTS, C as CaptureMode } from '../chunks/constants-CBz2pEEC.js';
 
-const FloatingToolbar = ({ onCapture, onClose, isCapturing }) => {
+const FloatingToolbar = ({ onCapture, onClose, status, statusMessage }) => {
   const [position, setPosition] = reactExports.useState(TOOLBAR_DEFAULTS.POSITION);
   const [isDragging, setIsDragging] = reactExports.useState(false);
   const [dragOffset, setDragOffset] = reactExports.useState({ x: 0, y: 0 });
@@ -33,6 +33,31 @@ const FloatingToolbar = ({ onCapture, onClose, isCapturing }) => {
       document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragging, dragOffset]);
+  const isWorking = status === "capturing" || status === "uploading";
+  const getButtonContent = () => {
+    switch (status) {
+      case "capturing":
+        return "📷 Capturing...";
+      case "uploading":
+        return "⬆️ Uploading...";
+      case "success":
+        return "✓ Saved!";
+      case "error":
+        return "✗ Failed";
+      default:
+        return "📸 Capture";
+    }
+  };
+  const getButtonColor = () => {
+    switch (status) {
+      case "success":
+        return "#22c55e";
+      case "error":
+        return "#ef4444";
+      default:
+        return "#6366f1";
+    }
+  };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -43,72 +68,88 @@ const FloatingToolbar = ({ onCapture, onClose, isCapturing }) => {
         top: position.y,
         zIndex: 2147483647,
         display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        padding: "8px 12px",
+        flexDirection: "column",
+        gap: "4px",
+        padding: "10px 14px",
         backgroundColor: "#1a1a2e",
         borderRadius: "12px",
-        boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+        boxShadow: "0 4px 24px rgba(0, 0, 0, 0.4)",
         cursor: isDragging ? "grabbing" : "grab",
         userSelect: "none",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       },
       onMouseDown: handleMouseDown,
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: {
-          color: "#fff",
-          fontSize: "14px",
-          fontWeight: 600,
-          marginRight: "8px"
-        }, children: "📸 CaptureInsight" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            onClick: () => onCapture(CaptureMode.TAB),
-            disabled: isCapturing,
-            style: {
-              padding: "6px 12px",
-              backgroundColor: "#6366f1",
-              color: "#fff",
-              border: "none",
-              borderRadius: "6px",
-              cursor: isCapturing ? "wait" : "pointer",
-              fontSize: "12px",
-              fontWeight: 500,
-              opacity: isCapturing ? 0.6 : 1
-            },
-            title: "Capture visible tab",
-            children: "Capture"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            onClick: onClose,
-            style: {
-              padding: "6px 8px",
-              backgroundColor: "transparent",
-              color: "#9ca3af",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "14px"
-            },
-            title: "Close toolbar",
-            children: "✕"
-          }
-        )
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: {
+            color: "#fff",
+            fontSize: "14px",
+            fontWeight: 600,
+            marginRight: "8px"
+          }, children: "CaptureInsight" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: () => onCapture(CaptureMode.TAB),
+              disabled: isWorking,
+              style: {
+                padding: "8px 16px",
+                backgroundColor: getButtonColor(),
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: isWorking ? "wait" : "pointer",
+                fontSize: "13px",
+                fontWeight: 500,
+                opacity: isWorking ? 0.8 : 1,
+                minWidth: "110px",
+                transition: "background-color 0.2s"
+              },
+              title: "Capture and save to CaptureInsight",
+              children: getButtonContent()
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: onClose,
+              style: {
+                padding: "6px 8px",
+                backgroundColor: "transparent",
+                color: "#9ca3af",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "16px"
+              },
+              title: "Close toolbar",
+              children: "✕"
+            }
+          )
+        ] }),
+        statusMessage && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: {
+          fontSize: "11px",
+          color: status === "error" ? "#ef4444" : "#9ca3af",
+          marginTop: "4px",
+          maxWidth: "280px",
+          wordBreak: "break-word"
+        }, children: statusMessage })
       ]
     }
   );
 };
 const ContentApp = () => {
   const [visible, setVisible] = reactExports.useState(false);
-  const [isCapturing, setIsCapturing] = reactExports.useState(false);
+  const [status, setStatus] = reactExports.useState("idle");
+  const [statusMessage, setStatusMessage] = reactExports.useState("");
   reactExports.useEffect(() => {
     const handleMessage = (message) => {
       if (message.type === MessageType.TOGGLE_TOOLBAR) {
         setVisible(message.visible);
+        if (message.visible) {
+          setStatus("idle");
+          setStatusMessage("");
+        }
       }
     };
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -117,30 +158,46 @@ const ContentApp = () => {
     };
   }, []);
   const handleCapture = reactExports.useCallback(async (mode) => {
-    setIsCapturing(true);
+    setStatus("capturing");
+    setStatusMessage("Taking screenshot...");
     try {
       const response = await chrome.runtime.sendMessage({
         type: MessageType.CAPTURE_REQUEST,
         mode
       });
       if (response.success && response.dataUrl) {
-        console.log("Screenshot captured successfully");
-        chrome.runtime.sendMessage({
+        setStatus("uploading");
+        setStatusMessage("Uploading to CaptureInsight...");
+        const uploadResult = await chrome.runtime.sendMessage({
           type: MessageType.UPLOAD_SCREENSHOT,
           dataUrl: response.dataUrl,
           metadata: response.metadata
         });
+        if (uploadResult.success) {
+          setStatus("success");
+          setStatusMessage("Screenshot saved! Check your dashboard.");
+          setTimeout(() => {
+            setStatus("idle");
+            setStatusMessage("");
+          }, 3e3);
+        } else {
+          setStatus("error");
+          setStatusMessage(uploadResult.error || "Failed to upload. Please try again.");
+        }
       } else {
-        console.error("Capture failed:", response.error);
+        setStatus("error");
+        setStatusMessage(response.error || "Capture failed");
       }
     } catch (error) {
       console.error("Capture error:", error);
-    } finally {
-      setIsCapturing(false);
+      setStatus("error");
+      setStatusMessage(error instanceof Error ? error.message : "Unknown error occurred");
     }
   }, []);
   const handleClose = reactExports.useCallback(() => {
     setVisible(false);
+    setStatus("idle");
+    setStatusMessage("");
   }, []);
   if (!visible) return null;
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -148,7 +205,8 @@ const ContentApp = () => {
     {
       onCapture: handleCapture,
       onClose: handleClose,
-      isCapturing
+      status,
+      statusMessage
     }
   );
 };

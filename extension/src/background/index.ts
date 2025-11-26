@@ -218,15 +218,43 @@ async function handleUploadScreenshot(message: ExtensionMessage) {
 }
 
 chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab.id) return;
+  if (!tab.id || !tab.url) return;
+  
+  if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('edge://')) {
+    console.log('Cannot inject into browser internal pages');
+    return;
+  }
   
   try {
     await chrome.tabs.sendMessage(tab.id, {
       type: MessageType.TOGGLE_TOOLBAR,
       visible: true
     });
-  } catch {
-    console.log('Content script not yet loaded, injecting...');
+    console.log('Toggle toolbar message sent successfully');
+  } catch (error) {
+    console.log('Content script not loaded, injecting now...');
+    
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content/index.js']
+      });
+      
+      await chrome.scripting.insertCSS({
+        target: { tabId: tab.id },
+        files: ['content/styles.css']
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      await chrome.tabs.sendMessage(tab.id, {
+        type: MessageType.TOGGLE_TOOLBAR,
+        visible: true
+      });
+      console.log('Content script injected and toolbar shown');
+    } catch (injectError) {
+      console.error('Failed to inject content script:', injectError);
+    }
   }
 });
 

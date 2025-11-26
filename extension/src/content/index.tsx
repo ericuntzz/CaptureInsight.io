@@ -8,13 +8,16 @@ import {
 } from '@shared/types';
 import { TOOLBAR_DEFAULTS } from '@shared/constants';
 
+type StatusType = 'idle' | 'capturing' | 'uploading' | 'success' | 'error';
+
 interface ToolbarProps {
   onCapture: (mode: CaptureMode) => void;
   onClose: () => void;
-  isCapturing: boolean;
+  status: StatusType;
+  statusMessage: string;
 }
 
-const FloatingToolbar: React.FC<ToolbarProps> = ({ onCapture, onClose, isCapturing }) => {
+const FloatingToolbar: React.FC<ToolbarProps> = ({ onCapture, onClose, status, statusMessage }) => {
   const [position, setPosition] = useState(TOOLBAR_DEFAULTS.POSITION);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -52,6 +55,34 @@ const FloatingToolbar: React.FC<ToolbarProps> = ({ onCapture, onClose, isCapturi
     };
   }, [isDragging, dragOffset]);
 
+  const isWorking = status === 'capturing' || status === 'uploading';
+  
+  const getButtonContent = () => {
+    switch (status) {
+      case 'capturing':
+        return '📷 Capturing...';
+      case 'uploading':
+        return '⬆️ Uploading...';
+      case 'success':
+        return '✓ Saved!';
+      case 'error':
+        return '✗ Failed';
+      default:
+        return '📸 Capture';
+    }
+  };
+  
+  const getButtonColor = () => {
+    switch (status) {
+      case 'success':
+        return '#22c55e';
+      case 'error':
+        return '#ef4444';
+      default:
+        return '#6366f1';
+    }
+  };
+
   return (
     <div
       className="captureinsight-toolbar"
@@ -61,73 +92,94 @@ const FloatingToolbar: React.FC<ToolbarProps> = ({ onCapture, onClose, isCapturi
         top: position.y,
         zIndex: 2147483647,
         display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '8px 12px',
+        flexDirection: 'column',
+        gap: '4px',
+        padding: '10px 14px',
         backgroundColor: '#1a1a2e',
         borderRadius: '12px',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+        boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       }}
       onMouseDown={handleMouseDown}
     >
-      <span style={{ 
-        color: '#fff', 
-        fontSize: '14px', 
-        fontWeight: 600,
-        marginRight: '8px'
-      }}>
-        📸 CaptureInsight
-      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ 
+          color: '#fff', 
+          fontSize: '14px', 
+          fontWeight: 600,
+          marginRight: '8px'
+        }}>
+          CaptureInsight
+        </span>
+        
+        <button
+          onClick={() => onCapture(CaptureMode.TAB)}
+          disabled={isWorking}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: getButtonColor(),
+            color: '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: isWorking ? 'wait' : 'pointer',
+            fontSize: '13px',
+            fontWeight: 500,
+            opacity: isWorking ? 0.8 : 1,
+            minWidth: '110px',
+            transition: 'background-color 0.2s'
+          }}
+          title="Capture and save to CaptureInsight"
+        >
+          {getButtonContent()}
+        </button>
+        
+        <button
+          onClick={onClose}
+          style={{
+            padding: '6px 8px',
+            backgroundColor: 'transparent',
+            color: '#9ca3af',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '16px'
+          }}
+          title="Close toolbar"
+        >
+          ✕
+        </button>
+      </div>
       
-      <button
-        onClick={() => onCapture(CaptureMode.TAB)}
-        disabled={isCapturing}
-        style={{
-          padding: '6px 12px',
-          backgroundColor: '#6366f1',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '6px',
-          cursor: isCapturing ? 'wait' : 'pointer',
-          fontSize: '12px',
-          fontWeight: 500,
-          opacity: isCapturing ? 0.6 : 1
-        }}
-        title="Capture visible tab"
-      >
-        Capture
-      </button>
-      
-      <button
-        onClick={onClose}
-        style={{
-          padding: '6px 8px',
-          backgroundColor: 'transparent',
-          color: '#9ca3af',
-          border: 'none',
-          borderRadius: '6px',
-          cursor: 'pointer',
-          fontSize: '14px'
-        }}
-        title="Close toolbar"
-      >
-        ✕
-      </button>
+      {statusMessage && (
+        <div style={{
+          fontSize: '11px',
+          color: status === 'error' ? '#ef4444' : '#9ca3af',
+          marginTop: '4px',
+          maxWidth: '280px',
+          wordBreak: 'break-word'
+        }}>
+          {statusMessage}
+        </div>
+      )}
     </div>
   );
 };
 
 const ContentApp: React.FC = () => {
   const [visible, setVisible] = useState(false);
-  const [isCapturing, setIsCapturing] = useState(false);
+  const [status, setStatus] = useState<StatusType>('idle');
+  const [statusMessage, setStatusMessage] = useState('');
 
   useEffect(() => {
     const handleMessage = (message: ToggleToolbarMessage) => {
       if (message.type === MessageType.TOGGLE_TOOLBAR) {
         setVisible(message.visible);
+        if (message.visible) {
+          setStatus('idle');
+          setStatusMessage('');
+        }
       }
     };
 
@@ -139,7 +191,8 @@ const ContentApp: React.FC = () => {
   }, []);
 
   const handleCapture = useCallback(async (mode: CaptureMode) => {
-    setIsCapturing(true);
+    setStatus('capturing');
+    setStatusMessage('Taking screenshot...');
     
     try {
       const response: CaptureResponse = await chrome.runtime.sendMessage({
@@ -148,25 +201,42 @@ const ContentApp: React.FC = () => {
       });
 
       if (response.success && response.dataUrl) {
-        console.log('Screenshot captured successfully');
+        setStatus('uploading');
+        setStatusMessage('Uploading to CaptureInsight...');
         
-        chrome.runtime.sendMessage({
+        const uploadResult = await chrome.runtime.sendMessage({
           type: MessageType.UPLOAD_SCREENSHOT,
           dataUrl: response.dataUrl,
           metadata: response.metadata
         });
+        
+        if (uploadResult.success) {
+          setStatus('success');
+          setStatusMessage('Screenshot saved! Check your dashboard.');
+          
+          setTimeout(() => {
+            setStatus('idle');
+            setStatusMessage('');
+          }, 3000);
+        } else {
+          setStatus('error');
+          setStatusMessage(uploadResult.error || 'Failed to upload. Please try again.');
+        }
       } else {
-        console.error('Capture failed:', response.error);
+        setStatus('error');
+        setStatusMessage(response.error || 'Capture failed');
       }
     } catch (error) {
       console.error('Capture error:', error);
-    } finally {
-      setIsCapturing(false);
+      setStatus('error');
+      setStatusMessage(error instanceof Error ? error.message : 'Unknown error occurred');
     }
   }, []);
 
   const handleClose = useCallback(() => {
     setVisible(false);
+    setStatus('idle');
+    setStatusMessage('');
   }, []);
 
   if (!visible) return null;
@@ -175,7 +245,8 @@ const ContentApp: React.FC = () => {
     <FloatingToolbar
       onCapture={handleCapture}
       onClose={handleClose}
-      isCapturing={isCapturing}
+      status={status}
+      statusMessage={statusMessage}
     />
   );
 };
