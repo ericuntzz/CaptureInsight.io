@@ -35,7 +35,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 interface CaptureDestination {
-  projectId: string;
+  projectId?: string;
+  spaceId?: string;
   folderId: string;
 }
 
@@ -65,7 +66,7 @@ interface CaptureOptionsModalProps {
   isOpen: boolean;
   onBack: () => void;
   onStartAnalysis: (data: { 
-    destinations: CaptureDestination[]; 
+    destinations: { spaceId: string; folderId: string }[]; 
     analysisSettings: CaptureAnalysisSettings[] 
   }) => void;
   spaces: Project[]; // Renamed from projects, using Project type for now
@@ -437,7 +438,7 @@ export function CaptureOptionsModal({
       // Update the selected project/folder to match this capture's current assignment
       const destination = getDestinationForCapture(captureId);
       if (destination) {
-        setSelectedProject(destination.projectId);
+        setSelectedProject(destination.projectId || destination.spaceId || '');
         setSelectedFolder(destination.folderId);
       }
       
@@ -1328,7 +1329,12 @@ export function CaptureOptionsModal({
                     
                     // Clear saved settings when completing the flow
                     localStorage.removeItem('captureOptionsSettings');
-                    onStartAnalysis({ destinations: updatedDestinations, analysisSettings });
+                    // Normalize destinations to have spaceId (use projectId as fallback)
+                    const normalizedDestinations = updatedDestinations.map(dest => ({
+                      spaceId: dest.spaceId || dest.projectId || '',
+                      folderId: dest.folderId
+                    }));
+                    onStartAnalysis({ destinations: normalizedDestinations, analysisSettings });
                   }
                 }}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white rounded-lg hover:scale-[1.02] hover:shadow-[0_8px_24px_rgba(255,107,53,0.4)] transition-all"

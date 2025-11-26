@@ -6,11 +6,13 @@ import { CaptureOptionsModal, CaptureItem } from './components/CaptureOptionsMod
 import { CaptureAssignmentPanel } from './components/CaptureAssignmentPanel';
 import { DataManagementView } from './components/DataManagementView';
 import { WelcomeOverlay } from './components/WelcomeOverlay';
-import { toast, Toaster } from 'sonner@2.0.3';
+import { toast, Toaster } from 'sonner';
+import { ChangeLogsView } from './components/ChangeLogsView';
 import { Space } from './components/SpaceBrowser';
 import type { DataSource } from './components/DataSourceSidebar';
 import { buildRoute, getCurrentView } from './routes';
 import { useRouter } from './hooks/useRouter';
+import { useAuth } from './hooks/useAuth';
 
 type CaptureMode = 'window' | 'region';
 
@@ -247,6 +249,7 @@ const initialSpaces: Space[] = [
 ];
 
 export default function App() {
+  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights'>(() => {
     // Initialize view from URL
@@ -484,7 +487,7 @@ export default function App() {
   };
 
   const handleFinalCapture = (settings?: {
-    destination: { spaceId: string; folderId: string };
+    destination: { projectId?: string; spaceId?: string; folderId: string };
     analysisType: 'one-time' | 'scheduled' | 'llm-integration' | 'api' | null;
     llmProvider?: { id: string; name: string };
     schedule?: { frequency: string; time: string };
@@ -499,8 +502,9 @@ export default function App() {
       return;
     }
     
-    // Build destinations array (all items go to same destination for now)
-    const destinations = captureItems.map(() => settings.destination);
+    // Build destinations array with normalized spaceId (all items go to same destination for now)
+    const resolvedSpaceId = settings.destination.spaceId || settings.destination.projectId || '';
+    const destinations = captureItems.map(() => ({ spaceId: resolvedSpaceId, folderId: settings.destination.folderId }));
     
     // Build analysis settings array (all items get same settings for now)
     const analysisSettings = captureItems.map(item => ({
@@ -531,7 +535,7 @@ export default function App() {
       const folder = space?.folders.find(f => f.id === dest.folderId);
       return {
         ...capture,
-        folder: folder ? `${space.name} → ${folder.name}` : capture.folder
+        folder: folder && space ? `${space.name} → ${folder.name}` : capture.folder
       };
     }));
     
@@ -1161,7 +1165,7 @@ export default function App() {
         const folder = space?.folders.find(f => f.id === settings.folderId);
         return {
           ...capture,
-          folder: folder ? `${space.name} → ${folder.name}` : capture.folder
+          folder: folder && space ? `${space.name} → ${folder.name}` : capture.folder
         };
       }
       return capture;
@@ -1330,6 +1334,43 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0A0E1A]">
+      {/* Auth Header Bar */}
+      <div className="fixed top-0 right-0 z-50 p-4">
+        {authLoading ? (
+          <div className="bg-[#1A1F2E] px-4 py-2 rounded-lg text-gray-400 text-sm">
+            Loading...
+          </div>
+        ) : isAuthenticated && user ? (
+          <div className="flex items-center gap-3 bg-[#1A1F2E] px-4 py-2 rounded-lg">
+            <div className="flex items-center gap-2">
+              {user.profileImageUrl && (
+                <img 
+                  src={user.profileImageUrl} 
+                  alt="Profile" 
+                  className="w-6 h-6 rounded-full"
+                />
+              )}
+              <span className="text-white text-sm">
+                {user.firstName || user.email || 'User'}
+              </span>
+            </div>
+            <a
+              href="/api/logout"
+              className="bg-[#2A2F3E] hover:bg-[#3A3F4E] text-white px-3 py-1 rounded text-sm transition-colors"
+            >
+              Logout
+            </a>
+          </div>
+        ) : (
+          <a
+            href="/api/login"
+            className="bg-[#FF6B35] hover:bg-[#FF8F5E] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            Login with Replit
+          </a>
+        )}
+      </div>
+
       {/* 
         ================================================================
         REPLIT IMPLEMENTATION NOTE - CAPTURE INSIGHT FLOATING MENU
@@ -1421,7 +1462,7 @@ export default function App() {
               selectedCaptureIndices={selectedCaptureIndices}
               onSelectedCapturesChange={setSelectedCaptureIndices}
               isShiftPressed={isShiftPressed}
-              spaces={spaces}
+              projects={spaces}
             />
           </div>
         </div>

@@ -18,8 +18,8 @@ interface CaptureData extends Selection {
 }
 
 interface ScreenshotOverlayProps {
-  containerRef: React.RefObject<HTMLDivElement>;
-  tableContainerRef: React.RefObject<HTMLDivElement>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  tableContainerRef: React.RefObject<HTMLDivElement | null>;
   onCapture: (selection: Selection) => void;
   isBlurMode: boolean;
   onBlurArea: (selection: Selection) => void;

@@ -36,6 +36,7 @@ interface CaptureItem {
 
 interface AssignmentSettings {
   projectId?: string;
+  spaceId?: string;
   folderId?: string;
   analysisType?: 'one-time' | 'scheduled' | null;
   schedule?: { frequency: string; time: string };
@@ -49,7 +50,7 @@ interface LLMProvider {
 }
 
 interface CaptureSettingsData {
-  destination?: { projectId: string; folderId: string };
+  destination?: { projectId?: string; spaceId?: string; folderId: string };
   analysisType?: 'one-time' | 'scheduled' | null;
   analysisFrequency?: string;
   analysisTime?: string;
@@ -62,7 +63,7 @@ interface CaptureAssignmentPanelProps {
   spaces: Project[]; // Renamed from projects
   onClose: () => void;
   onAssignCaptures: (captureIds: string[], settings: AssignmentSettings) => void;
-  defaultDestination?: { projectId: string; folderId: string } | null;
+  defaultDestination?: { projectId?: string; spaceId?: string; folderId: string } | null;
   analysisType?: 'one-time' | 'scheduled' | null;
   analysisFrequency?: string;
   selectedLlmId?: string | null;

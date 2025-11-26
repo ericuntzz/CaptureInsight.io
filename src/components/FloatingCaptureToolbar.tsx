@@ -28,7 +28,7 @@ import { Project } from './ProjectBrowser';
 import { Badge } from './ui/badge';
 import { Tag, mockTags, TAG_COLORS } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface LLMProvider {
   id: string;
@@ -69,7 +69,7 @@ interface FloatingCaptureToolbarProps {
 }
 
 export interface CaptureSettings {
-  destination: { projectId: string; folderId: string };
+  destination: { projectId?: string; spaceId?: string; folderId: string };
   analysisType: 'one-time' | 'scheduled' | 'llm-integration' | 'api' | null;
   llmProvider?: { id: string; name: string };
   schedule?: { frequency: string; time: string };

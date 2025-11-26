@@ -3,6 +3,7 @@
 // Space is essentially the same as Project but renamed for the Space-scoped architecture
 
 import { Tag } from '../data/insightsData';
+import type { DataSource } from './DataSourceSidebar';
 
 export interface Sheet {
   id: string;
@@ -12,6 +13,7 @@ export interface Sheet {
   analysisType?: 'one-time' | 'scheduled' | 'llm-integration' | 'api' | null;
   llmProvider?: { id: string; name: string };
   schedule?: { frequency: string; time: string };
+  dataSource?: DataSource;
 }
 
 export interface Folder {

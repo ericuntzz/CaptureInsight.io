@@ -35,10 +35,11 @@ interface FolderType {
 export interface Project {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   folders: FolderType[];
   goals?: string;
   instructions?: string;
+  tags?: import('../data/insightsData').Tag[];
 }
 
 interface ProjectBrowserProps {
