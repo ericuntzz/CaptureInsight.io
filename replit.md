@@ -166,5 +166,59 @@ CaptureInsight uses a hybrid AI approach for optimal functionality:
 - `AI_INTEGRATIONS_GEMINI_BASE_URL` - Auto-set by Replit AI Integrations
 - `OPENAI_API_KEY` - Required for embeddings (user must provide)
 
+## Chrome Extension (Phase 4 - Complete)
+
+### Overview
+CaptureInsight now includes a Chrome extension that enables screenshot capture directly from any webpage. The extension features a floating toolbar and popup interface for quick capture workflow.
+
+### Extension Structure
+```
+/extension
+├── manifest.json           # Manifest V3 configuration
+├── vite.config.ts          # Vite build config
+├── package.json            # Extension dependencies
+├── src/
+│   ├── background/         # Service worker (auth, capture handling)
+│   ├── content/            # Floating toolbar (React in shadow DOM)
+│   ├── popup/              # Extension popup UI
+│   └── shared/             # Shared types and constants
+└── dist-extension/         # Built extension (load in Chrome)
+```
+
+### Key Features
+- **Floating Toolbar**: Draggable toolbar injected into any webpage
+- **Tab Capture**: Screenshot the current visible tab
+- **Cookie-based Auth**: Uses existing Replit Auth session cookies
+- **AI Analysis**: Automatic screenshot analysis with Gemini (if configured)
+- **Backend Integration**: Saves captures as sheets linked to insights
+
+### Installation (Development)
+1. Build the extension:
+   ```bash
+   cd extension && npm install && npm run build
+   ```
+2. Open Chrome and go to `chrome://extensions/`
+3. Enable "Developer mode" (top right toggle)
+4. Click "Load unpacked" and select the `extension/dist-extension` folder
+5. The CaptureInsight extension icon will appear in your toolbar
+
+### Extension API Endpoint
+- `POST /api/captures` - Upload screenshot from extension
+  - Requires authentication (session cookies)
+  - Creates a sheet (stores screenshot data) and an insight
+  - Optionally runs AI analysis on the captured screenshot
+
+### Build Commands
+```bash
+npm run build:extension    # Build extension to dist-extension/
+npm run dev:extension      # Watch mode for development
+```
+
+### Technical Notes
+- Uses Manifest V3 (latest Chrome extension standard)
+- React components with shadow DOM for isolation from page styles
+- Cookie-based auth via `credentials: 'include'` in fetch requests
+- PNG dimension parsing for accurate metadata
+
 ## Future Phases
-- **Phase 4**: WebSocket real-time collaboration, notifications and @mentions system
+- **Phase 5**: Desktop application (Electron/Tauri) for system-wide floating toolbar
