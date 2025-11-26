@@ -445,10 +445,25 @@ function CanvasInsightCard({ insight, tags, onUpdateInsight, insightId, chatMess
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isAIGenerated, setIsAIGenerated] = useState(true); // Track if content is AI-generated
+  
+  // Local state for title to prevent cursor jumping (sync on blur)
+  const [localTitle, setLocalTitle] = useState(insight.title);
+  
+  // Sync local title when insight changes from external source (e.g., data refresh)
+  React.useEffect(() => {
+    setLocalTitle(insight.title);
+  }, [insight.id]); // Only sync when switching to a different insight
 
   // Guard against undefined tags - API may return null/undefined
   const insightTagIds = insight.tags || [];
   const insightTags = tags.filter((tag) => insightTagIds.includes(tag.id));
+  
+  // Handle title blur - sync to parent
+  const handleTitleBlur = () => {
+    if (onUpdateInsight && localTitle !== insight.title) {
+      onUpdateInsight(insightId, { title: localTitle });
+    }
+  };
 
   const handleRegenerateAISummary = () => {
     setIsRegenerating(true);
@@ -512,12 +527,9 @@ function CanvasInsightCard({ insight, tags, onUpdateInsight, insightId, chatMess
               <div className="mb-8">
                 <input
                   type="text"
-                  defaultValue={insight.title}
-                  onChange={(e) => {
-                    if (onUpdateInsight) {
-                      onUpdateInsight(insightId, { title: e.target.value });
-                    }
-                  }}
+                  value={localTitle}
+                  onChange={(e) => setLocalTitle(e.target.value)}
+                  onBlur={handleTitleBlur}
                   className="w-full text-4xl text-[#1A1A1A] bg-transparent border-b-2 border-[#E0E0E0] pb-4 outline-none focus:border-[#FF6B35] transition-colors"
                   placeholder="Click to add title"
                 />
@@ -556,12 +568,9 @@ function CanvasInsightCard({ insight, tags, onUpdateInsight, insightId, chatMess
       <div className="flex-shrink-0 px-[32px] py-[26px] pt-[33px] pr-[32px] pb-[8px] pl-[32px]">
         <input
           type="text"
-          value={insight.title}
-          onChange={(e) => {
-            if (onUpdateInsight) {
-              onUpdateInsight(insightId, { title: e.target.value });
-            }
-          }}
+          value={localTitle}
+          onChange={(e) => setLocalTitle(e.target.value)}
+          onBlur={handleTitleBlur}
           className="w-full text-xl text-white bg-transparent border-none outline-none focus:opacity-80 transition-opacity px-4"
           placeholder="Add a title..."
         />
