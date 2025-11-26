@@ -210,8 +210,8 @@ export function ProjectBrowser({
   };
 
   // ⚠️ CRITICAL: Get current Space for Space-scoped architecture
-  // Only show folders from the current Space
-  const currentSpace = currentSpaceId ? projects.find(p => p.id === currentSpaceId) : projects[0];
+  // Only show folders from the current Space - use fallback to first project if not found
+  const currentSpace = (currentSpaceId && projects.find(p => p.id === currentSpaceId)) || projects[0];
   const foldersToDisplay = currentSpace?.folders || [];
 
   // Handle create blank Space with auto-edit
@@ -232,19 +232,71 @@ export function ProjectBrowser({
       transition={{ duration: 0.3, ease: 'easeInOut' }}
       className="bg-[#1A1F2E] h-full flex flex-col"
     >
-      {/* Space Switcher */}
+      {/* Space Header - Original design with name + settings gear */}
       <div className="px-2 pt-4 pb-2">
-        {onSpaceChange && (
-          <SpaceSwitcher
-            spaces={projects}
-            currentSpaceId={currentSpaceId || null}
-            onSpaceChange={onSpaceChange}
-            onCreateSpace={onCreateProject}
-            onUpdateSpace={onUpdateProject}
-            onDeleteSpace={onDeleteProject}
-            onUpdateTags={onUpdateTags}
-            isCollapsed={isCollapsed}
-          />
+        {!isCollapsed ? (
+          <div className="flex items-center justify-between">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[rgba(255,107,53,0.1)] transition-colors text-white max-w-[180px]">
+                  <Sparkles className="w-4 h-4 text-[#FF6B35] flex-shrink-0" />
+                  <span className="text-sm font-medium truncate">
+                    {currentSpace?.name || 'Select a Space'}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-[#9CA3AF] flex-shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56 bg-[#2D3B4E] border-[rgba(255,107,53,0.2)]">
+                {projects.map((space) => (
+                  <DropdownMenuItem
+                    key={space.id}
+                    onClick={() => onSpaceChange?.(space.id)}
+                    className={`text-white hover:bg-[rgba(255,107,53,0.1)] cursor-pointer ${
+                      space.id === currentSpace?.id ? 'bg-[rgba(255,107,53,0.15)]' : ''
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 mr-2 text-[#FF6B35]" />
+                    <span className="truncate">{space.name}</span>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator className="bg-[rgba(255,107,53,0.1)]" />
+                <DropdownMenuItem
+                  onClick={() => setShowCreateProject(true)}
+                  className="text-[#FF6B35] hover:bg-[rgba(255,107,53,0.1)] cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-2" />
+                  Create New Space
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => currentSpace && setProjectSettingsDialog(currentSpace)}
+                  className="p-1.5 rounded hover:bg-[rgba(255,107,53,0.1)] text-[#6B7280] hover:text-white transition-colors"
+                >
+                  <SettingsIcon className="w-4 h-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+                Space Settings
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button 
+                onClick={handleProjectsClick}
+                className="w-full flex justify-center p-2 text-[#FF6B35]"
+              >
+                <Sparkles className="w-5 h-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+              {currentSpace?.name || 'Spaces'}
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
 
@@ -287,8 +339,35 @@ export function ProjectBrowser({
           )}
         </Tooltip>
 
-        {/* Upload Button - HIDDEN: Capture functionality moved to Chrome extension */}
-        {/* Users can still access capture page by manually navigating to / if needed for reference */}
+        {/* Upload Button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => onBackToCapture?.()}
+              className={`w-full flex items-center rounded-lg transition-all mb-2 group p-3 ${isCollapsed ? 'justify-center' : ''} text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white`}
+            >
+              <Camera className={`w-4 h-4 flex-shrink-0 ${isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
+              <AnimatePresence>
+                {!isCollapsed && (
+                  <motion.span 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-sm whitespace-nowrap overflow-hidden ml-3"
+                  >
+                    + Upload
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          </TooltipTrigger>
+          {isCollapsed && (
+            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+              Upload
+            </TooltipContent>
+          )}
+        </Tooltip>
 
         {/* Change Logs Button */}
         <Tooltip>
