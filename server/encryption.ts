@@ -9,14 +9,28 @@ const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 
 function getMasterKey(): Buffer {
-  const masterKeyHex = process.env.ENCRYPTION_MASTER_KEY;
-  if (!masterKeyHex) {
-    const generatedKey = crypto.randomBytes(KEY_LENGTH).toString('hex');
+  const masterKeyEnv = process.env.ENCRYPTION_MASTER_KEY;
+  if (!masterKeyEnv) {
+    const generatedKey = crypto.randomBytes(KEY_LENGTH).toString('base64');
     console.warn('ENCRYPTION_MASTER_KEY not set. For production, set this environment variable.');
     console.warn('Generated key (save this):', generatedKey);
-    return Buffer.from(generatedKey, 'hex');
+    return Buffer.from(generatedKey, 'base64');
   }
-  return Buffer.from(masterKeyHex, 'hex');
+  
+  // Support both base64 and hex formats
+  // Base64 keys are 44 chars for 32 bytes, hex keys are 64 chars
+  const isHex = /^[0-9a-fA-F]+$/.test(masterKeyEnv) && masterKeyEnv.length === 64;
+  
+  if (isHex) {
+    return Buffer.from(masterKeyEnv, 'hex');
+  } else {
+    // Assume base64
+    const decoded = Buffer.from(masterKeyEnv, 'base64');
+    if (decoded.length !== KEY_LENGTH) {
+      throw new Error(`ENCRYPTION_MASTER_KEY must decode to ${KEY_LENGTH} bytes. Got ${decoded.length} bytes.`);
+    }
+    return decoded;
+  }
 }
 
 export class ServerEncryptionService {

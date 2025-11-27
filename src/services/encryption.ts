@@ -76,7 +76,7 @@ export interface KeyBackup {
 
 class EncryptionService {
   private dek: CryptoKey | null = null;
-  private isInitialized: boolean = false;
+  private _isInitialized: boolean = false;
   private _securityMode: SecurityMode = SecurityMode.SIMPLE;
 
   constructor() {
@@ -160,7 +160,7 @@ class EncryptionService {
    * Check if encryption is unlocked (DEK is in memory)
    */
   isUnlocked(): boolean {
-    return this.dek !== null;
+    return this.dek !== null && this._isInitialized;
   }
 
   /**
@@ -168,7 +168,7 @@ class EncryptionService {
    */
   lock(): void {
     this.dek = null;
-    this.isInitialized = false;
+    this._isInitialized = false;
   }
 
   /**
@@ -436,7 +436,7 @@ class EncryptionService {
 
     // Store DEK in memory
     this.dek = dek;
-    this.isInitialized = true;
+    this._isInitialized = true;
 
     return {
       wrappedDek: this.arrayBufferToBase64(wrappedKey),
@@ -463,7 +463,7 @@ class EncryptionService {
 
       // Store DEK in memory
       this.dek = dek;
-      this.isInitialized = true;
+      this._isInitialized = true;
 
       return true;
     } catch (error) {

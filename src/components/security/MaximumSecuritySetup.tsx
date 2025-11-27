@@ -105,8 +105,10 @@ export function MaximumSecuritySetup({
   const setupMaximumMutation = useMutation({
     mutationFn: async (data: { wrappedKey: WrappedKey; hint?: string }) => {
       const res = await apiRequest('POST', '/api/security/setup-maximum', {
-        wrappedKey: data.wrappedKey,
-        hint: data.hint,
+        wrappedDek: data.wrappedKey.wrappedDek,
+        salt: data.wrappedKey.salt,
+        iv: data.wrappedKey.iv,
+        passwordHint: data.hint,
       });
       return res.json() as Promise<SetupMaximumResponse>;
     },
@@ -138,21 +140,32 @@ export function MaximumSecuritySetup({
     },
   });
 
-  const completeSetupMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', '/api/security/complete-setup', {});
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/security/status'] });
-      toast.success('Maximum Security mode enabled successfully!');
-      onSetupComplete?.();
-      handleClose();
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to complete setup: ${error.message}`);
-    },
-  });
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setStep(1);
+    setPassword('');
+    setConfirmPassword('');
+    setHint('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setWrappedKeyData(null);
+    setTotpSecret('');
+    setTotpUri('');
+    setVerificationCode('');
+    setBackupCodes([]);
+    setSavedCodesConfirmed(false);
+    onOpenChange(false);
+  }, [onOpenChange]);
+  
+  const handleCompleteSetup = useCallback(() => {
+    setIsCompleting(true);
+    queryClient.invalidateQueries({ queryKey: ['/api/security/status'] });
+    toast.success('Maximum Security mode enabled successfully!');
+    onSetupComplete?.();
+    handleClose();
+    setIsCompleting(false);
+  }, [queryClient, onSetupComplete, handleClose]);
 
   const handleStep1Continue = useCallback(async () => {
     try {
@@ -171,8 +184,8 @@ export function MaximumSecuritySetup({
   }, [verificationCode, verifyTotpMutation]);
 
   const handleStep3Complete = useCallback(() => {
-    completeSetupMutation.mutate();
-  }, [completeSetupMutation]);
+    handleCompleteSetup();
+  }, [handleCompleteSetup]);
 
   const handleCopySecret = useCallback(() => {
     navigator.clipboard.writeText(totpSecret);
@@ -205,22 +218,6 @@ ${backupCodes.join('\n')}
     URL.revokeObjectURL(url);
     toast.success('Backup codes downloaded');
   }, [backupCodes, userEmail]);
-
-  const handleClose = useCallback(() => {
-    setStep(1);
-    setPassword('');
-    setConfirmPassword('');
-    setHint('');
-    setShowPassword(false);
-    setShowConfirmPassword(false);
-    setWrappedKeyData(null);
-    setTotpSecret('');
-    setTotpUri('');
-    setVerificationCode('');
-    setBackupCodes([]);
-    setSavedCodesConfirmed(false);
-    onOpenChange(false);
-  }, [onOpenChange]);
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center gap-2 mb-6">
@@ -536,10 +533,10 @@ ${backupCodes.join('\n')}
 
       <Button
         onClick={handleStep3Complete}
-        disabled={!savedCodesConfirmed || completeSetupMutation.isPending}
+        disabled={!savedCodesConfirmed || isCompleting}
         className="w-full bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
       >
-        {completeSetupMutation.isPending ? (
+        {isCompleting ? (
           <>
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             Completing setup...
