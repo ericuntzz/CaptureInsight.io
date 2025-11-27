@@ -133,7 +133,7 @@ interface DataManagementViewProps {
       schedule?: { frequency: string; time: string };
     }
   ) => void;
-  onTopLevelViewChange?: (view: 'capture' | 'data' | 'changelogs' | 'insights') => void;
+  onTopLevelViewChange?: (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace') => void;
   user?: {
     id: string;
     email?: string | null;
@@ -244,9 +244,14 @@ export function DataManagementView({
   // Get current sheet with dataSource (must be AFTER currentFolder is defined)
   const currentSheet = currentFolder?.sheets.find(s => s.id === selectedSheet);
 
-  // Handle view changes - all views now open locally (data, ai, changelogs, insights)
-  const handleViewChange = (view: 'data' | 'ai' | 'changelogs' | 'insights') => {
-    setActiveView(view);
+  // Handle view changes - most views open locally, workspace bubbles up to top level
+  const handleViewChange = (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace') => {
+    if (view === 'workspace') {
+      // Workspace is a top-level view, bubble up to App.tsx
+      onTopLevelViewChange?.('workspace');
+    } else {
+      setActiveView(view);
+    }
   };
 
   return (
