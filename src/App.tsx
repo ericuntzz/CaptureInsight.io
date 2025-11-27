@@ -23,6 +23,7 @@ import {
   CompanyManagementPage,
 } from './components/settings';
 import { SecuritySettings } from './pages/SecuritySettings';
+import { InsightWorkspace } from './pages/InsightWorkspace';
 import { 
   useSpaces, 
   useCreateSpace, 
@@ -75,7 +76,7 @@ export default function App() {
   const router = useRouter();
   
   // Initialize view from URL or localStorage
-  const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights'>(() => {
+  const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights' | 'workspace'>(() => {
     if (typeof window !== 'undefined') {
       // First try to get view from URL
       const viewFromUrl = getCurrentView(window.location.pathname);
@@ -87,8 +88,8 @@ export default function App() {
       
       // Otherwise, check localStorage as fallback
       const savedView = localStorage.getItem('captureinsight_current_view');
-      if (savedView && ['capture', 'data', 'changelogs', 'insights'].includes(savedView)) {
-        return savedView as 'capture' | 'data' | 'changelogs' | 'insights';
+      if (savedView && ['capture', 'data', 'changelogs', 'insights', 'workspace'].includes(savedView)) {
+        return savedView as 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace';
       }
       
       return viewFromUrl;
@@ -138,7 +139,7 @@ export default function App() {
   }, [router.pathname]);
   
   // Update URL when view changes
-  const handleViewChange = (view: 'capture' | 'data' | 'changelogs' | 'insights') => {
+  const handleViewChange = (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace') => {
     setCurrentView(view);
     // Push new URL
     switch (view) {
@@ -153,6 +154,9 @@ export default function App() {
         break;
       case 'insights':
         router.push(buildRoute.insights());
+        break;
+      case 'workspace':
+        router.push(buildRoute.workspace());
         break;
     }
   };
@@ -1129,6 +1133,14 @@ export default function App() {
             toast.info('Capture data to link to your new insight');
           }
         }}
+      />
+    );
+  } else if (currentView === 'workspace') {
+    return (
+      <InsightWorkspace
+        onBack={() => setCurrentView('capture')}
+        spaceId={currentSpaceId}
+        insightId={null}
       />
     );
   }

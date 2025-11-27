@@ -6,6 +6,7 @@ export const ROUTES = {
   DATA: '/data',
   CHANGE_LOGS: '/changelogs',
   INSIGHTS: '/insights',
+  WORKSPACE: '/workspace',
   
   // Data management deep links
   DATA_SPACE: '/data/:spaceId',
@@ -14,6 +15,9 @@ export const ROUTES = {
   
   // Insights deep links
   INSIGHT_DETAIL: '/insights/:insightId',
+  
+  // Workspace deep links
+  WORKSPACE_INSIGHT: '/workspace/:insightId',
   
   // AI Assistant deep links
   AI_CHAT: '/ai-assistant',
@@ -41,6 +45,8 @@ export const buildRoute = {
   changeLogs: () => ROUTES.CHANGE_LOGS,
   insights: () => ROUTES.INSIGHTS,
   insightDetail: (insightId: string) => `/insights/${insightId}`,
+  workspace: () => ROUTES.WORKSPACE,
+  workspaceInsight: (insightId: string) => `/workspace/${insightId}`,
   aiChat: () => ROUTES.AI_CHAT,
   aiChatMessage: (messageId: string) => `/ai-assistant#message-${messageId}`,
   tags: () => ROUTES.TAGS,
@@ -55,6 +61,7 @@ export const parseRoute = {
   isData: (pathname: string) => pathname.startsWith('/data'),
   isChangeLogs: (pathname: string) => pathname.startsWith('/changelogs'),
   isInsights: (pathname: string) => pathname.startsWith('/insights'),
+  isWorkspace: (pathname: string) => pathname.startsWith('/workspace'),
   isAIChat: (pathname: string) => pathname.startsWith('/ai-assistant'),
   isTags: (pathname: string) => pathname.startsWith('/tags'),
   isSearch: (pathname: string) => pathname.startsWith('/search'),
@@ -80,6 +87,11 @@ export const parseRoute = {
     return match ? match[1] : null;
   },
   
+  getWorkspaceInsightId: (pathname: string) => {
+    const match = pathname.match(/^\/workspace\/([^\/]+)/);
+    return match ? match[1] : null;
+  },
+  
   getTagId: (pathname: string) => {
     const match = pathname.match(/^\/tags\/([^\/]+)/);
     return match ? match[1] : null;
@@ -92,9 +104,10 @@ export const parseRoute = {
 };
 
 // Get current view from pathname
-export const getCurrentView = (pathname: string): 'capture' | 'data' | 'changelogs' | 'insights' => {
+export const getCurrentView = (pathname: string): 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' => {
   if (parseRoute.isData(pathname)) return 'data';
   if (parseRoute.isChangeLogs(pathname)) return 'changelogs';
   if (parseRoute.isInsights(pathname)) return 'insights';
+  if (parseRoute.isWorkspace(pathname)) return 'workspace';
   return 'capture';
 };

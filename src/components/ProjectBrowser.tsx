@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Camera, FileText, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2, Settings as SettingsIcon, Check, X, MoreVertical, FolderPlus, Edit2, FileSpreadsheet, Brain, Clock, ChevronsRight, ChevronsLeft, HelpCircle, Gift, Database } from 'lucide-react';
+import { Sparkles, Camera, FileText, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2, Settings as SettingsIcon, Check, X, MoreVertical, FolderPlus, Edit2, FileSpreadsheet, Brain, Clock, ChevronsRight, ChevronsLeft, HelpCircle, Gift, Database, LayoutGrid } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from './ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from './ui/dropdown-menu';
 import { SpaceSwitcher } from './SpaceSwitcher';
@@ -67,8 +67,8 @@ interface ProjectBrowserProps {
       schedule?: { frequency: string; time: string };
     }
   ) => void;
-  activeView?: 'data' | 'ai' | 'changelogs' | 'insights';
-  onViewChange?: (view: 'data' | 'ai' | 'changelogs' | 'insights') => void;
+  activeView?: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace';
+  onViewChange?: (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace') => void;
   onBackToCapture?: () => void;
   externalCollapseControl?: boolean;
   user?: {
@@ -265,7 +265,41 @@ export function ProjectBrowser({
 
       {/* Navigation Buttons */}
       <div className="px-2 pb-2">
-        {/* Insights Button */}
+        {/* Workspace Button - New Unified View */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => onViewChange?.('workspace')}
+              className={`w-full h-10 flex items-center rounded-lg transition-all mb-2 group px-3 ${
+                activeView === 'workspace'
+                  ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
+                  : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
+              }`}
+            >
+              <LayoutGrid className={`w-4 h-4 flex-shrink-0 ${activeView !== 'workspace' && isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
+              <AnimatePresence>
+                {!isCollapsed && (
+                  <motion.span 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-sm whitespace-nowrap overflow-hidden ml-3"
+                  >
+                    Workspace
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          </TooltipTrigger>
+          {isCollapsed && (
+            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+              Workspace
+            </TooltipContent>
+          )}
+        </Tooltip>
+
+        {/* Insights Button (Legacy) */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
