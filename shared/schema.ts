@@ -46,7 +46,7 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   ownedSpaces: many(spaces),
   createdSheets: many(sheets),
   createdTags: many(tags),
@@ -54,6 +54,28 @@ export const usersRelations = relations(users, ({ many }) => ({
   assignedInsights: many(insights, { relationName: "assignedInsights" }),
   chatThreads: many(chatThreads),
   comments: many(insightComments),
+  encryptionKey: one(userEncryptionKeys),
+}));
+
+// User encryption keys table for E2EE (End-to-End Encryption)
+// Stores wrapped Data Encryption Keys (DEK) that can only be unlocked client-side
+export const userEncryptionKeys = pgTable("user_encryption_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  wrappedDek: text("wrapped_dek").notNull(), // Base64 encoded wrapped DEK
+  salt: text("salt").notNull(), // Base64 encoded PBKDF2 salt
+  iv: text("iv").notNull(), // Base64 encoded AES-GCM IV for key wrapping
+  version: integer("version").default(1),
+  passwordHint: varchar("password_hint"), // Optional hint for password recovery
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const userEncryptionKeysRelations = relations(userEncryptionKeys, ({ one }) => ({
+  user: one(users, {
+    fields: [userEncryptionKeys.userId],
+    references: [users.id],
+  }),
 }));
 
 // Spaces table
@@ -115,7 +137,10 @@ export const sheets = pgTable("sheets", {
   lastModified: timestamp("last_modified").defaultNow(),
   dataSourceType: varchar("data_source_type"),
   dataSourceMeta: jsonb("data_source_meta"),
-  data: jsonb("data"),
+  data: jsonb("data"), // Unencrypted data (legacy/migration)
+  encryptedData: text("encrypted_data"), // E2EE: Base64 encrypted data
+  encryptionIv: text("encryption_iv"), // E2EE: Base64 IV for decryption
+  encryptionVersion: integer("encryption_version").default(0), // 0=unencrypted, 1+=E2EE version
   createdAt: timestamp("created_at").defaultNow(),
   createdBy: varchar("created_by").references(() => users.id),
 });
@@ -182,7 +207,10 @@ export const tagAssociationsRelations = relations(tagAssociations, ({ one }) => 
 export const insights = pgTable("insights", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: varchar("title").notNull(),
-  summary: text("summary"),
+  summary: text("summary"), // Unencrypted summary (legacy/migration)
+  encryptedSummary: text("encrypted_summary"), // E2EE: Base64 encrypted summary
+  encryptionIv: text("encryption_iv"), // E2EE: Base64 IV for decryption
+  encryptionVersion: integer("encryption_version").default(0), // 0=unencrypted, 1+=E2EE version
   status: varchar("status").default("Open"), // 'Open' | 'Closed'
   priority: varchar("priority"), // 'High' | 'Medium' | 'Low'
   spaceId: varchar("space_id").references(() => spaces.id).notNull(),
