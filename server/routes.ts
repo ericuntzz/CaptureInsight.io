@@ -19,6 +19,11 @@ import {
   embedAndStoreContent,
   reindexSpace,
 } from "./ai/embeddings";
+import { serverEncryption } from "./encryption";
+import { db } from "./db";
+import { userEncryptionKeys, serverEncryptionKeys } from "../shared/schema";
+import { eq } from "drizzle-orm";
+import * as OTPAuth from "otpauth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -112,6 +117,525 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // ==================== SECURITY ====================
+  
+  // Get user's current security status
+  app.get('/api/security/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      const [encryptionKeyRecord] = await db
+        .select()
+        .from(userEncryptionKeys)
+        .where(eq(userEncryptionKeys.userId, userId))
+        .limit(1);
+      
+      const [serverKeyRecord] = await db
+        .select()
+        .from(serverEncryptionKeys)
+        .where(eq(serverEncryptionKeys.userId, userId))
+        .limit(1);
+      
+      if (!encryptionKeyRecord) {
+        return res.json({
+          securityMode: 0,
+          totpEnabled: false,
+          hasBackupCodes: false,
+          hasServerKey: false,
+        });
+      }
+      
+      res.json({
+        securityMode: encryptionKeyRecord.securityMode ?? 0,
+        totpEnabled: encryptionKeyRecord.totpEnabled ?? false,
+        hasBackupCodes: Array.isArray(encryptionKeyRecord.backupCodes) && encryptionKeyRecord.backupCodes.length > 0,
+        hasServerKey: !!serverKeyRecord,
+      });
+    } catch (error) {
+      console.error("Error fetching security status:", error);
+      res.status(500).json({ message: "Failed to fetch security status" });
+    }
+  });
+
+  // Initialize or switch to Simple mode (server-side encryption)
+  app.post('/api/security/setup-simple', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      const { keyId } = await serverEncryption.getOrCreateUserKey(userId);
+      
+      await db
+        .insert(userEncryptionKeys)
+        .values({
+          userId,
+          securityMode: 0,
+          serverKeyId: keyId,
+          totpEnabled: false,
+          wrappedDek: null,
+          salt: null,
+          iv: null,
+          totpSecret: null,
+          backupCodes: null,
+          backupCodesUsed: null,
+        })
+        .onConflictDoUpdate({
+          target: userEncryptionKeys.userId,
+          set: {
+            securityMode: 0,
+            serverKeyId: keyId,
+            totpEnabled: false,
+            wrappedDek: null,
+            salt: null,
+            iv: null,
+            totpSecret: null,
+            backupCodes: null,
+            backupCodesUsed: null,
+            updatedAt: new Date(),
+          },
+        });
+      
+      res.json({
+        success: true,
+        message: "Simple security mode activated",
+        securityMode: 0,
+      });
+    } catch (error) {
+      console.error("Error setting up simple security mode:", error);
+      res.status(500).json({ message: "Failed to setup simple security mode" });
+    }
+  });
+
+  // Initialize Maximum Security mode (E2EE with password + 2FA)
+  app.post('/api/security/setup-maximum', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { wrappedDek, salt, iv, passwordHint } = req.body;
+      
+      if (!wrappedDek || !salt || !iv) {
+        return res.status(400).json({ 
+          message: "Missing required fields: wrappedDek, salt, iv" 
+        });
+      }
+      
+      const user = await storage.getUser(userId);
+      const userEmail = user?.email || 'user@captureinsight.app';
+      
+      const totpSecret = new OTPAuth.Secret({ size: 20 });
+      const totp = new OTPAuth.TOTP({
+        issuer: "CaptureInsight",
+        label: userEmail,
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: totpSecret,
+      });
+      
+      const totpUri = totp.toString();
+      
+      const { codes: backupCodes, hashes: backupCodeHashes } = serverEncryption.generateBackupCodes(8);
+      
+      const encryptedTotpSecret = await serverEncryption.encryptForUser(userId, totpSecret.base32);
+      const totpSecretStored = JSON.stringify({
+        encrypted: encryptedTotpSecret.encrypted,
+        iv: encryptedTotpSecret.iv,
+      });
+      
+      await db
+        .insert(userEncryptionKeys)
+        .values({
+          userId,
+          securityMode: 1,
+          wrappedDek,
+          salt,
+          iv,
+          totpSecret: totpSecretStored,
+          totpEnabled: true,
+          backupCodes: backupCodeHashes,
+          backupCodesUsed: [],
+          passwordHint: passwordHint || null,
+          serverKeyId: null,
+        })
+        .onConflictDoUpdate({
+          target: userEncryptionKeys.userId,
+          set: {
+            securityMode: 1,
+            wrappedDek,
+            salt,
+            iv,
+            totpSecret: totpSecretStored,
+            totpEnabled: true,
+            backupCodes: backupCodeHashes,
+            backupCodesUsed: [],
+            passwordHint: passwordHint || null,
+            serverKeyId: null,
+            updatedAt: new Date(),
+          },
+        });
+      
+      res.json({
+        success: true,
+        totpSecret: totpSecret.base32,
+        totpUri,
+        backupCodes,
+        securityMode: 1,
+      });
+    } catch (error) {
+      console.error("Error setting up maximum security mode:", error);
+      res.status(500).json({ message: "Failed to setup maximum security mode" });
+    }
+  });
+
+  // Verify TOTP code for session unlock
+  app.post('/api/security/verify-totp', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { code } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ message: "TOTP code is required" });
+      }
+      
+      const [encryptionKeyRecord] = await db
+        .select()
+        .from(userEncryptionKeys)
+        .where(eq(userEncryptionKeys.userId, userId))
+        .limit(1);
+      
+      if (!encryptionKeyRecord || !encryptionKeyRecord.totpSecret) {
+        return res.status(400).json({ message: "TOTP not configured for this user" });
+      }
+      
+      let totpSecretBase32: string;
+      try {
+        const storedSecret = JSON.parse(encryptionKeyRecord.totpSecret);
+        const decrypted = await serverEncryption.decryptForUser(
+          userId,
+          storedSecret.encrypted,
+          storedSecret.iv
+        );
+        if (!decrypted) {
+          return res.status(500).json({ message: "Failed to decrypt TOTP secret" });
+        }
+        totpSecretBase32 = decrypted;
+      } catch (parseError) {
+        totpSecretBase32 = encryptionKeyRecord.totpSecret;
+      }
+      
+      const totp = new OTPAuth.TOTP({
+        issuer: "CaptureInsight",
+        label: "user",
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: OTPAuth.Secret.fromBase32(totpSecretBase32),
+      });
+      
+      const delta = totp.validate({ token: code, window: 1 });
+      const valid = delta !== null;
+      
+      if (valid) {
+        res.json({
+          valid: true,
+          wrappedDek: encryptionKeyRecord.wrappedDek,
+          salt: encryptionKeyRecord.salt,
+          iv: encryptionKeyRecord.iv,
+        });
+      } else {
+        res.json({ valid: false });
+      }
+    } catch (error) {
+      console.error("Error verifying TOTP:", error);
+      res.status(500).json({ message: "Failed to verify TOTP code" });
+    }
+  });
+
+  // Recover access using backup code
+  app.post('/api/security/recover', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { backupCode, newPassword, wrappedDek, salt, iv } = req.body;
+      
+      if (!backupCode) {
+        return res.status(400).json({ message: "Backup code is required" });
+      }
+      
+      if (!wrappedDek || !salt || !iv) {
+        return res.status(400).json({ 
+          message: "Missing required fields for key recovery: wrappedDek, salt, iv" 
+        });
+      }
+      
+      const [encryptionKeyRecord] = await db
+        .select()
+        .from(userEncryptionKeys)
+        .where(eq(userEncryptionKeys.userId, userId))
+        .limit(1);
+      
+      if (!encryptionKeyRecord || !encryptionKeyRecord.backupCodes) {
+        return res.status(400).json({ message: "No backup codes configured for this user" });
+      }
+      
+      const backupCodeHashes = encryptionKeyRecord.backupCodes as string[];
+      const usedCodes = (encryptionKeyRecord.backupCodesUsed as string[]) || [];
+      
+      const inputHash = serverEncryption.hashBackupCode(backupCode);
+      
+      if (usedCodes.includes(inputHash)) {
+        return res.status(400).json({ message: "This backup code has already been used" });
+      }
+      
+      if (!backupCodeHashes.includes(inputHash)) {
+        return res.status(400).json({ message: "Invalid backup code" });
+      }
+      
+      const updatedUsedCodes = [...usedCodes, inputHash];
+      const remainingCodes = backupCodeHashes.filter(hash => !updatedUsedCodes.includes(hash)).length;
+      
+      await db
+        .update(userEncryptionKeys)
+        .set({
+          wrappedDek,
+          salt,
+          iv,
+          backupCodesUsed: updatedUsedCodes,
+          updatedAt: new Date(),
+        })
+        .where(eq(userEncryptionKeys.userId, userId));
+      
+      res.json({
+        success: true,
+        remainingCodes,
+        message: remainingCodes === 0 
+          ? "Recovery successful. Warning: No backup codes remaining!"
+          : `Recovery successful. ${remainingCodes} backup code(s) remaining.`,
+      });
+    } catch (error) {
+      console.error("Error recovering with backup code:", error);
+      res.status(500).json({ message: "Failed to recover access" });
+    }
+  });
+
+  // ==================== LOGIN 2FA ====================
+  // These endpoints are for account login security (separate from encryption 2FA)
+  // Available to users on any security mode
+
+  // Get login 2FA status
+  app.get('/api/login-2fa/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { enabled } = await storage.getUserLoginTotp(userId);
+      res.json({ enabled });
+    } catch (error) {
+      console.error("Error fetching login 2FA status:", error);
+      res.status(500).json({ message: "Failed to fetch login 2FA status" });
+    }
+  });
+
+  // Start login 2FA setup
+  app.post('/api/login-2fa/setup', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      const user = await storage.getUser(userId);
+      const userEmail = user?.email || 'user@captureinsight.app';
+      
+      const totpSecret = new OTPAuth.Secret({ size: 20 });
+      const totp = new OTPAuth.TOTP({
+        issuer: "CaptureInsight",
+        label: userEmail,
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: totpSecret,
+      });
+      
+      const qrUri = totp.toString();
+      
+      const encryptedSecret = await serverEncryption.encryptForUser(userId, totpSecret.base32);
+      const secretStored = JSON.stringify({
+        encrypted: encryptedSecret.encrypted,
+        iv: encryptedSecret.iv,
+      });
+      
+      await storage.setUserLoginTotp(userId, secretStored, false);
+      
+      res.json({
+        secret: totpSecret.base32,
+        qrUri,
+      });
+    } catch (error) {
+      console.error("Error setting up login 2FA:", error);
+      res.status(500).json({ message: "Failed to setup login 2FA" });
+    }
+  });
+
+  // Verify setup and enable login 2FA
+  app.post('/api/login-2fa/verify-setup', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { code } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ message: "TOTP code is required" });
+      }
+      
+      const { secret, enabled } = await storage.getUserLoginTotp(userId);
+      
+      if (!secret) {
+        return res.status(400).json({ message: "Login 2FA not set up. Please start setup first." });
+      }
+      
+      if (enabled) {
+        return res.status(400).json({ message: "Login 2FA is already enabled" });
+      }
+      
+      let totpSecretBase32: string;
+      try {
+        const storedSecret = JSON.parse(secret);
+        const decrypted = await serverEncryption.decryptForUser(
+          userId,
+          storedSecret.encrypted,
+          storedSecret.iv
+        );
+        if (!decrypted) {
+          return res.status(500).json({ message: "Failed to decrypt TOTP secret" });
+        }
+        totpSecretBase32 = decrypted;
+      } catch (parseError) {
+        totpSecretBase32 = secret;
+      }
+      
+      const totp = new OTPAuth.TOTP({
+        issuer: "CaptureInsight",
+        label: "user",
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: OTPAuth.Secret.fromBase32(totpSecretBase32),
+      });
+      
+      const delta = totp.validate({ token: code, window: 1 });
+      const valid = delta !== null;
+      
+      if (valid) {
+        await storage.setUserLoginTotp(userId, secret, true);
+        res.json({ success: true });
+      } else {
+        res.json({ success: false, message: "Invalid TOTP code" });
+      }
+    } catch (error) {
+      console.error("Error verifying login 2FA setup:", error);
+      res.status(500).json({ message: "Failed to verify login 2FA setup" });
+    }
+  });
+
+  // Disable login 2FA
+  app.post('/api/login-2fa/disable', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { code } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ message: "TOTP code is required to disable 2FA" });
+      }
+      
+      const { secret, enabled } = await storage.getUserLoginTotp(userId);
+      
+      if (!enabled || !secret) {
+        return res.status(400).json({ message: "Login 2FA is not enabled" });
+      }
+      
+      let totpSecretBase32: string;
+      try {
+        const storedSecret = JSON.parse(secret);
+        const decrypted = await serverEncryption.decryptForUser(
+          userId,
+          storedSecret.encrypted,
+          storedSecret.iv
+        );
+        if (!decrypted) {
+          return res.status(500).json({ message: "Failed to decrypt TOTP secret" });
+        }
+        totpSecretBase32 = decrypted;
+      } catch (parseError) {
+        totpSecretBase32 = secret;
+      }
+      
+      const totp = new OTPAuth.TOTP({
+        issuer: "CaptureInsight",
+        label: "user",
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: OTPAuth.Secret.fromBase32(totpSecretBase32),
+      });
+      
+      const delta = totp.validate({ token: code, window: 1 });
+      const valid = delta !== null;
+      
+      if (valid) {
+        await storage.setUserLoginTotp(userId, null, false);
+        res.json({ success: true });
+      } else {
+        res.json({ success: false, message: "Invalid TOTP code" });
+      }
+    } catch (error) {
+      console.error("Error disabling login 2FA:", error);
+      res.status(500).json({ message: "Failed to disable login 2FA" });
+    }
+  });
+
+  // Verify login 2FA code (used during login flow)
+  app.post('/api/login-2fa/verify', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { code } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ message: "TOTP code is required" });
+      }
+      
+      const { secret, enabled } = await storage.getUserLoginTotp(userId);
+      
+      if (!enabled || !secret) {
+        return res.status(400).json({ message: "Login 2FA is not enabled for this user" });
+      }
+      
+      let totpSecretBase32: string;
+      try {
+        const storedSecret = JSON.parse(secret);
+        const decrypted = await serverEncryption.decryptForUser(
+          userId,
+          storedSecret.encrypted,
+          storedSecret.iv
+        );
+        if (!decrypted) {
+          return res.status(500).json({ message: "Failed to decrypt TOTP secret" });
+        }
+        totpSecretBase32 = decrypted;
+      } catch (parseError) {
+        totpSecretBase32 = secret;
+      }
+      
+      const totp = new OTPAuth.TOTP({
+        issuer: "CaptureInsight",
+        label: "user",
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: OTPAuth.Secret.fromBase32(totpSecretBase32),
+      });
+      
+      const delta = totp.validate({ token: code, window: 1 });
+      const valid = delta !== null;
+      
+      res.json({ valid });
+    } catch (error) {
+      console.error("Error verifying login 2FA:", error);
+      res.status(500).json({ message: "Failed to verify login 2FA code" });
     }
   });
 

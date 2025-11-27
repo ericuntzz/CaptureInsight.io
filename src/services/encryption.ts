@@ -5,6 +5,8 @@
  * - AES-256-GCM for data encryption (authenticated encryption)
  * - PBKDF2 for key derivation from password
  * - Key wrapping for secure DEK storage
+ * - TOTP secret generation for Maximum Security mode
+ * - Backup codes generation with SHA-256 hashing
  * 
  * Architecture:
  * User Password → PBKDF2 → KEK (Key Encryption Key, never leaves client)
@@ -23,6 +25,32 @@ const ENCRYPTION_CONFIG = {
   pbkdf2Iterations: 100000,
   tagLength: 128, // GCM auth tag length in bits
 };
+
+// Security mode configuration
+const SECURITY_MODE_STORAGE_KEY = 'captureinsight_security_mode';
+const BACKUP_CODE_LENGTH = 8;
+const BACKUP_CODE_COUNT = 8;
+const TOTP_SECRET_LENGTH = 20; // 160 bits for TOTP secret
+
+// Base32 alphabet for TOTP secret encoding (RFC 4648)
+const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+export enum SecurityMode {
+  SIMPLE = 0,
+  MAXIMUM = 1,
+}
+
+export interface SecurityStatus {
+  mode: SecurityMode;
+  totpEnabled: boolean;
+  hasBackupCodes: boolean;
+  isUnlocked: boolean;
+}
+
+export interface GeneratedBackupCodes {
+  plaintextCodes: string[];
+  hashedCodes: string[];
+}
 
 export interface EncryptedData {
   ciphertext: string; // Base64 encoded
@@ -49,6 +77,84 @@ export interface KeyBackup {
 class EncryptionService {
   private dek: CryptoKey | null = null;
   private isInitialized: boolean = false;
+  private _securityMode: SecurityMode = SecurityMode.SIMPLE;
+
+  constructor() {
+    this.loadSecurityMode();
+  }
+
+  /**
+   * Get current security mode
+   */
+  get securityMode(): SecurityMode {
+    return this._securityMode;
+  }
+
+  /**
+   * Set security mode
+   */
+  set securityMode(mode: SecurityMode) {
+    this._securityMode = mode;
+    this.saveSecurityMode(mode);
+  }
+
+  /**
+   * Load security mode from localStorage
+   */
+  private loadSecurityMode(): void {
+    try {
+      const stored = localStorage.getItem(SECURITY_MODE_STORAGE_KEY);
+      if (stored !== null) {
+        const mode = parseInt(stored, 10);
+        if (mode === SecurityMode.SIMPLE || mode === SecurityMode.MAXIMUM) {
+          this._securityMode = mode;
+        }
+      }
+    } catch {
+      // localStorage not available or error, use default
+    }
+  }
+
+  /**
+   * Save security mode to localStorage
+   */
+  private saveSecurityMode(mode: SecurityMode): void {
+    try {
+      localStorage.setItem(SECURITY_MODE_STORAGE_KEY, mode.toString());
+    } catch {
+      // localStorage not available, silently fail
+    }
+  }
+
+  /**
+   * Get security mode from localStorage (static method for external access)
+   */
+  getStoredSecurityMode(): SecurityMode {
+    try {
+      const stored = localStorage.getItem(SECURITY_MODE_STORAGE_KEY);
+      if (stored !== null) {
+        const mode = parseInt(stored, 10);
+        if (mode === SecurityMode.SIMPLE || mode === SecurityMode.MAXIMUM) {
+          return mode;
+        }
+      }
+    } catch {
+      // localStorage not available
+    }
+    return SecurityMode.SIMPLE;
+  }
+
+  /**
+   * Clear security mode from localStorage
+   */
+  clearStoredSecurityMode(): void {
+    try {
+      localStorage.removeItem(SECURITY_MODE_STORAGE_KEY);
+      this._securityMode = SecurityMode.SIMPLE;
+    } catch {
+      // localStorage not available
+    }
+  }
 
   /**
    * Check if encryption is unlocked (DEK is in memory)
@@ -101,6 +207,121 @@ class EncryptionService {
       bytes[i] = binary.charCodeAt(i);
     }
     return bytes.buffer;
+  }
+
+  /**
+   * Convert ArrayBuffer to hex string
+   */
+  private arrayBufferToHex(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    return Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  /**
+   * Encode bytes to Base32 (RFC 4648)
+   */
+  private encodeBase32(bytes: Uint8Array): string {
+    let result = '';
+    let bits = 0;
+    let value = 0;
+
+    for (let i = 0; i < bytes.length; i++) {
+      value = (value << 8) | bytes[i];
+      bits += 8;
+
+      while (bits >= 5) {
+        result += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+
+    if (bits > 0) {
+      result += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+    }
+
+    return result;
+  }
+
+  /**
+   * Generate 8 random 8-character alphanumeric backup codes
+   * Returns both plaintext codes and their SHA-256 hashes
+   */
+  async generateBackupCodes(): Promise<GeneratedBackupCodes> {
+    const alphanumeric = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars: I, O, 0, 1
+    const plaintextCodes: string[] = [];
+    const hashedCodes: string[] = [];
+
+    for (let i = 0; i < BACKUP_CODE_COUNT; i++) {
+      let code = '';
+      const randomBytes = crypto.getRandomValues(new Uint8Array(BACKUP_CODE_LENGTH));
+      
+      for (let j = 0; j < BACKUP_CODE_LENGTH; j++) {
+        code += alphanumeric[randomBytes[j] % alphanumeric.length];
+      }
+
+      plaintextCodes.push(code);
+      const hash = await this.hashBackupCode(code);
+      hashedCodes.push(hash);
+    }
+
+    return { plaintextCodes, hashedCodes };
+  }
+
+  /**
+   * Hash a backup code using SHA-256 for verification
+   */
+  async hashBackupCode(code: string): Promise<string> {
+    const normalizedCode = code.replace(/-/g, '').toUpperCase();
+    const encoded = new TextEncoder().encode(normalizedCode);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+    return this.arrayBufferToHex(hashBuffer);
+  }
+
+  /**
+   * Format backup codes as "XXXX-XXXX" for display
+   */
+  formatBackupCodes(codes: string[]): string[] {
+    return codes.map((code) => {
+      const clean = code.replace(/-/g, '').toUpperCase();
+      if (clean.length !== 8) {
+        return code; // Return as-is if not 8 characters
+      }
+      return `${clean.slice(0, 4)}-${clean.slice(4)}`;
+    });
+  }
+
+  /**
+   * Generate a random base32 secret for TOTP (RFC 6238)
+   * Returns a 32-character base32 encoded secret (160 bits)
+   */
+  generateTOTPSecret(): string {
+    const randomBytes = crypto.getRandomValues(new Uint8Array(TOTP_SECRET_LENGTH));
+    return this.encodeBase32(randomBytes);
+  }
+
+  /**
+   * Build otpauth:// URI for QR code generation (RFC 6238)
+   */
+  buildTOTPUri(secret: string, userEmail: string, issuer: string = 'CaptureInsight'): string {
+    const encodedIssuer = encodeURIComponent(issuer);
+    const encodedEmail = encodeURIComponent(userEmail);
+    const encodedSecret = encodeURIComponent(secret);
+    
+    return `otpauth://totp/${encodedIssuer}:${encodedEmail}?secret=${encodedSecret}&issuer=${encodedIssuer}&algorithm=SHA1&digits=6&period=30`;
+  }
+
+  /**
+   * Get current security status
+   */
+  getSecurityStatus(totpEnabled: boolean = false, hasBackupCodes: boolean = false): SecurityStatus {
+    return {
+      mode: this._securityMode,
+      totpEnabled,
+      hasBackupCodes,
+      isUnlocked: this.isUnlocked(),
+    };
   }
 
   /**

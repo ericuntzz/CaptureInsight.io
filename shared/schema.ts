@@ -7,6 +7,7 @@ import {
   varchar,
   text,
   integer,
+  boolean,
   customType,
 } from "drizzle-orm/pg-core";
 
@@ -42,6 +43,8 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  loginTotpSecret: text("login_totp_secret"), // Encrypted TOTP secret for login 2FA
+  loginTotpEnabled: boolean("login_totp_enabled").default(false), // Whether login 2FA is enabled
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -59,12 +62,19 @@ export const usersRelations = relations(users, ({ one, many }) => ({
 
 // User encryption keys table for E2EE (End-to-End Encryption)
 // Stores wrapped Data Encryption Keys (DEK) that can only be unlocked client-side
+// securityMode: 0 = Simple (server-side encryption), 1 = Maximum (E2EE with password + 2FA)
 export const userEncryptionKeys = pgTable("user_encryption_keys", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id).notNull().unique(),
-  wrappedDek: text("wrapped_dek").notNull(), // Base64 encoded wrapped DEK
-  salt: text("salt").notNull(), // Base64 encoded PBKDF2 salt
-  iv: text("iv").notNull(), // Base64 encoded AES-GCM IV for key wrapping
+  securityMode: integer("security_mode").default(0), // 0=simple, 1=maximum
+  wrappedDek: text("wrapped_dek"), // Base64 encoded wrapped DEK (Maximum mode only)
+  salt: text("salt"), // Base64 encoded PBKDF2 salt (Maximum mode only)
+  iv: text("iv"), // Base64 encoded AES-GCM IV for key wrapping (Maximum mode only)
+  serverKeyId: varchar("server_key_id"), // Reference to server-managed key (Simple mode)
+  totpSecret: text("totp_secret"), // Encrypted TOTP secret for encryption 2FA (Maximum mode)
+  totpEnabled: boolean("totp_enabled").default(false), // Whether encryption 2FA is enabled
+  backupCodes: jsonb("backup_codes").$type<string[]>(), // Hashed backup codes
+  backupCodesUsed: jsonb("backup_codes_used").$type<string[]>(), // Used backup code hashes
   version: integer("version").default(1),
   passwordHint: varchar("password_hint"), // Optional hint for password recovery
   createdAt: timestamp("created_at").defaultNow(),
@@ -74,6 +84,24 @@ export const userEncryptionKeys = pgTable("user_encryption_keys", {
 export const userEncryptionKeysRelations = relations(userEncryptionKeys, ({ one }) => ({
   user: one(users, {
     fields: [userEncryptionKeys.userId],
+    references: [users.id],
+  }),
+}));
+
+// Server-managed encryption keys for Simple mode
+// These keys are managed by the server and encrypted with a master key
+export const serverEncryptionKeys = pgTable("server_encryption_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  encryptedKey: text("encrypted_key").notNull(), // AES-256 key encrypted with server master key
+  iv: text("iv").notNull(), // IV used for encrypting the key
+  createdAt: timestamp("created_at").defaultNow(),
+  rotatedAt: timestamp("rotated_at"), // Last key rotation timestamp
+});
+
+export const serverEncryptionKeysRelations = relations(serverEncryptionKeys, ({ one }) => ({
+  user: one(users, {
+    fields: [serverEncryptionKeys.userId],
     references: [users.id],
   }),
 }));

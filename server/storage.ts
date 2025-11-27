@@ -56,6 +56,10 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
 
+  // Login 2FA operations
+  getUserLoginTotp(userId: string): Promise<{ secret: string | null, enabled: boolean }>;
+  setUserLoginTotp(userId: string, secret: string | null, enabled: boolean): Promise<void>;
+
   // Space operations
   getSpaces(ownerId: string): Promise<Space[]>;
   getSpace(id: string): Promise<Space | undefined>;
@@ -149,6 +153,38 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return user;
+  }
+
+  // Login 2FA operations
+  async getUserLoginTotp(userId: string): Promise<{ secret: string | null, enabled: boolean }> {
+    const [user] = await db
+      .select({
+        loginTotpSecret: users.loginTotpSecret,
+        loginTotpEnabled: users.loginTotpEnabled,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user) {
+      return { secret: null, enabled: false };
+    }
+
+    return {
+      secret: user.loginTotpSecret ?? null,
+      enabled: user.loginTotpEnabled ?? false,
+    };
+  }
+
+  async setUserLoginTotp(userId: string, secret: string | null, enabled: boolean): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        loginTotpSecret: secret,
+        loginTotpEnabled: enabled,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
   }
 
   // Space operations
