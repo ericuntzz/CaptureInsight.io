@@ -85,6 +85,7 @@ import {
   ChevronRight, 
   Check,
   LogOut,
+  Settings,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -121,14 +122,14 @@ export function UserAccountMenu({
   isCollapsed,
   onSwitchCompany,
   onCreateCompany,
-  onSettings: _onSettings,
+  onSettings,
   onProfile,
   onPreferences: _onPreferences,
   onBilling: _onBilling,
   onHelp: _onHelp,
   onLogout,
 }: UserAccountMenuProps) {
-  void _onSettings; void _onPreferences; void _onBilling; void _onHelp;
+  void _onPreferences; void _onBilling; void _onHelp;
   const [isOpen, setIsOpen] = useState(false);
   const [showCompanySwitch, setShowCompanySwitch] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -324,28 +325,11 @@ export function UserAccountMenu({
             label="Profile"
             onClick={() => handleMenuItemClick(onProfile)}
           />
-          {/* Hidden for now - reintegrate when launching to real userbase
           <MenuItem
             icon={Settings}
             label="Settings"
             onClick={() => handleMenuItemClick(onSettings)}
           />
-          <MenuItem
-            icon={Palette}
-            label="Preferences"
-            onClick={() => handleMenuItemClick(onPreferences)}
-          />
-          <MenuItem
-            icon={Bell}
-            label="Notifications"
-            onClick={() => handleMenuItemClick()}
-          />
-          <MenuItem
-            icon={CreditCard}
-            label="Billing"
-            onClick={() => handleMenuItemClick(onBilling)}
-          />
-          */}
         </div>
 
         {/* Company Switch Section */}

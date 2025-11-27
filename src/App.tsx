@@ -108,7 +108,7 @@ export default function App() {
   
   const handleNavigateToSettings = (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security') => {
     setActiveSettingsPage(page);
-    if (page === 'security') {
+    if (page === 'security' || page === 'settings') {
       router.push('/settings/security');
     }
   };
