@@ -18,6 +18,7 @@ The application's core features include:
 - **Space-scoped Tagging System**: With associations for organization.
 - **Insights Management**: Knowledge cards with status/priority, linked sources, and threaded comments.
 - **AI Chat Integration**: Per insight AI conversations for analysis and RAG-enabled chat.
+- **Insight Workspace**: Unified interface combining data viewing, AI chat, and canvas editing. Features collapsible sections for Data Sources (side-by-side original + extracted data), AI Chat, and a rich text canvas with export options (Markdown, PDF, Slides).
 - **Activity Tracking**: Change logs for user actions.
 - **Screenshot Capture**: Chrome extension for direct webpage capture, supporting tab screenshots, file uploads, and link captures.
 - **Multi-Tenant Data Isolation**: Space and entity-level authorization ensures data privacy.
