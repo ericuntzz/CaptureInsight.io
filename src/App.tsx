@@ -24,6 +24,7 @@ import {
 } from './components/settings';
 import { SecuritySettings } from './pages/SecuritySettings';
 import { InsightWorkspace } from './pages/InsightWorkspace';
+import { ProjectBrowser, Project } from './components/ProjectBrowser';
 import { 
   useSpaces, 
   useCreateSpace, 
@@ -69,7 +70,6 @@ interface FileData {
   file: File;
   timestamp: Date;
 }
-
 
 export default function App() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
@@ -1138,7 +1138,7 @@ export default function App() {
   } else if (currentView === 'workspace') {
     return (
       <InsightWorkspace
-        onBack={() => setCurrentView('capture')}
+        onBack={() => handleViewChange('capture')}
         spaceId={currentSpaceId}
         insightId={null}
       />

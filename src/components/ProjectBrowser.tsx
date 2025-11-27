@@ -8,7 +8,6 @@ import { UserAccountMenu, Company } from './UserAccountMenu';
 import { CreateProjectDialog } from './CreateProjectDialog';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
 import { toast } from 'sonner';
-import type { Project } from '../App';
 import type { DataSource } from './DataSourceSidebar';
 
 // ⚠️ CRITICAL: Sheet analysis preferences sync with CaptureOptionsModal
@@ -106,7 +105,7 @@ export function ProjectBrowser({
   onNavigateToSettings,
   onLogout,
 }: ProjectBrowserProps) {
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set(projects.map(p => p.id)));
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set(Array.isArray(projects) ? projects.map(p => p.id) : []));
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isCollapsed, setIsCollapsed] = useState(false);
   
@@ -223,7 +222,8 @@ export function ProjectBrowser({
 
   // ⚠️ CRITICAL: Get current Space for Space-scoped architecture
   // Only show folders from the current Space
-  const currentSpace = currentSpaceId ? projects.find(p => p.id === currentSpaceId) : projects[0];
+  const safeProjects = Array.isArray(projects) ? projects : [];
+  const currentSpace = currentSpaceId ? safeProjects.find(p => p.id === currentSpaceId) : safeProjects[0];
   const foldersToDisplay = currentSpace?.folders || [];
 
   // Handle create blank Space with auto-edit

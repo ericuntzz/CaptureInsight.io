@@ -32,7 +32,8 @@ export function SpaceSwitcher({
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const currentSpace = spaces.find(s => s.id === currentSpaceId);
+  const safeSpaces = Array.isArray(spaces) ? spaces : [];
+  const currentSpace = safeSpaces.find(s => s.id === currentSpaceId);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -135,7 +136,7 @@ export function SpaceSwitcher({
 
             {/* Space List */}
             <div className="max-h-[400px] overflow-y-auto py-1">
-              {spaces.map(space => (
+              {safeSpaces.map(space => (
                 <button
                   key={space.id}
                   onClick={() => handleSpaceSelect(space.id)}

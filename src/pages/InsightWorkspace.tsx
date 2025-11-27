@@ -1,31 +1,26 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useState, useRef, useEffect } from 'react';
+import { motion } from 'motion/react';
 import {
-  ChevronDown,
-  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Image,
   FileText,
   Link2,
-  Send,
   Copy,
-  FileDown,
-  Presentation,
   Plus,
-  Edit3,
   Code,
-  ArrowLeft,
   Sparkles,
   MessageSquare,
   Database,
   Trash2,
+  X,
+  Presentation,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
 import { useInsight, useCreateInsight, useUpdateInsight } from '../hooks/useInsights';
 import { RichTextEditor } from '../components/RichTextEditor';
-import { Button } from '../components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { copyToClipboard } from '../utils/clipboard';
 
 interface InsightSource {
@@ -36,252 +31,74 @@ interface InsightSource {
   sourceUrl?: string;
 }
 
-interface DataSourceViewerProps {
-  source: InsightSource;
-  sheetData: any;
-  onEditData: (sourceId: string, newData: any) => void;
-  onRemove: (sourceId: string) => void;
-}
-
-function DataSourceViewer({ source, sheetData, onEditData, onRemove }: DataSourceViewerProps) {
-  const [showRawJson, setShowRawJson] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedData, setEditedData] = useState(JSON.stringify(sheetData?.data || {}, null, 2));
-
-  const imageUrl = sheetData?.data?.dataUrl || sheetData?.data?.preview;
-  const extractedContent = sheetData?.data?.extracted || sheetData?.data;
-
-  const handleSaveEdit = () => {
-    try {
-      const parsed = JSON.parse(editedData);
-      onEditData(source.sourceId, parsed);
-      setIsEditing(false);
-      toast.success('Data updated successfully');
-    } catch {
-      toast.error('Invalid JSON format');
-    }
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-[#1A1F2E]/60 border border-[#2A2F3E] rounded-xl p-4 hover:border-[#FF6B35]/30 transition-all"
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          {source.sourceType === 'screenshot' && <Image className="w-4 h-4 text-[#FF6B35]" />}
-          {source.sourceType === 'link' && <Link2 className="w-4 h-4 text-blue-400" />}
-          {source.sourceType === 'file' && <FileText className="w-4 h-4 text-emerald-400" />}
-          <span className="text-sm font-medium text-white">{source.sourceName}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setShowRawJson(!showRawJson)}
-                className="p-1.5 rounded-lg hover:bg-[#2A2F3E] transition-colors"
-              >
-                <Code className={`w-3.5 h-3.5 ${showRawJson ? 'text-[#FF6B35]' : 'text-gray-400'}`} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{showRawJson ? 'Hide Raw Data' : 'View Raw Data'}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => onRemove(source.sourceId)}
-                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Remove Source</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        {imageUrl && (
-          <div className="relative group">
-            <img
-              src={imageUrl}
-              alt={source.sourceName}
-              className="w-full h-40 object-cover rounded-lg border border-[#2A2F3E]"
-            />
-            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-              <button className="px-3 py-1.5 bg-[#FF6B35] rounded-lg text-xs font-medium text-white">
-                View Full Size
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className={`${imageUrl ? '' : 'col-span-2'}`}>
-          {showRawJson ? (
-            <div className="relative">
-              {isEditing ? (
-                <div className="space-y-2">
-                  <textarea
-                    value={editedData}
-                    onChange={(e) => setEditedData(e.target.value)}
-                    className="w-full h-40 bg-[#0A0D12] border border-[#2A2F3E] rounded-lg p-3 text-xs font-mono text-gray-300 focus:border-[#FF6B35] focus:outline-none resize-none"
-                  />
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleSaveEdit} className="bg-[#FF6B35] hover:bg-[#E55A2B]">
-                      Save
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <pre className="bg-[#0A0D12] border border-[#2A2F3E] rounded-lg p-3 text-xs font-mono text-gray-300 overflow-auto max-h-40">
-                    {JSON.stringify(extractedContent, null, 2)}
-                  </pre>
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="absolute top-2 right-2 p-1.5 bg-[#2A2F3E] rounded-lg hover:bg-[#3A3F4E] transition-colors"
-                  >
-                    <Edit3 className="w-3 h-3 text-gray-400" />
-                  </button>
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="bg-[#0A0D12] border border-[#2A2F3E] rounded-lg p-3 h-40 overflow-auto">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Extracted Data
-              </h4>
-              {typeof extractedContent === 'object' ? (
-                <div className="space-y-1.5">
-                  {Object.entries(extractedContent).slice(0, 6).map(([key, value]) => (
-                    <div key={key} className="flex items-start gap-2">
-                      <span className="text-xs text-gray-500 min-w-[80px]">{key}:</span>
-                      <span className="text-xs text-white">
-                        {typeof value === 'string' ? value : JSON.stringify(value)}
-                      </span>
-                    </div>
-                  ))}
-                  {Object.keys(extractedContent).length > 6 && (
-                    <button
-                      onClick={() => setShowRawJson(true)}
-                      className="text-xs text-[#FF6B35] hover:underline"
-                    >
-                      +{Object.keys(extractedContent).length - 6} more fields
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-300">{String(extractedContent)}</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {source.sourceUrl && (
-        <a
-          href={source.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 text-xs text-[#FF6B35] hover:underline flex items-center gap-1"
-        >
-          <Link2 className="w-3 h-3" />
-          {source.sourceUrl}
-        </a>
-      )}
-    </motion.div>
-  );
-}
-
-interface CollapsibleSectionProps {
+interface InsightTab {
+  id: string;
   title: string;
-  icon: React.ReactNode;
-  isOpen: boolean;
-  onToggle: () => void;
-  badge?: string | number;
-  children: React.ReactNode;
-}
-
-function CollapsibleSection({ title, icon, isOpen, onToggle, badge, children }: CollapsibleSectionProps) {
-  return (
-    <div className="border border-[#2A2F3E] rounded-xl overflow-hidden">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 bg-[#1A1F2E]/60 hover:bg-[#1A1F2E] transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          {icon}
-          <span className="font-medium text-white">{title}</span>
-          {badge !== undefined && (
-            <span className="px-2 py-0.5 bg-[#FF6B35]/15 text-[#FF6B35] text-xs font-medium rounded-full">
-              {badge}
-            </span>
-          )}
-        </div>
-        {isOpen ? (
-          <ChevronUp className="w-5 h-5 text-gray-400" />
-        ) : (
-          <ChevronDown className="w-5 h-5 text-gray-400" />
-        )}
-      </button>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="p-4 bg-[#0A0D12]/50">{children}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+  summary: string;
 }
 
 interface InsightWorkspaceProps {
   onBack: () => void;
   spaceId: string | null;
   insightId?: string | null;
+  onSidebarCollapse?: (collapsed: boolean) => void;
 }
 
-export function InsightWorkspace({ onBack, spaceId, insightId }: InsightWorkspaceProps) {
-  useAuth();
-  const [isDataSourcesOpen, setIsDataSourcesOpen] = useState(true);
-  const [isAiChatOpen, setIsAiChatOpen] = useState(true);
-  const [viewMode, setViewMode] = useState<'default' | 'slide' | 'doc'>('default');
-
-  const [insightTitle, setInsightTitle] = useState('New Insight');
-  const [insightContent, setInsightContent] = useState('');
+export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse }: InsightWorkspaceProps) {
+  const { user } = useAuth();
+  
+  // Panel collapse states
+  const [isChatCollapsed, setIsChatCollapsed] = useState(false);
+  const [isCanvasExpanded, setIsCanvasExpanded] = useState(true);
+  const [isDataSourcesExpanded, setIsDataSourcesExpanded] = useState(false);
+  
+  // Insight tabs state
+  const [openTabs, setOpenTabs] = useState<InsightTab[]>([
+    { id: 'default', title: 'Untitled Insight', summary: '' }
+  ]);
+  const [activeTabId, setActiveTabId] = useState('default');
+  
+  // Canvas state
+  const [viewMode, setViewMode] = useState<'default' | 'slide'>('default');
+  const [notes, setNotes] = useState('');
+  const [localTitle, setLocalTitle] = useState('Untitled Insight');
+  
+  // Data sources state
   const [sources, setSources] = useState<InsightSource[]>([]);
   const [sheetsData, setSheetsData] = useState<Record<string, any>>({});
+  
+  // Chat state
   const [aiChatInput, setAiChatInput] = useState('');
   const aiChatContainerRef = useRef<HTMLDivElement>(null);
-
-  const activeInsightId = insightId || `temp-${Date.now()}`;
-
-  const { messages: chatMessages, sendMessage, isLoading: isAiTyping } = useChat({
+  
+  const activeInsightId = insightId || activeTabId;
+  
+  const { messages: chatMessages, sendMessage, isLoading: isAiTyping, clearMessages } = useChat({
     spaceId,
     insightId: activeInsightId,
   });
-
+  
   const { data: insight } = useInsight(insightId || null);
   const updateInsightMutation = useUpdateInsight();
   const createInsightMutation = useCreateInsight();
-
+  
+  // Auto-collapse left sidebar when workspace opens
+  useEffect(() => {
+    onSidebarCollapse?.(true);
+    return () => {
+      onSidebarCollapse?.(false);
+    };
+  }, [onSidebarCollapse]);
+  
+  // Load insight data
   useEffect(() => {
     if (insight) {
-      setInsightTitle(insight.title || 'Untitled Insight');
-      setInsightContent(insight.summary || '');
+      setLocalTitle(insight.title || 'Untitled Insight');
+      setNotes(insight.summary || '');
     }
   }, [insight]);
-
+  
+  // Load sources for insight
   useEffect(() => {
     if (insightId) {
       fetch(`/api/insights/${insightId}/sources`, { credentials: 'include' })
@@ -304,85 +121,55 @@ export function InsightWorkspace({ onBack, spaceId, insightId }: InsightWorkspac
         .catch(console.error);
     }
   }, [insightId]);
-
+  
+  // Auto-scroll chat to bottom
   useEffect(() => {
     if (aiChatContainerRef.current) {
       aiChatContainerRef.current.scrollTop = aiChatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
-
+  
+  // Handle panel toggle logic - Canvas and Data Sources are mutually exclusive when opening
+  // But both can be collapsed at the same time
+  const handleToggleDataSources = () => {
+    if (!isDataSourcesExpanded) {
+      // Opening Data Sources: close Canvas
+      setIsDataSourcesExpanded(true);
+      setIsCanvasExpanded(false);
+    } else {
+      // Closing Data Sources: don't force Canvas open
+      setIsDataSourcesExpanded(false);
+    }
+  };
+  
+  const handleToggleCanvas = () => {
+    if (!isCanvasExpanded) {
+      // Opening Canvas: close Data Sources
+      setIsCanvasExpanded(true);
+      setIsDataSourcesExpanded(false);
+    } else {
+      // Closing Canvas: don't force Data Sources open
+      setIsCanvasExpanded(false);
+    }
+  };
+  
+  const handleToggleChat = () => {
+    setIsChatCollapsed(!isChatCollapsed);
+  };
+  
+  // Chat handlers
   const handleSendMessage = async () => {
-    if (!aiChatInput.trim() || isAiTyping) return;
-    const message = aiChatInput.trim();
+    if (!aiChatInput.trim()) return;
+    const messageContent = aiChatInput.trim();
     setAiChatInput('');
-    await sendMessage(message);
+    await sendMessage(messageContent);
   };
-
-  const handleSaveInsight = async () => {
-    if (!spaceId) {
-      toast.error('Please select a space first');
-      return;
-    }
-
-    try {
-      if (insightId) {
-        await updateInsightMutation.mutateAsync({
-          id: insightId,
-          data: { title: insightTitle, summary: insightContent },
-        });
-        toast.success('Insight saved');
-      } else {
-        await createInsightMutation.mutateAsync({
-          spaceId,
-          data: {
-            title: insightTitle,
-            summary: insightContent,
-            status: 'Open',
-          },
-        });
-        toast.success('Insight created');
-      }
-    } catch (error) {
-      console.error('Error saving insight:', error);
-      toast.error('Failed to save insight');
-    }
+  
+  const handleCopyMessage = (content: string) => {
+    copyToClipboard(content);
+    toast.success('Message copied!');
   };
-
-  const handleEditSourceData = (sourceId: string, newData: any) => {
-    setSheetsData((prev) => ({
-      ...prev,
-      [sourceId]: { ...prev[sourceId], data: newData },
-    }));
-  };
-
-  const handleRemoveSource = (sourceId: string) => {
-    setSources((prev) => prev.filter((s) => s.sourceId !== sourceId));
-    setSheetsData((prev) => {
-      const newData = { ...prev };
-      delete newData[sourceId];
-      return newData;
-    });
-    toast.success('Source removed');
-  };
-
-  const handleExportMarkdown = () => {
-    let markdown = `# ${insightTitle}\n\n`;
-    markdown += insightContent.replace(/<[^>]*>/g, '');
-    markdown += '\n\n---\n\n';
-    markdown += `*Exported from CaptureInsight on ${new Date().toLocaleDateString()}*`;
-
-    copyToClipboard(markdown);
-    toast.success('Markdown copied to clipboard');
-  };
-
-  const handleExportPdf = () => {
-    toast.info('PDF export coming soon');
-  };
-
-  const handleExportSlides = () => {
-    toast.info('Slides export coming soon');
-  };
-
+  
   const formatRelativeTime = (date: Date) => {
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
@@ -391,305 +178,498 @@ export function InsightWorkspace({ onBack, spaceId, insightId }: InsightWorkspac
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
     return date.toLocaleDateString();
   };
+  
+  // Tab handlers
+  const handleCreateNewInsight = () => {
+    const newTab: InsightTab = {
+      id: `insight-${Date.now()}`,
+      title: 'New Chat Insight',
+      summary: '',
+    };
+    setOpenTabs([...openTabs, newTab]);
+    setActiveTabId(newTab.id);
+    setLocalTitle(newTab.title);
+    setNotes('');
+  };
+  
+  const handleCloseTab = (tabId: string) => {
+    if (openTabs.length <= 1) return;
+    const newTabs = openTabs.filter(t => t.id !== tabId);
+    setOpenTabs(newTabs);
+    if (activeTabId === tabId) {
+      setActiveTabId(newTabs[newTabs.length - 1].id);
+    }
+  };
+  
+  const handleSwitchTab = (tabId: string) => {
+    const tab = openTabs.find(t => t.id === tabId);
+    if (tab) {
+      setActiveTabId(tabId);
+      setLocalTitle(tab.title);
+      setNotes(tab.summary);
+    }
+  };
+  
+  // Update tab when title changes
+  const handleTitleBlur = () => {
+    setOpenTabs(tabs => tabs.map(t => 
+      t.id === activeTabId ? { ...t, title: localTitle } : t
+    ));
+  };
+  
+  // Data source handlers
+  const handleEditData = (sourceId: string, newData: any) => {
+    setSheetsData(prev => ({
+      ...prev,
+      [sourceId]: { ...prev[sourceId], data: newData }
+    }));
+  };
+  
+  const handleRemoveSource = (sourceId: string) => {
+    setSources(sources.filter(s => s.sourceId !== sourceId));
+    toast.success('Source removed');
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="min-h-screen bg-[#0A0D12]"
-    >
-      <div className="max-w-6xl mx-auto px-8 py-16">
-        <motion.button
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          onClick={onBack}
-          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-12"
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-200" />
-          <span className="text-sm font-medium">Back</span>
-        </motion.button>
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-8"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <input
-              type="text"
-              value={insightTitle}
-              onChange={(e) => setInsightTitle(e.target.value)}
-              placeholder="Insight Title..."
-              className="text-3xl font-bold tracking-tight text-white bg-transparent border-none outline-none w-full placeholder:text-gray-600"
-            />
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSaveInsight}
-                className="border-[#FF6B35]/30 text-[#FF6B35] hover:bg-[#FF6B35]/10"
+    <div className="h-screen bg-[#1E1E1E] flex overflow-hidden">
+      {/* Left Panel: AI Chat */}
+      <motion.div
+        animate={{ width: isChatCollapsed ? 48 : '30%' }}
+        transition={{ duration: 0.2 }}
+        className="h-full border-r border-[#2A2A2A] flex flex-col bg-[#1A1A1A] flex-shrink-0"
+      >
+        {isChatCollapsed ? (
+          <div className="flex flex-col items-center py-4 h-full">
+            <button
+              onClick={handleToggleChat}
+              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
+              title="Expand Chat"
+            >
+              <MessageSquare className="w-5 h-5" />
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={handleToggleChat}
+              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-end p-2 border-b border-[#2A2A2A]">
+              <button
+                onClick={handleToggleChat}
+                className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+                title="Collapse Chat"
               >
-                Save
-              </Button>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div
+              ref={aiChatContainerRef}
+              className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-hide"
+            >
+              {chatMessages.length === 0 && (
+                <div className="text-center py-8">
+                  <Sparkles className="w-8 h-8 mx-auto mb-3 text-[#FF6B35] opacity-50" />
+                  <p className="text-white mb-1">Start a conversation about this insight</p>
+                  <p className="text-xs text-[#6B7280]">Ask questions, get analysis, or brainstorm ideas (only you can see this chat)</p>
+                </div>
+              )}
+              
+              {chatMessages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex gap-3 group ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className="relative max-w-[85%] rounded-lg p-3 transition-all bg-[#1A1F2E] text-[#E5E7EB]">
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <p className="text-xs opacity-60 mt-1">{formatRelativeTime(message.timestamp)}</p>
+                    
+                    <div className="absolute -top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-[#1A1F2E] border border-[#2D3B4E] rounded px-1 py-1">
+                      <button
+                        onClick={() => handleCopyMessage(message.content)}
+                        className="p-1 text-[#6B7280] hover:text-white transition-colors"
+                        title="Copy message"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {isAiTyping && (
+                <div className="flex gap-3">
+                  <div className="bg-[#1A1F2E] rounded-lg p-3">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex-shrink-0 p-4">
+              <input
+                type="text"
+                value={aiChatInput}
+                onChange={(e) => setAiChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Ask about this insight... (Press Enter to send)"
+                className="w-full px-4 py-3 bg-[#1A1F2E] border border-[#2D3B4E] text-white placeholder:text-[#6B7280] outline-none focus:border-[#FF6B35] transition-colors rounded-[43px] text-[13px]"
+              />
             </div>
           </div>
-          <p className="text-gray-500 text-sm">
-            {insightId ? 'Edit your insight and connected data sources' : 'Create a new insight from your data'}
-          </p>
-        </motion.div>
-
-        <div className="space-y-6">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-          >
-            <CollapsibleSection
-              title="Data Sources"
-              icon={<Database className="w-5 h-5 text-[#FF6B35]" />}
-              isOpen={isDataSourcesOpen}
-              onToggle={() => setIsDataSourcesOpen(!isDataSourcesOpen)}
-              badge={sources.length || undefined}
+        )}
+      </motion.div>
+      
+      {/* Center Panel: Canvas */}
+      <motion.div
+        animate={{ 
+          flex: isCanvasExpanded ? 1 : 0,
+          width: isCanvasExpanded ? '100%' : 48,
+        }}
+        transition={{ duration: 0.2 }}
+        className="h-full flex flex-col bg-[#212121] overflow-hidden"
+        style={{ minWidth: isCanvasExpanded ? 0 : 48 }}
+      >
+        {!isCanvasExpanded ? (
+          <div className="flex flex-col items-center py-4 h-full border-r border-[#2A2A2A]">
+            <button
+              onClick={handleToggleCanvas}
+              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
+              title="Expand Canvas"
             >
-              {sources.length > 0 ? (
-                <div className="space-y-4">
-                  {sources.map((source) => (
-                    <DataSourceViewer
-                      key={source.id}
-                      source={source}
-                      sheetData={sheetsData[source.sourceId]}
-                      onEditData={handleEditSourceData}
-                      onRemove={handleRemoveSource}
+              <FileText className="w-5 h-5" />
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={handleToggleCanvas}
+              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex-shrink-0 bg-[#1E1E1E]">
+              <div className="flex items-center justify-between px-6 py-4 bg-[rgb(33,33,33)]">
+                <div className="flex items-center gap-2 overflow-x-auto flex-1">
+                  {openTabs.map((tab) => {
+                    const isActive = tab.id === activeTabId;
+                    return (
+                      <div
+                        key={tab.id}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-[#2A2A2A] text-white'
+                            : 'text-[#9CA3AF] hover:text-white hover:bg-[#252525]'
+                        }`}
+                        onClick={() => handleSwitchTab(tab.id)}
+                      >
+                        <span className="text-sm whitespace-nowrap max-w-[200px] truncate">
+                          {tab.title}
+                        </span>
+                        {openTabs.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCloseTab(tab.id);
+                            }}
+                            className="text-[#6B7280] hover:text-white transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  
+                  <button
+                    onClick={handleCreateNewInsight}
+                    className="px-3 py-1.5 text-sm text-[#6B7280] hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    + New Insight
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-1 ml-4">
+                  <button
+                    onClick={() => setViewMode('default')}
+                    className={`p-1.5 rounded transition-colors ${
+                      viewMode === 'default'
+                        ? 'text-white bg-[#2A2A2A]'
+                        : 'text-[#6B7280] hover:text-white hover:bg-[#252525]'
+                    }`}
+                    title="Canvas View"
+                  >
+                    <FileText className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('slide')}
+                    className={`p-1.5 rounded transition-colors ${
+                      viewMode === 'slide'
+                        ? 'text-white bg-[#2A2A2A]'
+                        : 'text-[#6B7280] hover:text-white hover:bg-[#252525]'
+                    }`}
+                    title="Slide View"
+                  >
+                    <Presentation className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto">
+              {viewMode === 'slide' ? (
+                <div className="p-12">
+                  <div className="flex flex-col items-center justify-center gap-4">
+                    <div className="w-full max-w-4xl aspect-[16/9] bg-white rounded-lg shadow-2xl p-12 flex flex-col">
+                      <div className="mb-8">
+                        <input
+                          type="text"
+                          value={localTitle}
+                          onChange={(e) => setLocalTitle(e.target.value)}
+                          onBlur={handleTitleBlur}
+                          className="w-full text-4xl text-[#1A1A1A] bg-transparent border-b-2 border-[#E0E0E0] pb-4 outline-none focus:border-[#FF6B35] transition-colors"
+                          placeholder="Click to add title"
+                        />
+                      </div>
+                      <div className="flex-1 border-2 border-[#E0E0E0] rounded p-6 overflow-y-auto">
+                        <textarea
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          placeholder="Click to add text"
+                          className="w-full h-full text-lg text-[#333333] bg-transparent outline-none resize-none"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toast.info('Add slide functionality coming soon!')}
+                      className="w-full max-w-4xl py-4 bg-[#2A2A2A] hover:bg-[#333333] text-white rounded-lg transition-colors flex items-center justify-center gap-2 border border-[#3A3A3A] hover:border-[#FF6B35]"
+                    >
+                      <span className="text-lg">Add Slide +</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-8 py-6">
+                  <input
+                    type="text"
+                    value={localTitle}
+                    onChange={(e) => setLocalTitle(e.target.value)}
+                    onBlur={handleTitleBlur}
+                    className="w-full text-xl text-white bg-transparent border-none outline-none focus:opacity-80 transition-opacity mb-6"
+                    placeholder="Add a title..."
+                  />
+                  
+                  <div className="bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] min-h-[400px]">
+                    <RichTextEditor
+                      content={notes}
+                      onChange={setNotes}
+                      placeholder="Start writing your insight..."
                     />
-                  ))}
-                  <button className="w-full py-3 border-2 border-dashed border-[#2A2F3E] rounded-xl text-gray-500 hover:text-[#FF6B35] hover:border-[#FF6B35]/30 transition-all flex items-center justify-center gap-2">
-                    <Plus className="w-4 h-4" />
-                    <span className="text-sm font-medium">Add Data Source</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </motion.div>
+      
+      {/* Right Panel: Data Sources */}
+      <motion.div
+        animate={{ width: isDataSourcesExpanded ? '35%' : 48 }}
+        transition={{ duration: 0.2 }}
+        className="h-full border-l border-[#2A2A2A] flex flex-col bg-[#1A1A1A] flex-shrink-0"
+      >
+        {!isDataSourcesExpanded ? (
+          <div className="flex flex-col items-center py-4 h-full">
+            <button
+              onClick={handleToggleDataSources}
+              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
+              title="Expand Data Sources"
+            >
+              <Database className="w-5 h-5" />
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={handleToggleDataSources}
+              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-4 border-b border-[#2A2A2A]">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-[#FF6B35]" />
+                <span className="text-sm font-medium text-white">Data Sources</span>
+              </div>
+              <button
+                onClick={handleToggleDataSources}
+                className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+                title="Collapse Data Sources"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {sources.length === 0 ? (
+                <div className="text-center py-8">
+                  <Database className="w-10 h-10 mx-auto mb-3 text-[#6B7280] opacity-50" />
+                  <p className="text-white mb-1">No data sources yet</p>
+                  <p className="text-xs text-[#6B7280] mb-4">Upload screenshots, files, or links to get started</p>
+                  <button
+                    onClick={() => toast.info('Add data source functionality coming soon!')}
+                    className="px-4 py-2 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white text-sm font-medium rounded-lg hover:from-[#E55A2B] hover:to-[#D04A1B] transition-all"
+                  >
+                    <Plus className="w-4 h-4 inline mr-2" />
+                    Add Data Source
                   </button>
                 </div>
               ) : (
-                <div className="text-center py-8">
-                  <Database className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <h4 className="text-white font-medium mb-1">No data sources yet</h4>
-                  <p className="text-gray-500 text-sm mb-4">
-                    Upload screenshots, files, or links to get started
-                  </p>
-                  <Button className="bg-gradient-to-r from-[#FF6B35] to-[#E55A2B]">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Data Source
-                  </Button>
-                </div>
+                <>
+                  {sources.map((source) => (
+                    <DataSourceCard
+                      key={source.id}
+                      source={source}
+                      sheetData={sheetsData[source.sourceId]}
+                      onEditData={handleEditData}
+                      onRemove={handleRemoveSource}
+                    />
+                  ))}
+                  <button
+                    onClick={() => toast.info('Add data source functionality coming soon!')}
+                    className="w-full py-3 border border-dashed border-[#3A3F4E] text-[#6B7280] hover:border-[#FF6B35] hover:text-[#FF6B35] rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Source
+                  </button>
+                </>
               )}
-            </CollapsibleSection>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <CollapsibleSection
-              title="AI Chat"
-              icon={<MessageSquare className="w-5 h-5 text-[#FF6B35]" />}
-              isOpen={isAiChatOpen}
-              onToggle={() => setIsAiChatOpen(!isAiChatOpen)}
-              badge={chatMessages.length || undefined}
-            >
-              <div className="space-y-4">
-                <div
-                  ref={aiChatContainerRef}
-                  className="h-64 overflow-y-auto space-y-3 bg-[#0A0D12] rounded-lg p-4"
-                >
-                  {chatMessages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center">
-                      <Sparkles className="w-8 h-8 text-[#FF6B35]/40 mb-2" />
-                      <p className="text-gray-500 text-sm">
-                        Ask AI about your data sources
-                      </p>
-                      <p className="text-gray-600 text-xs mt-1">
-                        AI can see all connected data and help you extract insights
-                      </p>
-                    </div>
-                  ) : (
-                    chatMessages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-[80%] rounded-xl px-4 py-2.5 ${
-                            msg.role === 'user'
-                              ? 'bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white'
-                              : 'bg-[#1A1F2E] text-gray-300 border border-[#2A2F3E]'
-                          }`}
-                        >
-                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                          <div className="flex items-center justify-between mt-1.5">
-                            <span className="text-[10px] opacity-60">
-                              {formatRelativeTime(msg.timestamp)}
-                            </span>
-                            {msg.role === 'assistant' && (
-                              <button
-                                onClick={() => {
-                                  copyToClipboard(msg.content);
-                                  toast.success('Copied to clipboard');
-                                }}
-                                className="p-1 hover:bg-white/10 rounded transition-colors"
-                              >
-                                <Copy className="w-3 h-3 opacity-60 hover:opacity-100" />
-                              </button>
-                            )}
-                          </div>
-                          {msg.citations && msg.citations.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-white/10">
-                              <p className="text-[10px] opacity-50 mb-1">Sources:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {msg.citations.map((cite, i) => (
-                                  <span
-                                    key={i}
-                                    className="text-[10px] px-1.5 py-0.5 bg-[#FF6B35]/20 rounded text-[#FF6B35]"
-                                  >
-                                    {cite.name}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  {isAiTyping && (
-                    <div className="flex justify-start">
-                      <div className="bg-[#1A1F2E] border border-[#2A2F3E] rounded-xl px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-2 h-2 bg-[#FF6B35] rounded-full animate-bounce" />
-                          <div className="w-2 h-2 bg-[#FF6B35] rounded-full animate-bounce [animation-delay:0.1s]" />
-                          <div className="w-2 h-2 bg-[#FF6B35] rounded-full animate-bounce [animation-delay:0.2s]" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={aiChatInput}
-                    onChange={(e) => setAiChatInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-                    placeholder="Ask AI about your data..."
-                    className="flex-1 px-4 py-3 bg-[#1A1F2E] border border-[#2A2F3E] rounded-full text-white placeholder:text-gray-500 focus:border-[#FF6B35] focus:outline-none text-sm"
-                    disabled={isAiTyping}
-                  />
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={!aiChatInput.trim() || isAiTyping}
-                    className="bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] rounded-full px-5"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </CollapsibleSection>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-          >
-            <div className="border border-[#2A2F3E] rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between p-4 bg-[#1A1F2E]/60 border-b border-[#2A2F3E]">
-                <div className="flex items-center gap-3">
-                  <FileText className="w-5 h-5 text-[#FF6B35]" />
-                  <span className="font-medium text-white">Insight Canvas</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center bg-[#0A0D12] rounded-lg p-0.5">
-                    {(['default', 'slide', 'doc'] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        onClick={() => setViewMode(mode)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                          viewMode === mode
-                            ? 'bg-[#FF6B35] text-white'
-                            : 'text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 bg-[#0A0D12]/50 min-h-[400px]">
-                <RichTextEditor
-                  content={insightContent}
-                  onChange={setInsightContent}
-                  placeholder="Start writing your insight..."
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-[#1A1F2E]/60 border-t border-[#2A2F3E]">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      toast.info('Insert data reference coming soon');
-                    }}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    <Database className="w-4 h-4 mr-2" />
-                    Insert Data
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      toast.info('AI expand coming soon');
-                    }}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    AI Expand
-                  </Button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" size="sm" onClick={handleExportMarkdown}>
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Copy as Markdown</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" size="sm" onClick={handleExportPdf}>
-                        <FileDown className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Export as PDF</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" size="sm" onClick={handleExportSlides}>
-                        <Presentation className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Export as Slides</TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
             </div>
-          </motion.div>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
+interface DataSourceCardProps {
+  source: InsightSource;
+  sheetData: any;
+  onEditData: (sourceId: string, newData: any) => void;
+  onRemove: (sourceId: string) => void;
+}
+
+function DataSourceCard({ source, sheetData, onEditData, onRemove }: DataSourceCardProps) {
+  const [showRawJson, setShowRawJson] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedData, setEditedData] = useState(JSON.stringify(sheetData?.data || {}, null, 2));
+  
+  const imageUrl = sheetData?.data?.dataUrl || sheetData?.data?.preview;
+  const extractedContent = sheetData?.data?.extracted || sheetData?.data;
+  
+  const handleSaveEdit = () => {
+    try {
+      const parsed = JSON.parse(editedData);
+      onEditData(source.sourceId, parsed);
+      setIsEditing(false);
+      toast.success('Data updated');
+    } catch {
+      toast.error('Invalid JSON format');
+    }
+  };
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-[#1A1F2E]/60 border border-[#2A2F3E] rounded-lg p-3 hover:border-[#FF6B35]/30 transition-all"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {source.sourceType === 'screenshot' && <Image className="w-4 h-4 text-[#FF6B35]" />}
+          {source.sourceType === 'link' && <Link2 className="w-4 h-4 text-blue-400" />}
+          {source.sourceType === 'file' && <FileText className="w-4 h-4 text-emerald-400" />}
+          <span className="text-sm font-medium text-white truncate max-w-[150px]">{source.sourceName}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowRawJson(!showRawJson)}
+            className="p-1 rounded hover:bg-[#2A2F3E] transition-colors"
+          >
+            <Code className={`w-3.5 h-3.5 ${showRawJson ? 'text-[#FF6B35]' : 'text-gray-400'}`} />
+          </button>
+          <button
+            onClick={() => onRemove(source.sourceId)}
+            className="p-1 rounded hover:bg-red-500/10 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
+          </button>
         </div>
       </div>
+      
+      {imageUrl && (
+        <div className="relative group mb-2">
+          <img
+            src={imageUrl}
+            alt={source.sourceName}
+            className="w-full h-24 object-cover rounded border border-[#2A2F3E]"
+          />
+        </div>
+      )}
+      
+      {showRawJson && (
+        <div className="mt-2">
+          {isEditing ? (
+            <div className="space-y-2">
+              <textarea
+                value={editedData}
+                onChange={(e) => setEditedData(e.target.value)}
+                className="w-full h-32 text-xs font-mono bg-[#0A0D12] border border-[#2A2F3E] rounded p-2 text-gray-300 outline-none focus:border-[#FF6B35]"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveEdit}
+                  className="px-2 py-1 bg-[#FF6B35] text-white text-xs rounded"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="px-2 py-1 bg-[#2A2F3E] text-gray-300 text-xs rounded"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              onClick={() => setIsEditing(true)}
+              className="bg-[#0A0D12] border border-[#2A2F3E] rounded p-2 cursor-pointer hover:border-[#FF6B35]/30"
+            >
+              <pre className="text-xs font-mono text-gray-400 overflow-x-auto max-h-24">
+                {JSON.stringify(extractedContent, null, 2).slice(0, 200)}
+                {JSON.stringify(extractedContent, null, 2).length > 200 && '...'}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 }
