@@ -1,11 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Shield, ShieldCheck, Lock, Smartphone, Loader2, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Shield, ShieldCheck, Lock, Smartphone, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Switch } from '../components/ui/switch';
-import { Badge } from '../components/ui/badge';
 import { apiRequest } from '../lib/queryClient';
 import { toast } from 'sonner';
 
@@ -27,6 +24,7 @@ interface TwoFAStatus {
 export function SecuritySettings({ onBack, onStartMaxSecuritySetup }: SecuritySettingsProps) {
   const queryClient = useQueryClient();
   const [isSettingUp2FA, setIsSettingUp2FA] = useState(false);
+  void isSettingUp2FA;
 
   const { data: securityStatus, isLoading: securityLoading } = useQuery<SecurityStatus>({
     queryKey: ['/api/security/status'],
@@ -90,18 +88,6 @@ export function SecuritySettings({ onBack, onStartMaxSecuritySetup }: SecuritySe
     updateSecurityModeMutation.mutate(0);
   };
 
-  const handle2FAToggle = (checked: boolean) => {
-    if (checked) {
-      if (!twoFAStatus?.isSetUp) {
-        setIsSettingUp2FA(true);
-      } else {
-        enable2FAMutation.mutate();
-      }
-    } else {
-      disable2FAMutation.mutate();
-    }
-  };
-
   const handleSetup2FA = () => {
     setIsSettingUp2FA(true);
     enable2FAMutation.mutate();
@@ -114,8 +100,16 @@ export function SecuritySettings({ onBack, onStartMaxSecuritySetup }: SecuritySe
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#0F1219]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#FF6B35]" />
+      <div className="flex-1 flex items-center justify-center bg-[#0A0D12]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#FF6B35] to-[#E55A2B] flex items-center justify-center shadow-lg shadow-[#FF6B35]/25">
+              <Shield className="w-6 h-6 text-white" />
+            </div>
+            <div className="absolute inset-0 rounded-full bg-[#FF6B35]/20 animate-ping" />
+          </div>
+          <p className="text-gray-400 text-sm">Loading security settings...</p>
+        </div>
       </div>
     );
   }
@@ -124,73 +118,105 @@ export function SecuritySettings({ onBack, onStartMaxSecuritySetup }: SecuritySe
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex-1 bg-[#0F1219] overflow-auto"
+      transition={{ duration: 0.3 }}
+      className="flex-1 bg-[#0A0D12] overflow-auto"
     >
-      <div className="max-w-3xl mx-auto p-8">
-        <button
+      <div className="max-w-4xl mx-auto py-12 px-8 lg:px-12">
+        <motion.button
           onClick={onBack}
-          className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 }}
+          className="group flex items-center gap-2 text-gray-500 hover:text-white mb-10 transition-all duration-200"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </button>
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-200" />
+          <span className="text-sm font-medium">Back</span>
+        </motion.button>
 
-        <div className="flex items-center gap-4 mb-8">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#FF6B35] to-[#FFA07A] flex items-center justify-center">
-            <Shield className="w-6 h-6 text-white" />
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="flex items-center gap-5 mb-12"
+        >
+          <div className="relative">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FF6B35] to-[#E55A2B] flex items-center justify-center shadow-xl shadow-[#FF6B35]/25">
+              <Shield className="w-7 h-7 text-white" />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#0A0D12] flex items-center justify-center">
+              <div className="w-3 h-3 rounded-full bg-green-500" />
+            </div>
           </div>
           <div>
-            <h1 className="text-2xl font-semibold text-white">Security Settings</h1>
-            <p className="text-gray-400">Manage your data encryption and login security</p>
+            <h1 className="text-3xl font-bold text-white tracking-tight">Security Settings</h1>
+            <p className="text-gray-400 mt-1">Manage your data encryption and login security</p>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="space-y-8">
-          <div>
-            <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
-              Data Encryption
-            </h2>
-            <p className="text-gray-400 text-sm mb-4">
-              Choose how your data is protected. This affects how your captures and insights are encrypted.
-            </p>
+        <div className="space-y-12">
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <div className="mb-6">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-[0.2em] mb-2">
+                Data Encryption
+              </h2>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Choose how your data is protected. This affects how your captures and insights are encrypted.
+              </p>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card 
-                className={`bg-[#1A1F2E] border-2 transition-all cursor-pointer hover:border-[rgba(255,107,53,0.4)] ${
-                  currentSecurityMode === 0 
-                    ? 'border-[#FF6B35]' 
-                    : 'border-[rgba(255,107,53,0.2)]'
-                }`}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <motion.div
+                whileHover={{ y: -2 }}
+                transition={{ duration: 0.2 }}
                 onClick={currentSecurityMode !== 0 ? handleSelectSimple : undefined}
+                className={`relative group cursor-pointer rounded-2xl p-6 transition-all duration-300 ${
+                  currentSecurityMode === 0 
+                    ? 'bg-gradient-to-br from-[#1A1F2E] to-[#161A24] ring-2 ring-[#FF6B35] shadow-lg shadow-[#FF6B35]/10' 
+                    : 'bg-[#1A1F2E]/60 hover:bg-[#1A1F2E] border border-[#2A2F3E] hover:border-[#FF6B35]/30 hover:shadow-lg hover:shadow-[#FF6B35]/5'
+                }`}
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="w-12 h-12 rounded-lg bg-[rgba(255,107,53,0.15)] flex items-center justify-center mb-2">
+                {currentSecurityMode === 0 && (
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#FF6B35]/5 to-transparent pointer-events-none" />
+                )}
+                
+                <div className="relative">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#FF6B35]/20 to-[#FF6B35]/5 border border-[#FF6B35]/10 flex items-center justify-center">
                       <ShieldCheck className="w-6 h-6 text-[#FF6B35]" />
                     </div>
-                    {currentSecurityMode === 0 ? (
-                      <Badge className="bg-[#FF6B35] text-white border-none">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        Current
-                      </Badge>
-                    ) : null}
+                    {currentSecurityMode === 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF6B35]/15 text-[#FF6B35] text-xs font-semibold">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Active
+                      </span>
+                    )}
                   </div>
-                  <CardTitle className="text-white text-lg">Simple Protection</CardTitle>
-                  <CardDescription className="text-gray-400 text-sm">
-                    Your data is encrypted on our servers. Protected against external attacks.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0">
+                  
+                  <h3 className="text-lg font-semibold text-white tracking-tight mb-2">
+                    Simple Protection
+                  </h3>
+                  <p className="text-sm text-gray-400 leading-relaxed mb-5">
+                    Your data is encrypted on our servers. Protected against external attacks with automatic key management.
+                  </p>
+                  
+                  <div className="flex flex-wrap gap-2 mb-5">
+                    <span className="px-2.5 py-1 rounded-md bg-[#2A2F3E] text-xs text-gray-300">Server-side encryption</span>
+                    <span className="px-2.5 py-1 rounded-md bg-[#2A2F3E] text-xs text-gray-300">Account recovery</span>
+                  </div>
+
                   {currentSecurityMode !== 0 && (
                     <Button
-                      variant="outline"
-                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleSelectSimple();
                       }}
                       disabled={updateSecurityModeMutation.isPending}
-                      className="w-full border-[rgba(255,107,53,0.3)] text-white hover:bg-[rgba(255,107,53,0.1)] hover:text-white"
+                      variant="outline"
+                      className="w-full border-[#3A3F4E] hover:border-[#FF6B35]/50 hover:bg-[#FF6B35]/5 text-white font-medium transition-all duration-200"
                     >
                       {updateSecurityModeMutation.isPending ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -198,35 +224,54 @@ export function SecuritySettings({ onBack, onStartMaxSecuritySetup }: SecuritySe
                       Select
                     </Button>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </motion.div>
 
-              <Card 
-                className={`bg-[#1A1F2E] border-2 transition-all cursor-pointer hover:border-[rgba(255,107,53,0.4)] ${
-                  currentSecurityMode === 1 
-                    ? 'border-[#FF6B35]' 
-                    : 'border-[rgba(255,107,53,0.2)]'
-                }`}
+              <motion.div
+                whileHover={{ y: -2 }}
+                transition={{ duration: 0.2 }}
                 onClick={currentSecurityMode !== 1 ? handleUpgradeToMaxSecurity : undefined}
+                className={`relative group cursor-pointer rounded-2xl p-6 transition-all duration-300 ${
+                  currentSecurityMode === 1 
+                    ? 'bg-gradient-to-br from-[#1A1F2E] to-[#161A24] ring-2 ring-[#FF6B35] shadow-lg shadow-[#FF6B35]/10' 
+                    : 'bg-[#1A1F2E]/60 hover:bg-[#1A1F2E] border border-[#2A2F3E] hover:border-[#FF6B35]/30 hover:shadow-lg hover:shadow-[#FF6B35]/5'
+                }`}
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="w-12 h-12 rounded-lg bg-[rgba(255,107,53,0.15)] flex items-center justify-center mb-2">
+                {currentSecurityMode === 1 && (
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#FF6B35]/5 to-transparent pointer-events-none" />
+                )}
+                
+                <div className="relative">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#FF6B35]/20 to-[#FF6B35]/5 border border-[#FF6B35]/10 flex items-center justify-center">
                       <Lock className="w-6 h-6 text-[#FF6B35]" />
                     </div>
                     {currentSecurityMode === 1 ? (
-                      <Badge className="bg-[#FF6B35] text-white border-none">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        Current
-                      </Badge>
-                    ) : null}
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF6B35]/15 text-[#FF6B35] text-xs font-semibold">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 text-xs font-semibold">
+                        <Sparkles className="w-3 h-3" />
+                        Recommended
+                      </span>
+                    )}
                   </div>
-                  <CardTitle className="text-white text-lg">Maximum Security</CardTitle>
-                  <CardDescription className="text-gray-400 text-sm">
-                    End-to-end encryption. Only you can access your data - we can't read it even if we wanted to.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0">
+                  
+                  <h3 className="text-lg font-semibold text-white tracking-tight mb-2">
+                    Maximum Security
+                  </h3>
+                  <p className="text-sm text-gray-400 leading-relaxed mb-5">
+                    End-to-end encryption with zero-knowledge architecture. Only you can access your data.
+                  </p>
+                  
+                  <div className="flex flex-wrap gap-2 mb-5">
+                    <span className="px-2.5 py-1 rounded-md bg-[#2A2F3E] text-xs text-gray-300">E2E encryption</span>
+                    <span className="px-2.5 py-1 rounded-md bg-[#2A2F3E] text-xs text-gray-300">Password + 2FA</span>
+                    <span className="px-2.5 py-1 rounded-md bg-[#2A2F3E] text-xs text-gray-300">Backup codes</span>
+                  </div>
+
                   {currentSecurityMode !== 1 && (
                     <Button
                       onClick={(e) => {
@@ -234,49 +279,61 @@ export function SecuritySettings({ onBack, onStartMaxSecuritySetup }: SecuritySe
                         handleUpgradeToMaxSecurity();
                       }}
                       disabled={updateSecurityModeMutation.isPending}
-                      className="w-full bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
+                      className="w-full bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] text-white font-medium shadow-md shadow-[#FF6B35]/25 transition-all duration-200"
                     >
                       {updateSecurityModeMutation.isPending ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       ) : null}
-                      Upgrade
+                      Upgrade to Maximum Security
                     </Button>
                   )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
-              Login Security
-            </h2>
-            <div className="bg-[#1A1F2E] rounded-xl border border-[rgba(255,107,53,0.2)] p-6">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-lg bg-[rgba(255,107,53,0.15)] flex items-center justify-center flex-shrink-0">
-                  <Smartphone className="w-5 h-5 text-[#FF6B35]" />
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-white font-medium">Two-Factor Authentication</h3>
-                    {is2FASetUp && (
-                      <Switch
-                        checked={is2FAEnabled}
-                        onCheckedChange={handle2FAToggle}
-                        disabled={enable2FAMutation.isPending || disable2FAMutation.isPending}
-                      />
+              </motion.div>
+            </div>
+          </motion.section>
+
+          <div className="h-px bg-gradient-to-r from-transparent via-[#2A2F3E] to-transparent" />
+
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+          >
+            <div className="mb-6">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-[0.2em] mb-2">
+                Login Security
+              </h2>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Additional protection for your account access.
+              </p>
+            </div>
+            
+            <div className="bg-gradient-to-br from-[#1A1F2E] to-[#161A24] rounded-2xl border border-[#2A2F3E] p-6">
+              <div className="flex items-start gap-5">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#FF6B35]/20 to-[#FF6B35]/5 border border-[#FF6B35]/10 flex items-center justify-center flex-shrink-0">
+                  <Smartphone className="w-6 h-6 text-[#FF6B35]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-4 mb-2">
+                    <h3 className="text-lg font-semibold text-white tracking-tight">
+                      Two-Factor Authentication
+                    </h3>
+                    {is2FAEnabled && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Enabled
+                      </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-400 mb-4">
-                    Add an extra layer of security to your account by requiring a verification code when signing in.
+                  <p className="text-sm text-gray-400 leading-relaxed mb-5">
+                    Add an extra layer of security to your account by requiring a verification code from your authenticator app when signing in.
                   </p>
                   
                   {!is2FASetUp ? (
                     <Button
                       onClick={handleSetup2FA}
                       disabled={enable2FAMutation.isPending}
-                      variant="outline"
-                      className="border-[rgba(255,107,53,0.3)] text-white hover:bg-[rgba(255,107,53,0.1)] hover:text-white"
+                      className="bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] text-white font-medium shadow-md shadow-[#FF6B35]/25 transition-all duration-200"
                     >
                       {enable2FAMutation.isPending ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -286,56 +343,47 @@ export function SecuritySettings({ onBack, onStartMaxSecuritySetup }: SecuritySe
                       Set up 2FA
                     </Button>
                   ) : is2FAEnabled ? (
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-green-600/20 text-green-400 border-green-600/30">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        2FA Enabled
-                      </Badge>
-                      <Button
-                        onClick={() => disable2FAMutation.mutate()}
-                        disabled={disable2FAMutation.isPending}
-                        variant="ghost"
-                        size="sm"
-                        className="text-gray-400 hover:text-red-400 hover:bg-red-900/20"
-                      >
-                        {disable2FAMutation.isPending ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          'Disable'
-                        )}
-                      </Button>
-                    </div>
+                    <Button
+                      onClick={() => disable2FAMutation.mutate()}
+                      disabled={disable2FAMutation.isPending}
+                      variant="outline"
+                      className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50 font-medium transition-all duration-200"
+                    >
+                      {disable2FAMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : null}
+                      Disable 2FA
+                    </Button>
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-gray-400 border-gray-600">
-                        2FA Disabled
-                      </Badge>
-                      <Button
-                        onClick={() => enable2FAMutation.mutate()}
-                        disabled={enable2FAMutation.isPending}
-                        variant="ghost"
-                        size="sm"
-                        className="text-[#FF6B35] hover:text-[#FF6B35] hover:bg-[rgba(255,107,53,0.1)]"
-                      >
-                        {enable2FAMutation.isPending ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          'Enable'
-                        )}
-                      </Button>
-                    </div>
+                    <Button
+                      onClick={() => enable2FAMutation.mutate()}
+                      disabled={enable2FAMutation.isPending}
+                      className="bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] text-white font-medium shadow-md shadow-[#FF6B35]/25 transition-all duration-200"
+                    >
+                      {enable2FAMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : null}
+                      Enable 2FA
+                    </Button>
                   )}
                 </div>
               </div>
             </div>
-          </div>
+          </motion.section>
 
-          <div className="bg-[#1A1F2E]/50 rounded-xl border border-[rgba(255,107,53,0.1)] p-4">
-            <p className="text-xs text-gray-500 text-center">
-              Your security is our priority. All data is encrypted in transit using TLS 1.3.
-              For questions about our security practices, contact security@captureinsight.com
-            </p>
-          </div>
+          <motion.footer
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="pt-4"
+          >
+            <div className="flex items-center justify-center gap-2 text-center">
+              <Shield className="w-4 h-4 text-gray-600" />
+              <p className="text-xs text-gray-600">
+                Your security is our priority. All data is encrypted in transit using TLS 1.3.
+              </p>
+            </div>
+          </motion.footer>
         </div>
       </div>
     </motion.div>
