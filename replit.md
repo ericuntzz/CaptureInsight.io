@@ -34,6 +34,20 @@ The Chrome extension, built with Manifest V3 and React in a shadow DOM, provides
 - PII filtering module (`server/ai/piiFilter.ts`) with 14 pattern types can be enabled/disabled and configured per space.
 - AI consent settings are stored in the `spaces` table (`aiSettings` JSONB field) to control `enableAI`, `piiFiltering`, and `allowedPatterns`.
 
+**Two-Tier Encryption System**:
+- **Simple Protection (securityMode: 0)**: Server-side encryption using AES-256-GCM. Data is automatically encrypted/decrypted by the server. Per-user keys are stored encrypted with a master key. Provides protection against external attacks while allowing account recovery.
+- **Maximum Security (securityMode: 1)**: End-to-end encryption (E2EE) with zero-knowledge architecture. Requires password + TOTP 2FA + 8 backup codes. Data is encrypted client-side using Web Crypto API. Server stores only encrypted blobs and cannot access user data.
+- Key derivation uses PBKDF2 with 100,000 iterations for password-based key generation.
+- TOTP uses SHA1/6-digit/30-second standard (OTPAuth library).
+- Backup codes are SHA-256 hashed, one-time use, stored with used codes tracked.
+- Session-based DEK (Data Encryption Key) management clears keys on browser close.
+- Important: Set `ENCRYPTION_MASTER_KEY` environment variable for production (auto-generates in dev).
+
+**Login 2FA** (separate from encryption):
+- Optional TOTP-based two-factor authentication for all users during login.
+- Managed independently from encryption security mode.
+- Available at `/settings/security`.
+
 ## External Dependencies
 - **Database**: PostgreSQL (Neon Serverless)
 - **ORM**: Drizzle ORM
