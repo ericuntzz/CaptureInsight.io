@@ -57,3 +57,84 @@ The Chrome extension, built with Manifest V3 and React in a shadow DOM, provides
     - Gemini 2.5 Pro/Flash (via Replit AI Integrations)
     - OpenAI API (for text embeddings)
 - **Frontend Libraries**: React, Radix UI, Tailwind CSS, TanStack React Query, TipTap, Motion library
+
+## Design System (Stripe-Inspired Premium UI)
+
+### Brand Colors
+- **Primary Orange**: `#FF6B35` (main accent)
+- **Secondary Orange**: `#E55A2B` (hover states, gradients)
+- **Dark Orange**: `#D04A1B` (pressed states)
+- **Background Dark**: `#0A0D12` (page backgrounds)
+- **Card Background**: `#1A1F2E` (cards, containers)
+- **Card Background Alt**: `#161A24` (gradient endpoints)
+- **Border Color**: `#2A2F3E` (subtle borders)
+- **Border Hover**: `#3A3F4E` (interactive borders)
+
+### Spacing Guidelines
+- **Page Padding**: `py-16 px-8 lg:px-16` (generous breathing room)
+- **Section Spacing**: `space-y-16` (large gaps between sections)
+- **Card Padding**: `p-8` (comfortable internal spacing)
+- **Card Gap**: `gap-8` (space between cards in grids)
+- **Header to Content**: `mb-16` (page header to first section)
+- **Section Header to Content**: `mb-8` (section title to cards)
+- **Back Button Margin**: `mb-12` (back button to page header)
+- **Title to Description**: `mb-2` to `mb-3` (tight coupling)
+- **Description to Content**: `mb-6` to `mb-8` (clear separation)
+- **Feature Tags to Button**: `mb-8` (adequate button spacing)
+
+### Typography
+- **Page Title**: `text-3xl font-bold tracking-tight`
+- **Card Title**: `text-xl font-semibold tracking-tight`
+- **Section Label**: `text-xs font-semibold uppercase tracking-[0.2em] text-gray-500`
+- **Body Text**: `text-base leading-relaxed text-gray-400`
+- **Card Description**: `text-sm leading-relaxed text-gray-400`
+- **Button Text**: `font-medium`
+- **Badge Text**: `text-xs font-semibold`
+
+### Component Patterns
+
+#### Cards
+- **Border Radius**: `rounded-2xl`
+- **Default State**: `bg-[#1A1F2E]/60 border border-[#2A2F3E]`
+- **Hover State**: `hover:bg-[#1A1F2E] hover:border-[#FF6B35]/30 hover:shadow-xl hover:shadow-[#FF6B35]/5`
+- **Active/Selected**: `ring-2 ring-[#FF6B35] shadow-xl shadow-[#FF6B35]/10`
+- **Gradient Background**: `bg-gradient-to-br from-[#1A1F2E] to-[#161A24]`
+- **Hover Animation**: `whileHover={{ y: -3 }}` with Motion library
+
+#### Icon Containers
+- **Size**: `w-14 h-14` (large) or `w-12 h-12` (medium)
+- **Border Radius**: `rounded-xl`
+- **Background**: `bg-gradient-to-br from-[#FF6B35]/20 to-[#FF6B35]/5`
+- **Border**: `border border-[#FF6B35]/10`
+
+#### Buttons
+- **Primary**: `bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] shadow-lg shadow-[#FF6B35]/25`
+- **Secondary/Outline**: `border-[#3A3F4E] hover:border-[#FF6B35]/50 hover:bg-[#FF6B35]/5`
+- **Destructive**: `border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50`
+- **Height**: `h-11` or `h-12` for prominence
+- **Transition**: `transition-all duration-200`
+
+#### Badges/Tags
+- **Status Active**: `bg-[#FF6B35]/15 text-[#FF6B35]` with icon
+- **Status Success**: `bg-emerald-500/15 text-emerald-400`
+- **Recommended**: `bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400`
+- **Feature Tag**: `px-3 py-1.5 rounded-lg bg-[#2A2F3E]/80 text-xs text-gray-300 font-medium`
+- **Padding**: `px-3 py-1.5` or `px-3.5 py-1.5`
+- **Border Radius**: `rounded-full` for status, `rounded-lg` for features
+
+#### Section Dividers
+- **Gradient Line**: `h-px bg-gradient-to-r from-transparent via-[#2A2F3E] to-transparent`
+
+### Animations (Motion Library)
+- **Page Enter**: `initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}`
+- **Stagger Elements**: Use `delay: 0.1`, `delay: 0.15`, `delay: 0.2`, etc.
+- **Content Slide**: `initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}`
+- **Back Button**: `initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}`
+- **Hover Lift**: `whileHover={{ y: -3 }} transition={{ duration: 0.2 }}`
+- **Icon Hover**: `group-hover:-translate-x-1 transition-transform duration-200`
+
+### Loading States
+- **Spinner**: Use Loader2 icon with `animate-spin`
+- **Accent Color**: `text-[#FF6B35]`
+- **Pulse Effect**: `animate-ping` on accent element behind main loader
+- **Loading Text**: `text-gray-400 text-sm font-medium`
