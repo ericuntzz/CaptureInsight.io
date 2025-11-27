@@ -22,6 +22,7 @@ import {
   BillingPage,
   CompanyManagementPage,
 } from './components/settings';
+import { SecuritySettings } from './pages/SecuritySettings';
 import { 
   useSpaces, 
   useCreateSpace, 
@@ -95,15 +96,28 @@ export default function App() {
     return 'capture';
   });
   
-  type SettingsPage = 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | null;
-  const [activeSettingsPage, setActiveSettingsPage] = useState<SettingsPage>(null);
+  type SettingsPage = 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security' | null;
+  const [activeSettingsPage, setActiveSettingsPage] = useState<SettingsPage>(() => {
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname === '/settings/security') {
+        return 'security';
+      }
+    }
+    return null;
+  });
   
-  const handleNavigateToSettings = (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies') => {
+  const handleNavigateToSettings = (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security') => {
     setActiveSettingsPage(page);
+    if (page === 'security') {
+      router.push('/settings/security');
+    }
   };
   
   const handleCloseSettings = () => {
     setActiveSettingsPage(null);
+    if (window.location.pathname.startsWith('/settings/')) {
+      router.push('/');
+    }
   };
   
   const handleLogout = () => {
@@ -997,6 +1011,8 @@ export default function App() {
           return <BillingPage onBack={handleCloseSettings} />;
         case 'companies':
           return <CompanyManagementPage onBack={handleCloseSettings} />;
+        case 'security':
+          return <SecuritySettings onBack={handleCloseSettings} />;
         default:
           return null;
       }

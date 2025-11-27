@@ -25,6 +25,9 @@ export const ROUTES = {
   
   // Universal search
   SEARCH: '/search',
+  
+  // Settings
+  SETTINGS_SECURITY: '/settings/security',
 } as const;
 
 // Helper functions to build URLs with parameters
@@ -43,6 +46,7 @@ export const buildRoute = {
   tags: () => ROUTES.TAGS,
   tagDetail: (tagId: string) => `/tags/${tagId}`,
   search: (query?: string) => query ? `/search?q=${encodeURIComponent(query)}` : ROUTES.SEARCH,
+  settingsSecurity: () => ROUTES.SETTINGS_SECURITY,
 };
 
 // Parse URL parameters
@@ -54,6 +58,7 @@ export const parseRoute = {
   isAIChat: (pathname: string) => pathname.startsWith('/ai-assistant'),
   isTags: (pathname: string) => pathname.startsWith('/tags'),
   isSearch: (pathname: string) => pathname.startsWith('/search'),
+  isSettingsSecurity: (pathname: string) => pathname === '/settings/security',
   
   getSpaceId: (pathname: string) => {
     const match = pathname.match(/^\/data\/([^\/]+)/);

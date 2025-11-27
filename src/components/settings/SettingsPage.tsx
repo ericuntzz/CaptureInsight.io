@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 
 interface SettingsPageProps {
   onBack: () => void;
-  onNavigate: (page: 'profile' | 'preferences' | 'notifications' | 'billing' | 'companies') => void;
+  onNavigate: (page: 'profile' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security') => void;
 }
 
 const settingsItems = [
@@ -44,8 +44,8 @@ const securityItems = [
     id: 'security',
     icon: Shield,
     title: 'Security',
-    description: 'Password, two-factor authentication, and sessions',
-    disabled: true,
+    description: 'Data encryption, two-factor authentication, and security settings',
+    disabled: false,
   },
   {
     id: 'api-keys',
@@ -110,27 +110,37 @@ export function SettingsPage({ onBack, onNavigate }: SettingsPageProps) {
           <div>
             <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Security</h2>
             <div className="bg-[#1A1F2E] rounded-xl border border-[rgba(255,107,53,0.2)] overflow-hidden">
-              {securityItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  className={`flex items-center gap-4 p-4 ${item.disabled ? 'opacity-50 cursor-not-allowed' : ''} ${
-                    index !== securityItems.length - 1 ? 'border-b border-[rgba(255,107,53,0.1)]' : ''
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-lg bg-[rgba(255,107,53,0.15)] flex items-center justify-center">
-                    <item.icon className="w-5 h-5 text-[#FF6B35]" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-white font-medium flex items-center gap-2">
-                      {item.title}
-                      {item.disabled && (
-                        <span className="text-xs px-2 py-0.5 bg-gray-700 rounded text-gray-400">Coming Soon</span>
-                      )}
+              {securityItems.map((item, index) => {
+                const isClickable = !item.disabled;
+                const Wrapper = isClickable ? 'button' : 'div';
+                return (
+                  <Wrapper
+                    key={item.id}
+                    onClick={isClickable ? () => onNavigate(item.id as any) : undefined}
+                    className={`w-full flex items-center gap-4 p-4 text-left ${
+                      item.disabled 
+                        ? 'opacity-50 cursor-not-allowed' 
+                        : 'hover:bg-[rgba(255,107,53,0.1)] transition-colors cursor-pointer'
+                    } ${
+                      index !== securityItems.length - 1 ? 'border-b border-[rgba(255,107,53,0.1)]' : ''
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-[rgba(255,107,53,0.15)] flex items-center justify-center">
+                      <item.icon className="w-5 h-5 text-[#FF6B35]" />
                     </div>
-                    <div className="text-sm text-gray-400">{item.description}</div>
-                  </div>
-                </div>
-              ))}
+                    <div className="flex-1">
+                      <div className="text-white font-medium flex items-center gap-2">
+                        {item.title}
+                        {item.disabled && (
+                          <span className="text-xs px-2 py-0.5 bg-gray-700 rounded text-gray-400">Coming Soon</span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-400">{item.description}</div>
+                    </div>
+                    {isClickable && <ArrowLeft className="w-4 h-4 text-gray-400 rotate-180" />}
+                  </Wrapper>
+                );
+              })}
             </div>
           </div>
         </div>
