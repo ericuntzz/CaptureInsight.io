@@ -847,7 +847,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== SHEETS ====================
   app.get('/api/spaces/:spaceId/sheets', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
       const sheets = await storage.getSheets(req.params.spaceId);
+      const securityMode = await serverEncryption.getSecurityMode(userId);
+      
+      if (securityMode === 0) {
+        for (const sheet of sheets) {
+          if (sheet.encryptedData && sheet.encryptionIv && sheet.encryptionVersion === 1) {
+            try {
+              const decryptedData = await serverEncryption.decryptForUser(userId, sheet.encryptedData, sheet.encryptionIv);
+              if (decryptedData) {
+                try {
+                  (sheet as any).data = JSON.parse(decryptedData);
+                } catch {
+                  (sheet as any).data = decryptedData;
+                }
+              }
+            } catch (decryptError) {
+              console.error("Error decrypting sheet data:", decryptError);
+            }
+          }
+        }
+      }
+      
       res.json(sheets);
     } catch (error) {
       console.error("Error fetching sheets:", error);
@@ -857,7 +879,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/folders/:folderId/sheets', isAuthenticated, requireEntityOwner('folder', 'folderId'), async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
       const sheets = await storage.getSheetsByFolder(req.params.folderId);
+      const securityMode = await serverEncryption.getSecurityMode(userId);
+      
+      if (securityMode === 0) {
+        for (const sheet of sheets) {
+          if (sheet.encryptedData && sheet.encryptionIv && sheet.encryptionVersion === 1) {
+            try {
+              const decryptedData = await serverEncryption.decryptForUser(userId, sheet.encryptedData, sheet.encryptionIv);
+              if (decryptedData) {
+                try {
+                  (sheet as any).data = JSON.parse(decryptedData);
+                } catch {
+                  (sheet as any).data = decryptedData;
+                }
+              }
+            } catch (decryptError) {
+              console.error("Error decrypting sheet data:", decryptError);
+            }
+          }
+        }
+      }
+      
       res.json(sheets);
     } catch (error) {
       console.error("Error fetching sheets:", error);
@@ -868,7 +912,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/spaces/:spaceId/sheets', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const sheet = await storage.createSheet({ ...req.body, spaceId: req.params.spaceId, createdBy: userId });
+      const securityMode = await serverEncryption.getSecurityMode(userId);
+      
+      let sheetData = { ...req.body, spaceId: req.params.spaceId, createdBy: userId };
+      
+      if (securityMode === 0 && sheetData.data !== undefined && sheetData.data !== null) {
+        const dataString = typeof sheetData.data === 'string' 
+          ? sheetData.data 
+          : JSON.stringify(sheetData.data);
+        const { encrypted, iv } = await serverEncryption.encryptForUser(userId, dataString);
+        sheetData = {
+          ...sheetData,
+          data: null,
+          encryptedData: encrypted,
+          encryptionIv: iv,
+          encryptionVersion: 1,
+        };
+      }
+      
+      const sheet = await storage.createSheet(sheetData);
       res.status(201).json(sheet);
     } catch (error) {
       console.error("Error creating sheet:", error);
@@ -878,7 +940,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/sheets/:id', isAuthenticated, requireEntityOwner('sheet'), async (req: any, res) => {
     try {
-      res.json(req.entity);
+      const userId = req.user.claims.sub;
+      const sheet = req.entity;
+      
+      if (sheet.encryptedData && sheet.encryptionIv && sheet.encryptionVersion === 1) {
+        const securityMode = await serverEncryption.getSecurityMode(userId);
+        if (securityMode === 0) {
+          try {
+            const decryptedData = await serverEncryption.decryptForUser(userId, sheet.encryptedData, sheet.encryptionIv);
+            if (decryptedData) {
+              try {
+                sheet.data = JSON.parse(decryptedData);
+              } catch {
+                sheet.data = decryptedData;
+              }
+            }
+          } catch (decryptError) {
+            console.error("Error decrypting sheet data:", decryptError);
+          }
+        }
+      }
+      
+      res.json(sheet);
     } catch (error) {
       console.error("Error fetching sheet:", error);
       res.status(500).json({ message: "Failed to fetch sheet" });
@@ -887,7 +970,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/sheets/:id', isAuthenticated, requireEntityOwner('sheet'), async (req: any, res) => {
     try {
-      const sheet = await storage.updateSheet(req.params.id, req.body);
+      const userId = req.user.claims.sub;
+      const securityMode = await serverEncryption.getSecurityMode(userId);
+      
+      let updateData = { ...req.body };
+      
+      if (securityMode === 0 && updateData.data !== undefined && updateData.data !== null) {
+        const dataString = typeof updateData.data === 'string' 
+          ? updateData.data 
+          : JSON.stringify(updateData.data);
+        const { encrypted, iv } = await serverEncryption.encryptForUser(userId, dataString);
+        updateData = {
+          ...updateData,
+          data: null,
+          encryptedData: encrypted,
+          encryptionIv: iv,
+          encryptionVersion: 1,
+        };
+      }
+      
+      const sheet = await storage.updateSheet(req.params.id, updateData);
       if (!sheet) {
         return res.status(404).json({ message: "Sheet not found" });
       }
@@ -1001,7 +1103,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== INSIGHTS ====================
   app.get('/api/spaces/:spaceId/insights', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
       const insights = await storage.getInsights(req.params.spaceId);
+      const securityMode = await serverEncryption.getSecurityMode(userId);
+      
+      if (securityMode === 0) {
+        for (const insight of insights) {
+          if (insight.encryptedSummary && insight.encryptionIv && insight.encryptionVersion === 1) {
+            try {
+              const decryptedSummary = await serverEncryption.decryptForUser(userId, insight.encryptedSummary, insight.encryptionIv);
+              if (decryptedSummary) {
+                (insight as any).summary = decryptedSummary;
+              }
+            } catch (decryptError) {
+              console.error("Error decrypting insight summary:", decryptError);
+            }
+          }
+        }
+      }
+      
       res.json(insights);
     } catch (error) {
       console.error("Error fetching insights:", error);
@@ -1012,7 +1132,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/spaces/:spaceId/insights', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const insight = await storage.createInsight({ ...req.body, spaceId: req.params.spaceId, createdBy: userId });
+      const securityMode = await serverEncryption.getSecurityMode(userId);
+      
+      let insightData = { ...req.body, spaceId: req.params.spaceId, createdBy: userId };
+      
+      if (securityMode === 0 && insightData.summary !== undefined && insightData.summary !== null) {
+        const summaryString = String(insightData.summary);
+        const { encrypted, iv } = await serverEncryption.encryptForUser(userId, summaryString);
+        insightData = {
+          ...insightData,
+          summary: null,
+          encryptedSummary: encrypted,
+          encryptionIv: iv,
+          encryptionVersion: 1,
+        };
+      }
+      
+      const insight = await storage.createInsight(insightData);
       res.status(201).json(insight);
     } catch (error) {
       console.error("Error creating insight:", error);
@@ -1022,7 +1158,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/insights/:id', isAuthenticated, requireEntityOwner('insight'), async (req: any, res) => {
     try {
-      res.json(req.entity);
+      const userId = req.user.claims.sub;
+      const insight = req.entity;
+      
+      if (insight.encryptedSummary && insight.encryptionIv && insight.encryptionVersion === 1) {
+        const securityMode = await serverEncryption.getSecurityMode(userId);
+        if (securityMode === 0) {
+          try {
+            const decryptedSummary = await serverEncryption.decryptForUser(userId, insight.encryptedSummary, insight.encryptionIv);
+            if (decryptedSummary) {
+              insight.summary = decryptedSummary;
+            }
+          } catch (decryptError) {
+            console.error("Error decrypting insight summary:", decryptError);
+          }
+        }
+      }
+      
+      res.json(insight);
     } catch (error) {
       console.error("Error fetching insight:", error);
       res.status(500).json({ message: "Failed to fetch insight" });
@@ -1031,7 +1184,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/insights/:id', isAuthenticated, requireEntityOwner('insight'), async (req: any, res) => {
     try {
-      const insight = await storage.updateInsight(req.params.id, req.body);
+      const userId = req.user.claims.sub;
+      const securityMode = await serverEncryption.getSecurityMode(userId);
+      
+      let updateData = { ...req.body };
+      
+      if (securityMode === 0 && updateData.summary !== undefined && updateData.summary !== null) {
+        const summaryString = String(updateData.summary);
+        const { encrypted, iv } = await serverEncryption.encryptForUser(userId, summaryString);
+        updateData = {
+          ...updateData,
+          summary: null,
+          encryptedSummary: encrypted,
+          encryptionIv: iv,
+          encryptionVersion: 1,
+        };
+      }
+      
+      const insight = await storage.updateInsight(req.params.id, updateData);
       if (!insight) {
         return res.status(404).json({ message: "Insight not found" });
       }
