@@ -14,7 +14,6 @@ import {
   Trash2,
   X,
   Presentation,
-  GripVertical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -150,14 +149,6 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   
   const handleCollapseChat = useCallback(() => {
     chatPanelRef.current?.collapse();
-  }, []);
-  
-  const handleExpandCanvas = useCallback(() => {
-    canvasPanelRef.current?.expand();
-  }, []);
-  
-  const handleExpandData = useCallback(() => {
-    dataPanelRef.current?.expand();
   }, []);
   
   const handleCollapseData = useCallback(() => {
