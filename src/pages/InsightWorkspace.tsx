@@ -249,28 +249,28 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
 
   // Thin subtle resize handle - uses child div for visible line
   const ChatCanvasDragHandle = () => (
-    <ResizableHandle className="w-2 group cursor-col-resize flex items-center justify-center">
-      <div className="w-0.5 h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+    <ResizableHandle className="w-1.5 group cursor-col-resize flex items-center justify-center">
+      <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
     </ResizableHandle>
   );
   
   // Canvas-Data drag handle with double-click to expand canvas
   const CanvasDataDragHandle = () => (
     <ResizableHandle 
-      className="w-2 group cursor-col-resize flex items-center justify-center"
+      className="w-1.5 group cursor-col-resize flex items-center justify-center"
       onDoubleClick={handleDoubleClickExpandCanvas}
     >
-      <div className="w-0.5 h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+      <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
     </ResizableHandle>
   );
   
   // Data-Canvas drag handle (when swapped) with double-click to expand data
   const DataCanvasDragHandle = () => (
     <ResizableHandle 
-      className="w-2 group cursor-col-resize flex items-center justify-center"
+      className="w-1.5 group cursor-col-resize flex items-center justify-center"
       onDoubleClick={handleDoubleClickExpandData}
     >
-      <div className="w-0.5 h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+      <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
     </ResizableHandle>
   );
 
