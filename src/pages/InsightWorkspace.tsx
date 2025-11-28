@@ -27,6 +27,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '../components/ui/resizable';
+import type { ImperativePanelHandle } from 'react-resizable-panels';
 
 interface InsightSource {
   id: string;
@@ -52,15 +53,15 @@ interface InsightWorkspaceProps {
 export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: InsightWorkspaceProps) {
   useAuth();
   
-  // Panel collapse states
+  // Panel refs for imperative control
+  const chatPanelRef = useRef<ImperativePanelHandle>(null);
+  const canvasPanelRef = useRef<ImperativePanelHandle>(null);
+  const dataPanelRef = useRef<ImperativePanelHandle>(null);
+  
+  // Panel collapse states - synced with actual panel state via callbacks
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
   const [isCanvasCollapsed, setIsCanvasCollapsed] = useState(false);
   const [isDataCollapsed, setIsDataCollapsed] = useState(true);
-  
-  // Panel order: when Data is expanded, it swaps position with Canvas
-  // 'normal' = Chat | Canvas | Data
-  // 'swapped' = Chat | Data | Canvas
-  const [panelOrder, setPanelOrder] = useState<'normal' | 'swapped'>('normal');
   
   // Insight tabs state
   const [openTabs, setOpenTabs] = useState<InsightTab[]>([
