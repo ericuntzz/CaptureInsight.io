@@ -19,7 +19,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
-import { useInsight, useCreateInsight, useUpdateInsight } from '../hooks/useInsights';
+import { useInsight } from '../hooks/useInsights';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
 import {
@@ -58,10 +58,10 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   const canvasPanelRef = useRef<ImperativePanelHandle>(null);
   const dataPanelRef = useRef<ImperativePanelHandle>(null);
   
-  // Panel collapse states - synced with actual panel state via callbacks
+  // Panel collapse states - synced with actual panel state via onCollapse/onExpand callbacks
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
   const [isCanvasCollapsed, setIsCanvasCollapsed] = useState(false);
-  const [isDataCollapsed, setIsDataCollapsed] = useState(true);
+  const [isDataCollapsed, setIsDataCollapsed] = useState(false);
   
   // Insight tabs state
   const [openTabs, setOpenTabs] = useState<InsightTab[]>([
@@ -84,14 +84,12 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   
   const activeInsightId = insightId || activeTabId;
   
-  const { messages: chatMessages, sendMessage, isLoading: isAiTyping, clearMessages } = useChat({
+  const { messages: chatMessages, sendMessage, isLoading: isAiTyping } = useChat({
     spaceId,
     insightId: activeInsightId,
   });
   
   const { data: insight } = useInsight(insightId || null);
-  const updateInsightMutation = useUpdateInsight();
-  const createInsightMutation = useCreateInsight();
   
   // Auto-collapse left sidebar when workspace opens
   useEffect(() => {
@@ -140,28 +138,26 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     }
   }, [chatMessages]);
   
-  // Handle panel expand/collapse with order swapping
-  const handleExpandData = useCallback(() => {
-    setIsDataCollapsed(false);
-    setIsCanvasCollapsed(true);
-    setPanelOrder('swapped'); // Data moves next to Chat
+  // Handle panel expand/collapse using imperative panel controls
+  const handleExpandChat = useCallback(() => {
+    chatPanelRef.current?.expand();
+  }, []);
+  
+  const handleCollapseChat = useCallback(() => {
+    chatPanelRef.current?.collapse();
   }, []);
   
   const handleExpandCanvas = useCallback(() => {
-    setIsCanvasCollapsed(false);
-    setIsDataCollapsed(true);
-    setPanelOrder('normal'); // Canvas next to Chat (normal order)
+    canvasPanelRef.current?.expand();
+  }, []);
+  
+  const handleExpandData = useCallback(() => {
+    dataPanelRef.current?.expand();
   }, []);
   
   const handleCollapseData = useCallback(() => {
-    setIsDataCollapsed(true);
-    setIsCanvasCollapsed(false);
-    setPanelOrder('normal');
+    dataPanelRef.current?.collapse();
   }, []);
-  
-  const handleToggleChat = useCallback(() => {
-    setIsChatCollapsed(!isChatCollapsed);
-  }, [isChatCollapsed]);
   
   // Chat handlers
   const handleSendMessage = async () => {
@@ -252,7 +248,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     <div className="flex flex-col h-full bg-[#1A1A1A]">
       <div className="flex items-center justify-end p-2 border-b border-[#2A2A2A]">
         <button
-          onClick={handleToggleChat}
+          onClick={handleCollapseChat}
           className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
           title="Collapse Chat"
         >
@@ -510,18 +506,21 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      <ResizablePanelGroup direction="horizontal" className="h-full" key={`panel-group-${panelOrder}`}>
-        {/* Chat Panel - Always rendered */}
+      <ResizablePanelGroup direction="horizontal" className="h-full">
+        {/* Chat Panel */}
         <ResizablePanel 
-          defaultSize={isChatCollapsed ? 4 : 30} 
-          minSize={isChatCollapsed ? 4 : 15}
-          maxSize={isChatCollapsed ? 4 : 50}
+          ref={chatPanelRef}
+          defaultSize={30} 
+          minSize={4}
+          maxSize={50}
           collapsible={true}
           collapsedSize={4}
+          onCollapse={() => setIsChatCollapsed(true)}
+          onExpand={() => setIsChatCollapsed(false)}
           className="border-r border-[#2A2A2A]"
         >
           {isChatCollapsed ? (
-            <CollapsedPanelContent type="chat" onClick={handleToggleChat} direction="left" />
+            <CollapsedPanelContent type="chat" onClick={handleExpandChat} direction="left" />
           ) : (
             <ChatPanelContent />
           )}
@@ -529,106 +528,42 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
         
         <DragHandle />
         
-        {/* Center and Right Panels - Order depends on panelOrder state */}
-        {panelOrder === 'normal' ? (
-          <>
-            {/* Canvas Panel (center) - Always rendered */}
-            <ResizablePanel 
-              defaultSize={isCanvasCollapsed ? 4 : (isDataCollapsed ? 66 : 46)}
-              minSize={isCanvasCollapsed ? 4 : 20}
-              collapsible={true}
-              collapsedSize={4}
-            >
-              {isCanvasCollapsed ? (
-                <CollapsedPanelContent type="canvas" onClick={handleExpandCanvas} direction="left" />
-              ) : (
-                <motion.div
-                  key="canvas-normal"
-                  className="h-full"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <CanvasPanelContent />
-                </motion.div>
-              )}
-            </ResizablePanel>
-            
-            <DragHandle />
-            
-            {/* Data Panel (right) - Always rendered */}
-            <ResizablePanel 
-              defaultSize={isDataCollapsed ? 4 : 50}
-              minSize={isDataCollapsed ? 4 : 20}
-              collapsible={true}
-              collapsedSize={4}
-              className="border-l border-[#2A2A2A]"
-            >
-              {isDataCollapsed ? (
-                <CollapsedPanelContent type="data" onClick={handleExpandData} direction="right" />
-              ) : (
-                <motion.div
-                  key="data-normal"
-                  className="h-full"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <DataSourcesPanelContent />
-                </motion.div>
-              )}
-            </ResizablePanel>
-          </>
-        ) : (
-          <>
-            {/* Data Panel (center - swapped) - Always rendered */}
-            <ResizablePanel 
-              defaultSize={isDataCollapsed ? 4 : (isCanvasCollapsed ? 66 : 46)}
-              minSize={isDataCollapsed ? 4 : 20}
-              collapsible={true}
-              collapsedSize={4}
-            >
-              {isDataCollapsed ? (
-                <CollapsedPanelContent type="data" onClick={handleExpandData} direction="left" />
-              ) : (
-                <motion.div
-                  key="data-swapped"
-                  className="h-full"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <DataSourcesPanelContent />
-                </motion.div>
-              )}
-            </ResizablePanel>
-            
-            <DragHandle />
-            
-            {/* Canvas Panel (right - swapped) - Always rendered */}
-            <ResizablePanel 
-              defaultSize={isCanvasCollapsed ? 4 : 50}
-              minSize={isCanvasCollapsed ? 4 : 20}
-              collapsible={true}
-              collapsedSize={4}
-              className="border-l border-[#2A2A2A]"
-            >
-              {isCanvasCollapsed ? (
-                <CollapsedPanelContent type="canvas" onClick={handleExpandCanvas} direction="right" />
-              ) : (
-                <motion.div
-                  key="canvas-swapped"
-                  className="h-full"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <CanvasPanelContent />
-                </motion.div>
-              )}
-            </ResizablePanel>
-          </>
-        )}
+        {/* Canvas Panel (center) */}
+        <ResizablePanel 
+          ref={canvasPanelRef}
+          defaultSize={45}
+          minSize={4}
+          collapsible={true}
+          collapsedSize={4}
+          onCollapse={() => setIsCanvasCollapsed(true)}
+          onExpand={() => setIsCanvasCollapsed(false)}
+        >
+          {isCanvasCollapsed ? (
+            <CollapsedPanelContent type="canvas" onClick={handleExpandCanvas} direction="left" />
+          ) : (
+            <CanvasPanelContent />
+          )}
+        </ResizablePanel>
+        
+        <DragHandle />
+        
+        {/* Data Panel (right) */}
+        <ResizablePanel 
+          ref={dataPanelRef}
+          defaultSize={25}
+          minSize={4}
+          collapsible={true}
+          collapsedSize={4}
+          onCollapse={() => setIsDataCollapsed(true)}
+          onExpand={() => setIsDataCollapsed(false)}
+          className="border-l border-[#2A2A2A]"
+        >
+          {isDataCollapsed ? (
+            <CollapsedPanelContent type="data" onClick={handleExpandData} direction="right" />
+          ) : (
+            <DataSourcesPanelContent />
+          )}
+        </ResizablePanel>
       </ResizablePanelGroup>
     </motion.div>
   );
