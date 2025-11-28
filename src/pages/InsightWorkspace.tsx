@@ -14,6 +14,7 @@ import {
   Trash2,
   X,
   Presentation,
+  GripVertical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -27,6 +28,25 @@ import {
   ResizableHandle,
 } from '../components/ui/resizable';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface InsightSource {
   id: string;
@@ -69,10 +89,73 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   // Track if chat was manually collapsed by user
   const [chatManuallyCollapsed, setChatManuallyCollapsed] = useState(false);
   
-  // Panel order for swapping - controls which panel appears next to Chat
-  // 'normal' = Chat | Canvas | Data
-  // 'swapped' = Chat | Data | Canvas
-  const [panelOrder, setPanelOrder] = useState<'normal' | 'swapped'>('normal');
+  // Panel order as array - supports drag-and-drop reordering
+  // Order determines visual position: index 0 = left, index 1 = center, index 2 = right
+  type PanelId = 'chat' | 'canvas' | 'data';
+  const PANEL_ORDER_STORAGE_KEY = 'insight-workspace-panel-order';
+  
+  const getInitialPanelOrder = (): PanelId[] => {
+    try {
+      const saved = localStorage.getItem(PANEL_ORDER_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 3) {
+          return parsed as PanelId[];
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load panel order from localStorage:', e);
+    }
+    return ['chat', 'canvas', 'data'];
+  };
+  
+  const [panelOrder, setPanelOrder] = useState<PanelId[]>(getInitialPanelOrder);
+  const [activeDragId, setActiveDragId] = useState<PanelId | null>(null);
+  
+  // Save panel order to localStorage when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANEL_ORDER_STORAGE_KEY, JSON.stringify(panelOrder));
+    } catch (e) {
+      console.error('Failed to save panel order to localStorage:', e);
+    }
+  }, [panelOrder]);
+  
+  // Get order index for a panel (1-based for react-resizable-panels)
+  const getPanelOrderIndex = (panelId: PanelId): number => {
+    return panelOrder.indexOf(panelId) + 1;
+  };
+  
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Minimum drag distance before activating
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+  
+  // Handle drag start
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(event.active.id as PanelId);
+  };
+  
+  // Handle drag end
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragId(null);
+    
+    if (over && active.id !== over.id) {
+      setPanelOrder((items) => {
+        const oldIndex = items.indexOf(active.id as PanelId);
+        const newIndex = items.indexOf(over.id as PanelId);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
   
   // Calculate continuous opacity for smooth fade during drag (fade between 4% and 10%)
   const getContentOpacity = (size: number) => {
