@@ -57,15 +57,35 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   const canvasPanelRef = useRef<ImperativePanelHandle>(null);
   const dataPanelRef = useRef<ImperativePanelHandle>(null);
   
-  // Panel collapse states - synced with actual panel size via onResize
-  const [isChatCollapsed, setIsChatCollapsed] = useState(false);
-  const [isCanvasCollapsed, setIsCanvasCollapsed] = useState(false);
-  const [isDataCollapsed, setIsDataCollapsed] = useState(false);
+  // Live panel sizes for continuous opacity calculation (0-100)
+  const [chatSize, setChatSize] = useState(30);
+  const [canvasSize, setCanvasSize] = useState(45);
+  const [dataSize, setDataSize] = useState(25);
   
-  // Panel order for swapping when double-clicking to expand
+  // Derived collapsed states (for logic, not rendering)
+  const isCanvasCollapsed = canvasSize < 8;
+  const isDataCollapsed = dataSize < 8;
+  
+  // Track if chat was manually collapsed by user
+  const [chatManuallyCollapsed, setChatManuallyCollapsed] = useState(false);
+  
+  // Panel order for swapping - controls which panel appears next to Chat
   // 'normal' = Chat | Canvas | Data
   // 'swapped' = Chat | Data | Canvas
   const [panelOrder, setPanelOrder] = useState<'normal' | 'swapped'>('normal');
+  
+  // Calculate continuous opacity for smooth fade during drag (fade between 4% and 10%)
+  const getContentOpacity = (size: number) => {
+    if (size <= 4) return 0;
+    if (size >= 10) return 1;
+    return (size - 4) / 6; // Linear fade from 4% to 10%
+  };
+  
+  const getCollapsedOpacity = (size: number) => {
+    if (size <= 4) return 1;
+    if (size >= 10) return 0;
+    return 1 - (size - 4) / 6; // Inverse of content opacity
+  };
   
   // Insight tabs state
   const [openTabs, setOpenTabs] = useState<InsightTab[]>([
@@ -144,10 +164,12 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   
   // Handle panel expand/collapse using imperative panel resize
   const handleExpandChat = useCallback(() => {
+    setChatManuallyCollapsed(false);
     chatPanelRef.current?.resize(30);
   }, []);
   
   const handleCollapseChat = useCallback(() => {
+    setChatManuallyCollapsed(true);
     chatPanelRef.current?.resize(3);
   }, []);
   
@@ -159,25 +181,25 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     canvasPanelRef.current?.resize(3);
   }, []);
   
-  // Double-click handlers for toggle expand/contract with panel swapping
-  const handleDoubleClickExpandCanvas = useCallback(() => {
+  // Expand canvas - swap to normal order, collapse data, keep chat as-is
+  const handleExpandCanvas = useCallback(() => {
     // If canvas is already large (not collapsed), restore to normal sizes
-    // Otherwise expand canvas fully
     if (!isCanvasCollapsed && isDataCollapsed) {
       // Canvas is expanded, restore both to normal sizes
       canvasPanelRef.current?.resize(45);
       dataPanelRef.current?.resize(25);
     } else {
-      // Expand canvas fully, collapse data, normal order
-      canvasPanelRef.current?.resize(67);
+      // Expand canvas fully, collapse data
+      // Don't touch chat - respect chatManuallyCollapsed
+      canvasPanelRef.current?.resize(chatManuallyCollapsed ? 72 : 67);
       dataPanelRef.current?.resize(3);
     }
     setPanelOrder('normal');
-  }, [isCanvasCollapsed, isDataCollapsed]);
+  }, [isCanvasCollapsed, isDataCollapsed, chatManuallyCollapsed]);
   
-  const handleDoubleClickExpandData = useCallback(() => {
+  // Expand data - swap to put data next to chat, collapse canvas, keep chat as-is
+  const handleExpandData = useCallback(() => {
     // If data is already large (not collapsed), restore to normal sizes
-    // Otherwise expand data fully
     if (!isDataCollapsed && isCanvasCollapsed) {
       // Data is expanded, restore both to normal sizes
       dataPanelRef.current?.resize(25);
@@ -185,11 +207,16 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
       setPanelOrder('normal');
     } else {
       // Expand data fully, collapse canvas, swap order so data is next to chat
-      dataPanelRef.current?.resize(67);
+      // Don't touch chat - respect chatManuallyCollapsed
+      dataPanelRef.current?.resize(chatManuallyCollapsed ? 72 : 67);
       canvasPanelRef.current?.resize(3);
       setPanelOrder('swapped');
     }
-  }, [isCanvasCollapsed, isDataCollapsed]);
+  }, [isCanvasCollapsed, isDataCollapsed, chatManuallyCollapsed]);
+  
+  // Double-click handlers use the same expand logic
+  const handleDoubleClickExpandCanvas = handleExpandCanvas;
+  const handleDoubleClickExpandData = handleExpandData;
   
   // Chat handlers
   const handleSendMessage = async () => {
@@ -265,32 +292,6 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   };
 
 
-  // Thin subtle resize handle - uses child div for visible line
-  const ChatCanvasDragHandle = () => (
-    <ResizableHandle className="w-1.5 group cursor-col-resize flex items-center justify-center">
-      <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
-    </ResizableHandle>
-  );
-  
-  // Canvas-Data drag handle with double-click to expand canvas
-  const CanvasDataDragHandle = () => (
-    <ResizableHandle 
-      className="w-1.5 group cursor-col-resize flex items-center justify-center"
-      onDoubleClick={handleDoubleClickExpandCanvas}
-    >
-      <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
-    </ResizableHandle>
-  );
-  
-  // Data-Canvas drag handle (when swapped) with double-click to expand data
-  const DataCanvasDragHandle = () => (
-    <ResizableHandle 
-      className="w-1.5 group cursor-col-resize flex items-center justify-center"
-      onDoubleClick={handleDoubleClickExpandData}
-    >
-      <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
-    </ResizableHandle>
-  );
 
   // Chat Panel Content
   const ChatPanelContent = () => (
@@ -556,6 +557,47 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     );
   };
 
+  // Panel content wrappers with continuous opacity based on live size
+  const PanelContentWrapper = ({ 
+    size, 
+    collapsedContent, 
+    expandedContent 
+  }: { 
+    size: number; 
+    collapsedContent: React.ReactNode; 
+    expandedContent: React.ReactNode;
+  }) => {
+    const contentOpacity = getContentOpacity(size);
+    const collapsedOpacity = getCollapsedOpacity(size);
+    
+    return (
+      <div className="relative h-full w-full overflow-hidden">
+        {/* Collapsed content - fades out as panel grows */}
+        <div 
+          className="absolute inset-0 z-10"
+          style={{ 
+            opacity: collapsedOpacity,
+            pointerEvents: collapsedOpacity > 0.5 ? 'auto' : 'none',
+            transition: 'opacity 100ms ease-out'
+          }}
+        >
+          {collapsedContent}
+        </div>
+        {/* Expanded content - fades in as panel grows */}
+        <div 
+          className="absolute inset-0 z-0"
+          style={{ 
+            opacity: contentOpacity,
+            pointerEvents: contentOpacity > 0.5 ? 'auto' : 'none',
+            transition: 'opacity 100ms ease-out'
+          }}
+        >
+          {expandedContent}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <motion.div 
       className="h-screen bg-[#1E1E1E] flex overflow-hidden"
@@ -563,105 +605,80 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      <ResizablePanelGroup direction="horizontal" className="h-full" key={`panel-group-${panelOrder}`}>
-        {/* Chat Panel - render both contents, show/hide with CSS */}
+      <ResizablePanelGroup direction="horizontal" className="h-full" autoSaveId="insight-workspace-panels">
+        {/* Chat Panel - always first, uses order=1 */}
         <ResizablePanel 
+          id="chat-panel"
           ref={chatPanelRef}
           defaultSize={30} 
           minSize={3}
           maxSize={50}
-          onResize={(size) => setIsChatCollapsed(size < 8)}
+          order={1}
+          onResize={(size) => setChatSize(size)}
         >
-          <div className="relative h-full w-full overflow-hidden">
-            <div className={`absolute inset-0 transition-opacity duration-150 ${isChatCollapsed ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-              <CollapsedPanelContent type="chat" onClick={handleExpandChat} direction="left" />
-            </div>
-            <div className={`absolute inset-0 transition-opacity duration-150 ${isChatCollapsed ? 'opacity-0 z-0 pointer-events-none' : 'opacity-100 z-10'}`}>
-              <ChatPanelContent />
-            </div>
-          </div>
+          <PanelContentWrapper
+            size={chatSize}
+            collapsedContent={<CollapsedPanelContent type="chat" onClick={handleExpandChat} direction="left" />}
+            expandedContent={<ChatPanelContent />}
+          />
         </ResizablePanel>
         
-        <ChatCanvasDragHandle />
+        <ResizableHandle id="chat-center-handle" className="w-1.5 group cursor-col-resize flex items-center justify-center">
+          <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+        </ResizableHandle>
         
-        {/* Center and Right Panels - Order depends on panelOrder state */}
-        {panelOrder === 'normal' ? (
-          <>
-            {/* Canvas Panel (center) */}
-            <ResizablePanel 
-              ref={canvasPanelRef}
-              defaultSize={45}
-              minSize={3}
-              onResize={(size) => setIsCanvasCollapsed(size < 8)}
-            >
-              <div className="relative h-full w-full overflow-hidden">
-                <div className={`absolute inset-0 transition-opacity duration-150 ${isCanvasCollapsed ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-                  <CollapsedPanelContent type="canvas" onClick={handleDoubleClickExpandCanvas} direction="left" />
-                </div>
-                <div className={`absolute inset-0 transition-opacity duration-150 ${isCanvasCollapsed ? 'opacity-0 z-0 pointer-events-none' : 'opacity-100 z-10'}`}>
-                  <CanvasPanelContent />
-                </div>
-              </div>
-            </ResizablePanel>
-            
-            <CanvasDataDragHandle />
-            
-            {/* Data Panel (right) */}
-            <ResizablePanel 
-              ref={dataPanelRef}
-              defaultSize={25}
-              minSize={3}
-              onResize={(size) => setIsDataCollapsed(size < 8)}
-            >
-              <div className="relative h-full w-full overflow-hidden">
-                <div className={`absolute inset-0 transition-opacity duration-150 ${isDataCollapsed ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-                  <CollapsedPanelContent type="data" onClick={handleDoubleClickExpandData} direction="right" />
-                </div>
-                <div className={`absolute inset-0 transition-opacity duration-150 ${isDataCollapsed ? 'opacity-0 z-0 pointer-events-none' : 'opacity-100 z-10'}`}>
-                  <DataSourcesPanelContent />
-                </div>
-              </div>
-            </ResizablePanel>
-          </>
-        ) : (
-          <>
-            {/* Data Panel (center - swapped position) */}
-            <ResizablePanel 
-              ref={dataPanelRef}
-              defaultSize={45}
-              minSize={3}
-              onResize={(size) => setIsDataCollapsed(size < 8)}
-            >
-              <div className="relative h-full w-full overflow-hidden">
-                <div className={`absolute inset-0 transition-opacity duration-150 ${isDataCollapsed ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-                  <CollapsedPanelContent type="data" onClick={handleDoubleClickExpandData} direction="left" />
-                </div>
-                <div className={`absolute inset-0 transition-opacity duration-150 ${isDataCollapsed ? 'opacity-0 z-0 pointer-events-none' : 'opacity-100 z-10'}`}>
-                  <DataSourcesPanelContent />
-                </div>
-              </div>
-            </ResizablePanel>
-            
-            <DataCanvasDragHandle />
-            
-            {/* Canvas Panel (right - swapped position) */}
-            <ResizablePanel 
-              ref={canvasPanelRef}
-              defaultSize={25}
-              minSize={3}
-              onResize={(size) => setIsCanvasCollapsed(size < 8)}
-            >
-              <div className="relative h-full w-full overflow-hidden">
-                <div className={`absolute inset-0 transition-opacity duration-150 ${isCanvasCollapsed ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-                  <CollapsedPanelContent type="canvas" onClick={handleDoubleClickExpandCanvas} direction="right" />
-                </div>
-                <div className={`absolute inset-0 transition-opacity duration-150 ${isCanvasCollapsed ? 'opacity-0 z-0 pointer-events-none' : 'opacity-100 z-10'}`}>
-                  <CanvasPanelContent />
-                </div>
-              </div>
-            </ResizablePanel>
-          </>
-        )}
+        {/* Canvas Panel - order depends on panelOrder state */}
+        <ResizablePanel 
+          id="canvas-panel"
+          ref={canvasPanelRef}
+          defaultSize={45}
+          minSize={3}
+          order={panelOrder === 'normal' ? 2 : 3}
+          onResize={(size) => setCanvasSize(size)}
+        >
+          <PanelContentWrapper
+            size={canvasSize}
+            collapsedContent={
+              <CollapsedPanelContent 
+                type="canvas" 
+                onClick={handleExpandCanvas} 
+                direction={panelOrder === 'normal' ? 'left' : 'right'} 
+              />
+            }
+            expandedContent={<CanvasPanelContent />}
+          />
+        </ResizablePanel>
+        
+        {/* Drag handle between center and right panels - double-click behavior depends on which panel is in center */}
+        <ResizableHandle 
+          id="center-right-handle"
+          className="w-1.5 group cursor-col-resize flex items-center justify-center"
+          onDoubleClick={panelOrder === 'normal' ? handleDoubleClickExpandCanvas : handleDoubleClickExpandData}
+        >
+          <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+        </ResizableHandle>
+        
+        {/* Data Panel - order depends on panelOrder state */}
+        <ResizablePanel 
+          id="data-panel"
+          ref={dataPanelRef}
+          defaultSize={25}
+          minSize={3}
+          order={panelOrder === 'normal' ? 3 : 2}
+          onResize={(size) => setDataSize(size)}
+        >
+          <PanelContentWrapper
+            size={dataSize}
+            collapsedContent={
+              <CollapsedPanelContent 
+                type="data" 
+                onClick={handleExpandData} 
+                direction={panelOrder === 'normal' ? 'right' : 'left'} 
+              />
+            }
+            expandedContent={<DataSourcesPanelContent />}
+          />
+        </ResizablePanel>
       </ResizablePanelGroup>
     </motion.div>
   );
@@ -718,7 +735,9 @@ interface DataSourcesPanelProps {
   onRemoveSource: (sourceId: string) => void;
 }
 
-function DataSourcesPanel({ sources, sheetsData, onToggle, onEditData, onRemoveSource }: DataSourcesPanelProps) {
+function DataSourcesPanel({ sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
+  // Note: sheetsData, onEditData, onRemoveSource are reserved for future real data integration
+  void _sheetsData; void _onEditData; void _onRemoveSource;
   const [activeTab, setActiveTab] = useState<'all' | 'screenshots' | 'files' | 'links'>('all');
   const [selectedMockId, setSelectedMockId] = useState<string | null>(MOCK_DATA_SOURCES[0]?.id || null);
   
