@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,13 +8,13 @@ import {
   Link2,
   Copy,
   Plus,
-  Code,
   Sparkles,
   MessageSquare,
   Database,
   Trash2,
   X,
   Presentation,
+  GripVertical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -22,6 +22,12 @@ import { useChat } from '../hooks/useChat';
 import { useInsight, useCreateInsight, useUpdateInsight } from '../hooks/useInsights';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '../components/ui/resizable';
+import type { ImperativePanelHandle } from 'react-resizable-panels';
 
 interface InsightSource {
   id: string;
@@ -47,10 +53,20 @@ interface InsightWorkspaceProps {
 export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse }: InsightWorkspaceProps) {
   const { user } = useAuth();
   
+  // Panel refs for programmatic control
+  const chatPanelRef = useRef<ImperativePanelHandle>(null);
+  const canvasPanelRef = useRef<ImperativePanelHandle>(null);
+  const dataPanelRef = useRef<ImperativePanelHandle>(null);
+  
   // Panel collapse states
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
-  const [isCanvasExpanded, setIsCanvasExpanded] = useState(true);
-  const [isDataSourcesExpanded, setIsDataSourcesExpanded] = useState(false);
+  const [isCanvasCollapsed, setIsCanvasCollapsed] = useState(false);
+  const [isDataCollapsed, setIsDataCollapsed] = useState(true);
+  
+  // Panel order: when Data is expanded, it swaps position with Canvas
+  // 'normal' = Chat | Canvas | Data
+  // 'swapped' = Chat | Data | Canvas
+  const [panelOrder, setPanelOrder] = useState<'normal' | 'swapped'>('normal');
   
   // Insight tabs state
   const [openTabs, setOpenTabs] = useState<InsightTab[]>([
@@ -129,34 +145,57 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     }
   }, [chatMessages]);
   
-  // Handle panel toggle logic - Canvas and Data Sources are mutually exclusive when opening
-  // Closing Data Sources automatically opens Canvas
-  const handleToggleDataSources = () => {
-    if (!isDataSourcesExpanded) {
-      // Opening Data Sources: close Canvas
-      setIsDataSourcesExpanded(true);
-      setIsCanvasExpanded(false);
-    } else {
-      // Closing Data Sources: auto-open Canvas
-      setIsDataSourcesExpanded(false);
-      setIsCanvasExpanded(true);
-    }
-  };
+  // Handle panel expand/collapse with order swapping
+  const handleExpandData = useCallback(() => {
+    setIsDataCollapsed(false);
+    setIsCanvasCollapsed(true);
+    setPanelOrder('swapped'); // Data moves next to Chat
+    
+    // Resize panels programmatically
+    setTimeout(() => {
+      dataPanelRef.current?.resize(70);
+      canvasPanelRef.current?.resize(0);
+    }, 50);
+  }, []);
   
-  const handleToggleCanvas = () => {
-    if (!isCanvasExpanded) {
-      // Opening Canvas: close Data Sources
-      setIsCanvasExpanded(true);
-      setIsDataSourcesExpanded(false);
-    } else {
-      // Closing Canvas: don't force Data Sources open
-      setIsCanvasExpanded(false);
-    }
-  };
+  const handleExpandCanvas = useCallback(() => {
+    setIsCanvasCollapsed(false);
+    setIsDataCollapsed(true);
+    setPanelOrder('normal'); // Canvas next to Chat (normal order)
+    
+    setTimeout(() => {
+      canvasPanelRef.current?.resize(70);
+      dataPanelRef.current?.resize(0);
+    }, 50);
+  }, []);
   
-  const handleToggleChat = () => {
-    setIsChatCollapsed(!isChatCollapsed);
-  };
+  const handleCollapseData = useCallback(() => {
+    setIsDataCollapsed(true);
+    setIsCanvasCollapsed(false);
+    setPanelOrder('normal');
+    
+    setTimeout(() => {
+      dataPanelRef.current?.resize(0);
+      canvasPanelRef.current?.resize(70);
+    }, 50);
+  }, []);
+  
+  const handleCollapseCanvas = useCallback(() => {
+    setIsCanvasCollapsed(true);
+    // Don't auto-expand data
+    setTimeout(() => {
+      canvasPanelRef.current?.resize(0);
+    }, 50);
+  }, []);
+  
+  const handleToggleChat = useCallback(() => {
+    const newCollapsed = !isChatCollapsed;
+    setIsChatCollapsed(newCollapsed);
+    
+    setTimeout(() => {
+      chatPanelRef.current?.resize(newCollapsed ? 0 : 30);
+    }, 50);
+  }, [isChatCollapsed]);
   
   // Chat handlers
   const handleSendMessage = async () => {
@@ -231,286 +270,405 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     toast.success('Source removed');
   };
 
-  return (
-    <div className="h-screen bg-[#1E1E1E] flex overflow-hidden">
-      {/* Left Panel: AI Chat */}
-      <motion.div
-        animate={{ width: isChatCollapsed ? 48 : '30%' }}
-        transition={{ duration: 0.2 }}
-        className="h-full border-r border-[#2A2A2A] flex flex-col bg-[#1A1A1A] flex-shrink-0"
+  // Collapsed panel rail component
+  const CollapsedRail = ({ 
+    type, 
+    onClick, 
+    direction 
+  }: { 
+    type: 'chat' | 'canvas' | 'data'; 
+    onClick: () => void;
+    direction: 'left' | 'right';
+  }) => {
+    const icons = {
+      chat: <MessageSquare className="w-5 h-5 text-[#6B7280]" />,
+      canvas: <FileText className="w-5 h-5 text-[#6B7280]" />,
+      data: <Database className="w-5 h-5 text-[#6B7280]" />,
+    };
+    
+    const labels = {
+      chat: 'Expand Chat',
+      canvas: 'Expand Canvas',
+      data: 'Expand Data Sources',
+    };
+    
+    return (
+      <button
+        onClick={onClick}
+        className="flex flex-col items-center justify-between py-4 h-full w-12 bg-[#1A1A1A] hover:bg-[#252525] transition-colors cursor-pointer border-x border-[#2A2A2A]"
+        title={labels[type]}
+        aria-label={labels[type]}
       >
-        {isChatCollapsed ? (
-          <button
-            onClick={handleToggleChat}
-            className="flex flex-col items-center py-4 h-full w-full hover:bg-[#252525] transition-colors cursor-pointer"
-            title="Expand Chat"
-            aria-expanded="false"
-            aria-label="Expand Chat Panel"
-          >
-            <MessageSquare className="w-5 h-5 text-[#6B7280]" />
-            <div className="flex-1" />
-            <ChevronRight className="w-4 h-4 text-[#6B7280]" />
-          </button>
+        {icons[type]}
+        <div className="flex-1" />
+        {direction === 'left' ? (
+          <ChevronRight className="w-4 h-4 text-[#6B7280]" />
         ) : (
-          <div className="flex flex-col h-full">
-            <div className="flex items-center justify-end p-2 border-b border-[#2A2A2A]">
-              <button
-                onClick={handleToggleChat}
-                className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
-                title="Collapse Chat"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div
-              ref={aiChatContainerRef}
-              className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-hide"
-            >
-              {chatMessages.length === 0 && (
-                <div className="text-center py-8">
-                  <Sparkles className="w-8 h-8 mx-auto mb-3 text-[#FF6B35] opacity-50" />
-                  <p className="text-white mb-1">Start a conversation about this insight</p>
-                  <p className="text-xs text-[#6B7280]">Ask questions, get analysis, or brainstorm ideas (only you can see this chat)</p>
-                </div>
-              )}
+          <ChevronLeft className="w-4 h-4 text-[#6B7280]" />
+        )}
+      </button>
+    );
+  };
+
+  // Custom resize handle with visible drag grip
+  const DragHandle = () => (
+    <ResizableHandle className="w-1 bg-[#2A2A2A] hover:bg-[#FF6B35] transition-colors relative group cursor-col-resize">
+      <div className="absolute inset-y-0 -left-1 -right-1 flex items-center justify-center">
+        <div className="w-1 h-8 rounded-full bg-[#3A3A3A] group-hover:bg-[#FF6B35] transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+          <GripVertical className="w-3 h-3 text-white" />
+        </div>
+      </div>
+    </ResizableHandle>
+  );
+
+  // Chat Panel Content
+  const ChatPanelContent = () => (
+    <div className="flex flex-col h-full bg-[#1A1A1A]">
+      <div className="flex items-center justify-end p-2 border-b border-[#2A2A2A]">
+        <button
+          onClick={handleToggleChat}
+          className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+          title="Collapse Chat"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+      </div>
+      
+      <div
+        ref={aiChatContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-hide"
+      >
+        {chatMessages.length === 0 && (
+          <div className="text-center py-8">
+            <Sparkles className="w-8 h-8 mx-auto mb-3 text-[#FF6B35] opacity-50" />
+            <p className="text-white mb-1">Start a conversation about this insight</p>
+            <p className="text-xs text-[#6B7280]">Ask questions, get analysis, or brainstorm ideas (only you can see this chat)</p>
+          </div>
+        )}
+        
+        {chatMessages.map((message) => (
+          <div
+            key={message.id}
+            className={`flex gap-3 group ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            <div className="relative max-w-[85%] rounded-lg p-3 transition-all bg-[#1A1F2E] text-[#E5E7EB]">
+              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              <p className="text-xs opacity-60 mt-1">{formatRelativeTime(message.timestamp)}</p>
               
-              {chatMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 group ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              <div className="absolute -top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-[#1A1F2E] border border-[#2D3B4E] rounded px-1 py-1">
+                <button
+                  onClick={() => handleCopyMessage(message.content)}
+                  className="p-1 text-[#6B7280] hover:text-white transition-colors"
+                  title="Copy message"
                 >
-                  <div className="relative max-w-[85%] rounded-lg p-3 transition-all bg-[#1A1F2E] text-[#E5E7EB]">
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                    <p className="text-xs opacity-60 mt-1">{formatRelativeTime(message.timestamp)}</p>
-                    
-                    <div className="absolute -top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-[#1A1F2E] border border-[#2D3B4E] rounded px-1 py-1">
-                      <button
-                        onClick={() => handleCopyMessage(message.content)}
-                        className="p-1 text-[#6B7280] hover:text-white transition-colors"
-                        title="Copy message"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {isAiTyping && (
-                <div className="flex gap-3">
-                  <div className="bg-[#1A1F2E] rounded-lg p-3">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                  </div>
-                </div>
-              )}
+                  <Copy className="w-3 h-3" />
+                </button>
+              </div>
             </div>
-            
-            <div className="flex-shrink-0 p-4">
-              <input
-                type="text"
-                value={aiChatInput}
-                onChange={(e) => setAiChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                placeholder="Ask about this insight... (Press Enter to send)"
-                className="w-full px-4 py-3 bg-[#1A1F2E] border border-[#2D3B4E] text-white placeholder:text-[#6B7280] outline-none focus:border-[#FF6B35] transition-colors rounded-[43px] text-[13px]"
-              />
+          </div>
+        ))}
+        
+        {isAiTyping && (
+          <div className="flex gap-3">
+            <div className="bg-[#1A1F2E] rounded-lg p-3">
+              <div className="flex gap-1">
+                <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
           </div>
         )}
-      </motion.div>
+      </div>
       
-      {/* Center Panel: Canvas */}
-      <motion.div
-        animate={{ 
-          flex: isCanvasExpanded ? 1 : 0,
-          width: isCanvasExpanded ? '100%' : 48,
-        }}
-        transition={{ duration: 0.2 }}
-        className="h-full flex flex-col bg-[#212121] overflow-hidden"
-        style={{ minWidth: isCanvasExpanded ? 0 : 48 }}
-      >
-        {!isCanvasExpanded ? (
-          <button
-            onClick={handleToggleCanvas}
-            className="flex flex-col items-center py-4 h-full w-full border-r border-[#2A2A2A] hover:bg-[#2A2A2A] transition-colors cursor-pointer"
-            title="Expand Canvas"
-            aria-expanded="false"
-            aria-label="Expand Canvas Panel"
-          >
-            <FileText className="w-5 h-5 text-[#6B7280]" />
-            <div className="flex-1" />
-            <ChevronRight className="w-4 h-4 text-[#6B7280]" />
-          </button>
-        ) : (
-          <>
-            <div className="flex-shrink-0 bg-[#1E1E1E]">
-              <div className="flex items-center justify-between px-6 py-4 bg-[rgb(33,33,33)]">
-                <div className="flex items-center gap-2 overflow-x-auto flex-1">
-                  {openTabs.map((tab) => {
-                    const isActive = tab.id === activeTabId;
-                    return (
-                      <div
-                        key={tab.id}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded transition-colors cursor-pointer ${
-                          isActive
-                            ? 'bg-[#2A2A2A] text-white'
-                            : 'text-[#9CA3AF] hover:text-white hover:bg-[#252525]'
-                        }`}
-                        onClick={() => handleSwitchTab(tab.id)}
-                      >
-                        <span className="text-sm whitespace-nowrap max-w-[200px] truncate">
-                          {tab.title}
-                        </span>
-                        {openTabs.length > 1 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCloseTab(tab.id);
-                            }}
-                            className="text-[#6B7280] hover:text-white transition-colors"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                  
-                  <button
-                    onClick={handleCreateNewInsight}
-                    className="px-3 py-1.5 text-sm text-[#6B7280] hover:text-white transition-colors whitespace-nowrap"
-                  >
-                    + New Insight
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-1 ml-4">
-                  <button
-                    onClick={() => setViewMode('default')}
-                    className={`p-1.5 rounded transition-colors ${
-                      viewMode === 'default'
-                        ? 'text-white bg-[#2A2A2A]'
-                        : 'text-[#6B7280] hover:text-white hover:bg-[#252525]'
-                    }`}
-                    title="Canvas View"
-                  >
-                    <FileText className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('slide')}
-                    className={`p-1.5 rounded transition-colors ${
-                      viewMode === 'slide'
-                        ? 'text-white bg-[#2A2A2A]'
-                        : 'text-[#6B7280] hover:text-white hover:bg-[#252525]'
-                    }`}
-                    title="Slide View"
-                  >
-                    <Presentation className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto">
-              {viewMode === 'slide' ? (
-                <div className="p-12">
-                  <div className="flex flex-col items-center justify-center gap-4">
-                    <div className="w-full max-w-4xl aspect-[16/9] bg-white rounded-lg shadow-2xl p-12 flex flex-col">
-                      <div className="mb-8">
-                        <input
-                          type="text"
-                          value={localTitle}
-                          onChange={(e) => setLocalTitle(e.target.value)}
-                          onBlur={handleTitleBlur}
-                          className="w-full text-4xl text-[#1A1A1A] bg-transparent border-b-2 border-[#E0E0E0] pb-4 outline-none focus:border-[#FF6B35] transition-colors"
-                          placeholder="Click to add title"
-                        />
-                      </div>
-                      <div className="flex-1 border-2 border-[#E0E0E0] rounded p-6 overflow-y-auto">
-                        <textarea
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          placeholder="Click to add text"
-                          className="w-full h-full text-lg text-[#333333] bg-transparent outline-none resize-none"
-                        />
-                      </div>
-                    </div>
+      <div className="flex-shrink-0 p-4">
+        <input
+          type="text"
+          value={aiChatInput}
+          onChange={(e) => setAiChatInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSendMessage();
+            }
+          }}
+          placeholder="Ask about this insight... (Press Enter to send)"
+          className="w-full px-4 py-3 bg-[#1A1F2E] border border-[#2D3B4E] text-white placeholder:text-[#6B7280] outline-none focus:border-[#FF6B35] transition-colors rounded-[43px] text-[13px]"
+        />
+      </div>
+    </div>
+  );
+
+  // Canvas Panel Content
+  const CanvasPanelContent = () => (
+    <div className="flex flex-col h-full bg-[#212121]">
+      <div className="flex-shrink-0 bg-[#1E1E1E]">
+        <div className="flex items-center justify-between px-6 py-4 bg-[rgb(33,33,33)]">
+          <div className="flex items-center gap-2 overflow-x-auto flex-1">
+            {openTabs.map((tab) => {
+              const isActive = tab.id === activeTabId;
+              return (
+                <div
+                  key={tab.id}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded transition-colors cursor-pointer ${
+                    isActive
+                      ? 'bg-[#2A2A2A] text-white'
+                      : 'text-[#9CA3AF] hover:text-white hover:bg-[#252525]'
+                  }`}
+                  onClick={() => handleSwitchTab(tab.id)}
+                >
+                  <span className="text-sm whitespace-nowrap max-w-[200px] truncate">
+                    {tab.title}
+                  </span>
+                  {openTabs.length > 1 && (
                     <button
-                      onClick={() => toast.info('Add slide functionality coming soon!')}
-                      className="w-full max-w-4xl py-4 bg-[#2A2A2A] hover:bg-[#333333] text-white rounded-lg transition-colors flex items-center justify-center gap-2 border border-[#3A3A3A] hover:border-[#FF6B35]"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCloseTab(tab.id);
+                      }}
+                      className="text-[#6B7280] hover:text-white transition-colors"
                     >
-                      <span className="text-lg">Add Slide +</span>
+                      <X className="w-3 h-3" />
                     </button>
-                  </div>
+                  )}
                 </div>
-              ) : (
-                <div className="px-8 py-6">
+              );
+            })}
+            
+            <button
+              onClick={handleCreateNewInsight}
+              className="px-3 py-1.5 text-sm text-[#6B7280] hover:text-white transition-colors whitespace-nowrap"
+            >
+              + New Insight
+            </button>
+          </div>
+          
+          <div className="flex items-center gap-1 ml-4">
+            <button
+              onClick={() => setViewMode('default')}
+              className={`p-1.5 rounded transition-colors ${
+                viewMode === 'default'
+                  ? 'text-white bg-[#2A2A2A]'
+                  : 'text-[#6B7280] hover:text-white hover:bg-[#252525]'
+              }`}
+              title="Canvas View"
+            >
+              <FileText className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setViewMode('slide')}
+              className={`p-1.5 rounded transition-colors ${
+                viewMode === 'slide'
+                  ? 'text-white bg-[#2A2A2A]'
+                  : 'text-[#6B7280] hover:text-white hover:bg-[#252525]'
+              }`}
+              title="Slide View"
+            >
+              <Presentation className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto">
+        {viewMode === 'slide' ? (
+          <div className="p-12">
+            <div className="flex flex-col items-center justify-center gap-4">
+              <div className="w-full max-w-4xl aspect-[16/9] bg-white rounded-lg shadow-2xl p-12 flex flex-col">
+                <div className="mb-8">
                   <input
                     type="text"
                     value={localTitle}
                     onChange={(e) => setLocalTitle(e.target.value)}
                     onBlur={handleTitleBlur}
-                    className="w-full text-xl text-white bg-transparent border-none outline-none focus:opacity-80 transition-opacity mb-6"
-                    placeholder="Add a title..."
+                    className="w-full text-4xl text-[#1A1A1A] bg-transparent border-b-2 border-[#E0E0E0] pb-4 outline-none focus:border-[#FF6B35] transition-colors"
+                    placeholder="Click to add title"
                   />
-                  
-                  <div className="bg-[#1A1A1A] rounded-lg min-h-[400px]">
-                    <RichTextEditor
-                      content={notes}
-                      onChange={setNotes}
-                      placeholder="Start writing your insight..."
-                    />
-                  </div>
                 </div>
-              )}
+                <div className="flex-1 border-2 border-[#E0E0E0] rounded p-6 overflow-y-auto">
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Click to add text"
+                    className="w-full h-full text-lg text-[#333333] bg-transparent outline-none resize-none"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={() => toast.info('Add slide functionality coming soon!')}
+                className="w-full max-w-4xl py-4 bg-[#2A2A2A] hover:bg-[#333333] text-white rounded-lg transition-colors flex items-center justify-center gap-2 border border-[#3A3A3A] hover:border-[#FF6B35]"
+              >
+                <span className="text-lg">Add Slide +</span>
+              </button>
             </div>
+          </div>
+        ) : (
+          <div className="px-8 py-6">
+            <input
+              type="text"
+              value={localTitle}
+              onChange={(e) => setLocalTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              className="w-full text-xl text-white bg-transparent border-none outline-none focus:opacity-80 transition-opacity mb-6"
+              placeholder="Add a title..."
+            />
+            
+            <div className="bg-[#1A1A1A] rounded-lg min-h-[400px]">
+              <RichTextEditor
+                content={notes}
+                onChange={setNotes}
+                placeholder="Start writing your insight..."
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Data Sources Panel Content
+  const DataSourcesPanelContent = () => (
+    <DataSourcesPanel
+      sources={sources}
+      sheetsData={sheetsData}
+      onToggle={handleCollapseData}
+      onEditData={handleEditData}
+      onRemoveSource={handleRemoveSource}
+    />
+  );
+
+  return (
+    <motion.div 
+      className="h-screen bg-[#1E1E1E] flex overflow-hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      <ResizablePanelGroup direction="horizontal" className="h-full">
+        {/* Chat Panel */}
+        {isChatCollapsed ? (
+          <CollapsedRail type="chat" onClick={handleToggleChat} direction="left" />
+        ) : (
+          <>
+            <ResizablePanel 
+              ref={chatPanelRef}
+              defaultSize={30} 
+              minSize={20}
+              maxSize={50}
+              className="border-r border-[#2A2A2A]"
+            >
+              <ChatPanelContent />
+            </ResizablePanel>
+            <DragHandle />
           </>
         )}
-      </motion.div>
-      
-      {/* Right Panel: Data Sources - Full width when expanded */}
-      <motion.div
-        animate={{ 
-          flex: isDataSourcesExpanded ? 1 : 0,
-          width: isDataSourcesExpanded ? '100%' : 48,
-        }}
-        transition={{ duration: 0.2 }}
-        className="h-full border-l border-[#2A2A2A] flex flex-col bg-[#1A1A1A]"
-        style={{ minWidth: isDataSourcesExpanded ? 0 : 48, flexShrink: 0 }}
-      >
-        {!isDataSourcesExpanded ? (
-          <button
-            onClick={handleToggleDataSources}
-            className="flex flex-col items-center py-4 h-full w-full hover:bg-[#252525] transition-colors cursor-pointer"
-            title="Expand Data Sources"
-            aria-expanded="false"
-            aria-label="Expand Data Sources Panel"
-          >
-            <Database className="w-5 h-5 text-[#6B7280]" />
-            <div className="flex-1" />
-            <ChevronLeft className="w-4 h-4 text-[#6B7280]" />
-          </button>
-        ) : (
-          <DataSourcesPanel
-            sources={sources}
-            sheetsData={sheetsData}
-            onToggle={handleToggleDataSources}
-            onEditData={handleEditData}
-            onRemoveSource={handleRemoveSource}
-          />
-        )}
-      </motion.div>
-    </div>
+        
+        {/* Center and Right Panels - Order depends on panelOrder state */}
+        <AnimatePresence mode="wait">
+          {panelOrder === 'normal' ? (
+            <>
+              {/* Canvas Panel (center) */}
+              {isCanvasCollapsed ? (
+                <CollapsedRail type="canvas" onClick={handleExpandCanvas} direction="left" />
+              ) : (
+                <>
+                  <ResizablePanel 
+                    ref={canvasPanelRef}
+                    defaultSize={70}
+                    minSize={20}
+                  >
+                    <motion.div
+                      key="canvas-normal"
+                      className="h-full"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <CanvasPanelContent />
+                    </motion.div>
+                  </ResizablePanel>
+                  <DragHandle />
+                </>
+              )}
+              
+              {/* Data Panel (right) */}
+              {isDataCollapsed ? (
+                <CollapsedRail type="data" onClick={handleExpandData} direction="right" />
+              ) : (
+                <ResizablePanel 
+                  ref={dataPanelRef}
+                  defaultSize={0}
+                  minSize={20}
+                  className="border-l border-[#2A2A2A]"
+                >
+                  <motion.div
+                    key="data-normal"
+                    className="h-full"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <DataSourcesPanelContent />
+                  </motion.div>
+                </ResizablePanel>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Data Panel (center - swapped) */}
+              {isDataCollapsed ? (
+                <CollapsedRail type="data" onClick={handleExpandData} direction="left" />
+              ) : (
+                <>
+                  <ResizablePanel 
+                    ref={dataPanelRef}
+                    defaultSize={70}
+                    minSize={20}
+                  >
+                    <motion.div
+                      key="data-swapped"
+                      className="h-full"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <DataSourcesPanelContent />
+                    </motion.div>
+                  </ResizablePanel>
+                  <DragHandle />
+                </>
+              )}
+              
+              {/* Canvas Panel (right - swapped) */}
+              {isCanvasCollapsed ? (
+                <CollapsedRail type="canvas" onClick={handleExpandCanvas} direction="right" />
+              ) : (
+                <ResizablePanel 
+                  ref={canvasPanelRef}
+                  defaultSize={0}
+                  minSize={20}
+                  className="border-l border-[#2A2A2A]"
+                >
+                  <motion.div
+                    key="canvas-swapped"
+                    className="h-full"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <CanvasPanelContent />
+                  </motion.div>
+                </ResizablePanel>
+              )}
+            </>
+          )}
+        </AnimatePresence>
+      </ResizablePanelGroup>
+    </motion.div>
   );
 }
 
@@ -593,7 +751,7 @@ function DataSourcesPanel({ sources, sheetsData, onToggle, onEditData, onRemoveS
     : null;
   
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-[#1A1A1A]">
       {/* Header with tabs */}
       <div className="flex-shrink-0 border-b border-[#2A2A2A]">
         <div className="flex items-center justify-between px-4 py-3">
@@ -613,16 +771,16 @@ function DataSourcesPanel({ sources, sheetsData, onToggle, onEditData, onRemoveS
           </button>
         </div>
         
-        {/* Tab bar */}
-        <div className="flex items-center gap-1 px-4 pb-2">
+        {/* Tabs */}
+        <div className="flex border-t border-[#2A2A2A]">
           {(['all', 'screenshots', 'files', 'links'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
                 activeTab === tab
-                  ? 'bg-[#FF6B35]/20 text-[#FF6B35]'
-                  : 'text-[#6B7280] hover:text-white hover:bg-[#2A2A2A]'
+                  ? 'text-[#FF6B35] border-b-2 border-[#FF6B35] bg-[#FF6B35]/5'
+                  : 'text-gray-400 hover:text-white hover:bg-[#252525]'
               }`}
             >
               {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -631,96 +789,70 @@ function DataSourcesPanel({ sources, sheetsData, onToggle, onEditData, onRemoveS
         </div>
       </div>
       
-      {/* Content area - split view for mock data */}
+      {/* Content area - split view */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Source list */}
-        <div className="w-64 flex-shrink-0 border-r border-[#2A2A2A] overflow-y-auto">
-          <div className="p-3 space-y-2">
-            {filteredSources.map((source) => {
-              const isMock = useMockData;
-              const mockSource = source as typeof MOCK_DATA_SOURCES[0];
-              const realSource = source as InsightSource;
-              const isSelected = isMock ? mockSource.id === selectedMockId : false;
-              
-              return (
-                <div
-                  key={isMock ? mockSource.id : realSource.id}
-                  onClick={() => isMock && setSelectedMockId(mockSource.id)}
-                  className={`p-3 rounded-lg cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-[#FF6B35]/10 border border-[#FF6B35]/30'
-                      : 'bg-[#1A1F2E]/60 border border-[#2A2F3E] hover:border-[#FF6B35]/20'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    {(isMock ? mockSource.type : realSource.sourceType) === 'screenshot' && (
-                      <Image className="w-4 h-4 text-[#FF6B35]" />
-                    )}
-                    {(isMock ? mockSource.type : realSource.sourceType) === 'file' && (
-                      <FileText className="w-4 h-4 text-emerald-400" />
-                    )}
-                    {(isMock ? mockSource.type : realSource.sourceType) === 'link' && (
-                      <Link2 className="w-4 h-4 text-blue-400" />
-                    )}
-                    <span className="text-sm font-medium text-white truncate">
-                      {isMock ? mockSource.name : realSource.sourceName}
-                    </span>
-                  </div>
-                  {isMock && (
-                    <p className="text-xs text-[#6B7280]">{mockSource.date}</p>
-                  )}
-                </div>
-              );
-            })}
+        {/* Sources list */}
+        <div className="w-1/3 border-r border-[#2A2A2A] overflow-y-auto">
+          {filteredSources.map((source) => {
+            const mockSource = source as typeof MOCK_DATA_SOURCES[0];
+            const isSelected = useMockData && selectedMockId === mockSource.id;
             
-            <button
-              onClick={() => toast.info('Add data source functionality coming soon!')}
-              className="w-full py-3 border border-dashed border-[#3A3F4E] text-[#6B7280] hover:border-[#FF6B35] hover:text-[#FF6B35] rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add Source
-            </button>
-          </div>
+            return (
+              <div
+                key={mockSource.id}
+                onClick={() => useMockData && setSelectedMockId(mockSource.id)}
+                className={`p-3 border-b border-[#2A2A2A] cursor-pointer transition-colors ${
+                  isSelected ? 'bg-[#FF6B35]/10 border-l-2 border-l-[#FF6B35]' : 'hover:bg-[#252525]'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  {mockSource.type === 'screenshot' && <Image className="w-3.5 h-3.5 text-blue-400" />}
+                  {mockSource.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
+                  {mockSource.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
+                  <span className="text-xs text-gray-400">{mockSource.type}</span>
+                </div>
+                <p className="text-sm text-white truncate">{mockSource.name}</p>
+                <p className="text-xs text-gray-500 mt-1">{mockSource.date}</p>
+              </div>
+            );
+          })}
         </div>
         
-        {/* Detail view */}
+        {/* Selected source detail */}
         <div className="flex-1 overflow-y-auto p-4">
           {selectedMockSource ? (
             <div className="space-y-4">
               {/* Preview image */}
               {selectedMockSource.preview && (
-                <div className="relative group">
-                  <img
-                    src={selectedMockSource.preview}
+                <div className="rounded-lg overflow-hidden border border-[#2A2A2A]">
+                  <img 
+                    src={selectedMockSource.preview} 
                     alt={selectedMockSource.name}
-                    className="w-full h-48 object-cover rounded-lg border border-[#2A2F3E]"
+                    className="w-full h-48 object-cover"
                   />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                    <button className="px-4 py-2 bg-[#FF6B35] text-white text-sm font-medium rounded-lg">
-                      View Full Size
-                    </button>
-                  </div>
                 </div>
               )}
               
               {/* Source info */}
               <div>
-                <h3 className="text-lg font-semibold text-white mb-1">{selectedMockSource.name}</h3>
-                <p className="text-sm text-[#6B7280]">
-                  Captured on {selectedMockSource.date} • {selectedMockSource.type}
-                </p>
+                <h3 className="text-lg font-medium text-white mb-2">{selectedMockSource.name}</h3>
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  {selectedMockSource.type === 'screenshot' && <Image className="w-3.5 h-3.5 text-blue-400" />}
+                  {selectedMockSource.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
+                  {selectedMockSource.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
+                  <span className="capitalize">{selectedMockSource.type}</span>
+                  <span>•</span>
+                  <span>{selectedMockSource.date}</span>
+                </div>
               </div>
               
               {/* Extracted data */}
-              <div className="bg-[#1A1F2E]/60 border border-[#2A2F3E] rounded-lg p-4">
-                <h4 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[#FF6B35]" />
-                  Extracted Data
-                </h4>
+              <div className="bg-[#212121] rounded-lg p-4 border border-[#2A2A2A]">
+                <h4 className="text-sm font-medium text-[#FF6B35] mb-3">Extracted Data</h4>
                 <div className="grid grid-cols-2 gap-3">
                   {Object.entries(selectedMockSource.extractedData).map(([key, value]) => (
-                    <div key={key} className="bg-[#0A0D12] rounded-lg p-3">
-                      <p className="text-xs text-[#6B7280] mb-1">{key}</p>
+                    <div key={key} className="bg-[#1A1A1A] rounded-lg p-3">
+                      <p className="text-xs text-gray-400 mb-1">{key}</p>
                       <p className="text-sm font-medium text-white">{value}</p>
                     </div>
                   ))}
@@ -728,144 +860,45 @@ function DataSourcesPanel({ sources, sheetsData, onToggle, onEditData, onRemoveS
               </div>
               
               {/* Actions */}
-              <div className="flex items-center gap-2">
-                <button className="flex-1 px-4 py-2 bg-[#2A2F3E] text-white text-sm font-medium rounded-lg hover:bg-[#3A3F4E] transition-colors flex items-center justify-center gap-2">
-                  <Copy className="w-4 h-4" />
-                  Copy Data
+              <div className="flex gap-2">
+                <button
+                  onClick={() => toast.info('Edit functionality coming soon!')}
+                  className="flex-1 py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-sm rounded-lg transition-colors"
+                >
+                  Edit Data
                 </button>
-                <button className="flex-1 px-4 py-2 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white text-sm font-medium rounded-lg hover:from-[#E55A2B] hover:to-[#D04A1B] transition-all flex items-center justify-center gap-2">
-                  <Sparkles className="w-4 h-4" />
-                  Analyze with AI
+                <button
+                  onClick={() => {
+                    if (selectedMockId) {
+                      setSelectedMockId(null);
+                      toast.success('Source removed');
+                    }
+                  }}
+                  className="py-2 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-            </div>
-          ) : !useMockData && sources.length > 0 ? (
-            <div className="space-y-4">
-              {sources.map((source) => (
-                <DataSourceCard
-                  key={source.id}
-                  source={source}
-                  sheetData={sheetsData[source.sourceId]}
-                  onEditData={onEditData}
-                  onRemove={onRemoveSource}
-                />
-              ))}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <Database className="w-12 h-12 text-[#6B7280] opacity-50 mb-3" />
-              <p className="text-white mb-1">Select a data source</p>
-              <p className="text-xs text-[#6B7280]">Choose from the list to view details</p>
+              <Database className="w-12 h-12 text-[#3A3A3A] mb-3" />
+              <p className="text-gray-400 text-sm">Select a data source to view details</p>
             </div>
           )}
         </div>
+      </div>
+      
+      {/* Add source button */}
+      <div className="flex-shrink-0 p-4 border-t border-[#2A2A2A]">
+        <button
+          onClick={() => toast.info('Add data source functionality coming soon!')}
+          className="w-full py-2.5 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] text-white text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Add Data Source
+        </button>
       </div>
     </div>
-  );
-}
-
-interface DataSourceCardProps {
-  source: InsightSource;
-  sheetData: any;
-  onEditData: (sourceId: string, newData: any) => void;
-  onRemove: (sourceId: string) => void;
-}
-
-function DataSourceCard({ source, sheetData, onEditData, onRemove }: DataSourceCardProps) {
-  const [showRawJson, setShowRawJson] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedData, setEditedData] = useState(JSON.stringify(sheetData?.data || {}, null, 2));
-  
-  const imageUrl = sheetData?.data?.dataUrl || sheetData?.data?.preview;
-  const extractedContent = sheetData?.data?.extracted || sheetData?.data;
-  
-  const handleSaveEdit = () => {
-    try {
-      const parsed = JSON.parse(editedData);
-      onEditData(source.sourceId, parsed);
-      setIsEditing(false);
-      toast.success('Data updated');
-    } catch {
-      toast.error('Invalid JSON format');
-    }
-  };
-  
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-[#1A1F2E]/60 border border-[#2A2F3E] rounded-lg p-3 hover:border-[#FF6B35]/30 transition-all"
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          {source.sourceType === 'screenshot' && <Image className="w-4 h-4 text-[#FF6B35]" />}
-          {source.sourceType === 'link' && <Link2 className="w-4 h-4 text-blue-400" />}
-          {source.sourceType === 'file' && <FileText className="w-4 h-4 text-emerald-400" />}
-          <span className="text-sm font-medium text-white truncate max-w-[150px]">{source.sourceName}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setShowRawJson(!showRawJson)}
-            className="p-1 rounded hover:bg-[#2A2F3E] transition-colors"
-          >
-            <Code className={`w-3.5 h-3.5 ${showRawJson ? 'text-[#FF6B35]' : 'text-gray-400'}`} />
-          </button>
-          <button
-            onClick={() => onRemove(source.sourceId)}
-            className="p-1 rounded hover:bg-red-500/10 transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
-          </button>
-        </div>
-      </div>
-      
-      {imageUrl && (
-        <div className="relative group mb-2">
-          <img
-            src={imageUrl}
-            alt={source.sourceName}
-            className="w-full h-24 object-cover rounded border border-[#2A2F3E]"
-          />
-        </div>
-      )}
-      
-      {showRawJson && (
-        <div className="mt-2">
-          {isEditing ? (
-            <div className="space-y-2">
-              <textarea
-                value={editedData}
-                onChange={(e) => setEditedData(e.target.value)}
-                className="w-full h-32 text-xs font-mono bg-[#0A0D12] border border-[#2A2F3E] rounded p-2 text-gray-300 outline-none focus:border-[#FF6B35]"
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSaveEdit}
-                  className="px-2 py-1 bg-[#FF6B35] text-white text-xs rounded"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-2 py-1 bg-[#2A2F3E] text-gray-300 text-xs rounded"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div
-              onClick={() => setIsEditing(true)}
-              className="bg-[#0A0D12] border border-[#2A2F3E] rounded p-2 cursor-pointer hover:border-[#FF6B35]/30"
-            >
-              <pre className="text-xs font-mono text-gray-400 overflow-x-auto max-h-24">
-                {JSON.stringify(extractedContent, null, 2).slice(0, 200)}
-                {JSON.stringify(extractedContent, null, 2).length > 200 && '...'}
-              </pre>
-            </div>
-          )}
-        </div>
-      )}
-    </motion.div>
   );
 }

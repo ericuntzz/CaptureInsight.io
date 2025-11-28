@@ -1136,7 +1136,7 @@ export default function App() {
       />
     );
   } else if (currentView === 'workspace') {
-    // Workspace view with original ProjectBrowser sidebar
+    // Workspace view with auto-collapsed ProjectBrowser sidebar
     const handleWorkspaceSelectSheet = (projectId: string, _folderId: string, _sheetId: string) => {
       setCurrentSpaceId(projectId);
     };
@@ -1206,11 +1206,8 @@ export default function App() {
     };
     
     const handleWorkspaceViewChange = (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace') => {
-      // All navigation options should work from the workspace sidebar
-      // 'ai' is a sub-view of data management, so navigate to data view (AI panel is there)
       if (view === 'ai') {
         handleViewChange('data');
-        // Note: AI Assistant is accessed within the Data Management view
       } else if (view === 'data' || view === 'changelogs' || view === 'insights' || view === 'workspace') {
         handleViewChange(view);
       }
@@ -1218,7 +1215,7 @@ export default function App() {
     
     return (
       <div className="h-screen bg-[#0A0E1A] flex overflow-hidden">
-        {/* Original Left Sidebar - Project Browser */}
+        {/* Original Left Sidebar - Project Browser (auto-collapsed) */}
         <ProjectBrowser
           projects={Array.isArray(spaces) ? spaces : []}
           currentSpaceId={currentSpaceId}
@@ -1239,6 +1236,7 @@ export default function App() {
           activeView="workspace"
           onViewChange={handleWorkspaceViewChange}
           onBackToCapture={() => handleViewChange('capture')}
+          externalCollapseControl={true}
           user={user}
           onNavigateToSettings={handleNavigateToSettings}
           onLogout={handleLogout}
