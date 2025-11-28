@@ -1136,12 +1136,123 @@ export default function App() {
       />
     );
   } else if (currentView === 'workspace') {
+    // Workspace view with original ProjectBrowser sidebar
+    const handleWorkspaceSelectSheet = (projectId: string, _folderId: string, _sheetId: string) => {
+      setCurrentSpaceId(projectId);
+    };
+    
+    const handleWorkspaceCreateProject = async (data: { name: string; description: string; goals: string; instructions: string }) => {
+      try {
+        await createSpaceMutation.mutateAsync({
+          name: data.name,
+          description: data.description,
+          goals: data.goals,
+          instructions: data.instructions,
+        });
+        toast.success(`Space "${data.name}" created!`);
+      } catch (error) {
+        console.error('Error creating space:', error);
+        toast.error('Failed to create space');
+      }
+    };
+    
+    const handleWorkspaceUpdateProject = async (projectId: string, data: { name: string; goals: string; instructions: string }) => {
+      try {
+        await updateSpaceMutation.mutateAsync({
+          id: projectId,
+          data: { name: data.name, goals: data.goals, instructions: data.instructions },
+        });
+        toast.success('Space updated!');
+      } catch (error) {
+        console.error('Error updating space:', error);
+        toast.error('Failed to update space');
+      }
+    };
+    
+    const handleWorkspaceDeleteProject = async (projectId: string) => {
+      try {
+        await deleteSpaceMutation.mutateAsync(projectId);
+        toast.success('Space deleted');
+        if (currentSpaceId === projectId && spaces.length > 1) {
+          const remaining = spaces.filter(s => s.id !== projectId);
+          if (remaining.length > 0) {
+            setCurrentSpaceId(remaining[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('Error deleting space:', error);
+        toast.error('Failed to delete space');
+      }
+    };
+    
+    const handleWorkspaceUpdateFolder = async (_spaceId: string, folderId: string, name: string) => {
+      try {
+        await updateFolderMutation.mutateAsync({ id: folderId, name });
+        toast.success(`Folder renamed to "${name}"!`);
+      } catch (error) {
+        console.error('Error renaming folder:', error);
+        toast.error('Failed to rename folder');
+      }
+    };
+    
+    const handleWorkspaceDeleteFolder = async (_spaceId: string, folderId: string) => {
+      try {
+        await deleteFolderMutation.mutateAsync(folderId);
+        toast.success('Folder deleted');
+      } catch (error) {
+        console.error('Error deleting folder:', error);
+        toast.error('Failed to delete folder');
+      }
+    };
+    
+    const handleWorkspaceViewChange = (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace') => {
+      // All navigation options should work from the workspace sidebar
+      // 'ai' is a sub-view of data management, so navigate to data view (AI panel is there)
+      if (view === 'ai') {
+        handleViewChange('data');
+        // Note: AI Assistant is accessed within the Data Management view
+      } else if (view === 'data' || view === 'changelogs' || view === 'insights' || view === 'workspace') {
+        handleViewChange(view);
+      }
+    };
+    
     return (
-      <InsightWorkspace
-        onBack={() => handleViewChange('capture')}
-        spaceId={currentSpaceId}
-        insightId={null}
-      />
+      <div className="h-screen bg-[#0A0E1A] flex overflow-hidden">
+        {/* Original Left Sidebar - Project Browser */}
+        <ProjectBrowser
+          projects={Array.isArray(spaces) ? spaces : []}
+          currentSpaceId={currentSpaceId}
+          onSpaceChange={setCurrentSpaceId}
+          onCreateBlankSpace={handleCreateBlankSpace}
+          selectedSheet={null}
+          onSelectSheet={handleWorkspaceSelectSheet}
+          onCreateProject={handleWorkspaceCreateProject}
+          onUpdateProject={handleWorkspaceUpdateProject}
+          onDeleteProject={handleWorkspaceDeleteProject}
+          onUpdateFolder={handleWorkspaceUpdateFolder}
+          onDeleteFolder={handleWorkspaceDeleteFolder}
+          onCreateFolder={handleCreateFolder}
+          onAddDataCapture={() => {
+            handleViewChange('capture');
+            toast.info('Create a new capture');
+          }}
+          activeView="workspace"
+          onViewChange={handleWorkspaceViewChange}
+          onBackToCapture={() => handleViewChange('capture')}
+          user={user}
+          onNavigateToSettings={handleNavigateToSettings}
+          onLogout={handleLogout}
+        />
+        
+        {/* Main Workspace Content */}
+        <div className="flex-1 overflow-hidden">
+          <InsightWorkspace
+            onBack={() => handleViewChange('capture')}
+            spaceId={currentSpaceId}
+            insightId={null}
+          />
+        </div>
+      </div>
     );
   }
 
