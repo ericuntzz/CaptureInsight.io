@@ -130,15 +130,16 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   }, [chatMessages]);
   
   // Handle panel toggle logic - Canvas and Data Sources are mutually exclusive when opening
-  // But both can be collapsed at the same time
+  // Closing Data Sources automatically opens Canvas
   const handleToggleDataSources = () => {
     if (!isDataSourcesExpanded) {
       // Opening Data Sources: close Canvas
       setIsDataSourcesExpanded(true);
       setIsCanvasExpanded(false);
     } else {
-      // Closing Data Sources: don't force Canvas open
+      // Closing Data Sources: auto-open Canvas
       setIsDataSourcesExpanded(false);
+      setIsCanvasExpanded(true);
     }
   };
   
@@ -239,22 +240,17 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         className="h-full border-r border-[#2A2A2A] flex flex-col bg-[#1A1A1A] flex-shrink-0"
       >
         {isChatCollapsed ? (
-          <div className="flex flex-col items-center py-4 h-full">
-            <button
-              onClick={handleToggleChat}
-              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
-              title="Expand Chat"
-            >
-              <MessageSquare className="w-5 h-5" />
-            </button>
+          <button
+            onClick={handleToggleChat}
+            className="flex flex-col items-center py-4 h-full w-full hover:bg-[#252525] transition-colors cursor-pointer"
+            title="Expand Chat"
+            aria-expanded="false"
+            aria-label="Expand Chat Panel"
+          >
+            <MessageSquare className="w-5 h-5 text-[#6B7280]" />
             <div className="flex-1" />
-            <button
-              onClick={handleToggleChat}
-              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+            <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+          </button>
         ) : (
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-end p-2 border-b border-[#2A2A2A]">
@@ -344,22 +340,17 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         style={{ minWidth: isCanvasExpanded ? 0 : 48 }}
       >
         {!isCanvasExpanded ? (
-          <div className="flex flex-col items-center py-4 h-full border-r border-[#2A2A2A]">
-            <button
-              onClick={handleToggleCanvas}
-              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
-              title="Expand Canvas"
-            >
-              <FileText className="w-5 h-5" />
-            </button>
+          <button
+            onClick={handleToggleCanvas}
+            className="flex flex-col items-center py-4 h-full w-full border-r border-[#2A2A2A] hover:bg-[#2A2A2A] transition-colors cursor-pointer"
+            title="Expand Canvas"
+            aria-expanded="false"
+            aria-label="Expand Canvas Panel"
+          >
+            <FileText className="w-5 h-5 text-[#6B7280]" />
             <div className="flex-1" />
-            <button
-              onClick={handleToggleCanvas}
-              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+            <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+          </button>
         ) : (
           <>
             <div className="flex-shrink-0 bg-[#1E1E1E]">
@@ -473,7 +464,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
                     placeholder="Add a title..."
                   />
                   
-                  <div className="bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] min-h-[400px]">
+                  <div className="bg-[#1A1A1A] rounded-lg min-h-[400px]">
                     <RichTextEditor
                       content={notes}
                       onChange={setNotes}
@@ -487,83 +478,288 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         )}
       </motion.div>
       
-      {/* Right Panel: Data Sources */}
+      {/* Right Panel: Data Sources - Full width when expanded */}
       <motion.div
-        animate={{ width: isDataSourcesExpanded ? '35%' : 48 }}
+        animate={{ 
+          flex: isDataSourcesExpanded ? 1 : 0,
+          width: isDataSourcesExpanded ? '100%' : 48,
+        }}
         transition={{ duration: 0.2 }}
-        className="h-full border-l border-[#2A2A2A] flex flex-col bg-[#1A1A1A] flex-shrink-0"
+        className="h-full border-l border-[#2A2A2A] flex flex-col bg-[#1A1A1A]"
+        style={{ minWidth: isDataSourcesExpanded ? 0 : 48, flexShrink: 0 }}
       >
         {!isDataSourcesExpanded ? (
-          <div className="flex flex-col items-center py-4 h-full">
-            <button
-              onClick={handleToggleDataSources}
-              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
-              title="Expand Data Sources"
-            >
-              <Database className="w-5 h-5" />
-            </button>
+          <button
+            onClick={handleToggleDataSources}
+            className="flex flex-col items-center py-4 h-full w-full hover:bg-[#252525] transition-colors cursor-pointer"
+            title="Expand Data Sources"
+            aria-expanded="false"
+            aria-label="Expand Data Sources Panel"
+          >
+            <Database className="w-5 h-5 text-[#6B7280]" />
             <div className="flex-1" />
-            <button
-              onClick={handleToggleDataSources}
-              className="p-2 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-          </div>
+            <ChevronLeft className="w-4 h-4 text-[#6B7280]" />
+          </button>
         ) : (
-          <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between p-4 border-b border-[#2A2A2A]">
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-[#FF6B35]" />
-                <span className="text-sm font-medium text-white">Data Sources</span>
-              </div>
-              <button
-                onClick={handleToggleDataSources}
-                className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
-                title="Collapse Data Sources"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {sources.length === 0 ? (
-                <div className="text-center py-8">
-                  <Database className="w-10 h-10 mx-auto mb-3 text-[#6B7280] opacity-50" />
-                  <p className="text-white mb-1">No data sources yet</p>
-                  <p className="text-xs text-[#6B7280] mb-4">Upload screenshots, files, or links to get started</p>
-                  <button
-                    onClick={() => toast.info('Add data source functionality coming soon!')}
-                    className="px-4 py-2 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white text-sm font-medium rounded-lg hover:from-[#E55A2B] hover:to-[#D04A1B] transition-all"
-                  >
-                    <Plus className="w-4 h-4 inline mr-2" />
-                    Add Data Source
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {sources.map((source) => (
-                    <DataSourceCard
-                      key={source.id}
-                      source={source}
-                      sheetData={sheetsData[source.sourceId]}
-                      onEditData={handleEditData}
-                      onRemove={handleRemoveSource}
-                    />
-                  ))}
-                  <button
-                    onClick={() => toast.info('Add data source functionality coming soon!')}
-                    className="w-full py-3 border border-dashed border-[#3A3F4E] text-[#6B7280] hover:border-[#FF6B35] hover:text-[#FF6B35] rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Source
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+          <DataSourcesPanel
+            sources={sources}
+            sheetsData={sheetsData}
+            onToggle={handleToggleDataSources}
+            onEditData={handleEditData}
+            onRemoveSource={handleRemoveSource}
+          />
         )}
       </motion.div>
+    </div>
+  );
+}
+
+// Mock data for demonstration
+const MOCK_DATA_SOURCES = [
+  {
+    id: 'mock-1',
+    name: 'Q4 Sales Dashboard',
+    type: 'screenshot' as const,
+    preview: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop',
+    date: '2024-11-25',
+    extractedData: {
+      'Total Revenue': '$2.4M',
+      'Growth Rate': '+15.3%',
+      'Active Customers': '12,847',
+      'Top Product': 'Enterprise Plan',
+    },
+  },
+  {
+    id: 'mock-2',
+    name: 'Customer Feedback Survey',
+    type: 'file' as const,
+    preview: null,
+    date: '2024-11-24',
+    extractedData: {
+      'Response Rate': '68%',
+      'NPS Score': '72',
+      'Satisfaction': '4.5/5',
+      'Top Concern': 'Pricing',
+    },
+  },
+  {
+    id: 'mock-3',
+    name: 'Competitor Analysis Report',
+    type: 'link' as const,
+    preview: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop',
+    date: '2024-11-23',
+    extractedData: {
+      'Market Share': '23%',
+      'Key Differentiator': 'AI Features',
+      'Pricing Gap': '-12%',
+      'Feature Parity': '85%',
+    },
+  },
+];
+
+interface DataSourcesPanelProps {
+  sources: InsightSource[];
+  sheetsData: Record<string, any>;
+  onToggle: () => void;
+  onEditData: (sourceId: string, newData: any) => void;
+  onRemoveSource: (sourceId: string) => void;
+}
+
+function DataSourcesPanel({ sources, sheetsData, onToggle, onEditData, onRemoveSource }: DataSourcesPanelProps) {
+  const [activeTab, setActiveTab] = useState<'all' | 'screenshots' | 'files' | 'links'>('all');
+  const [selectedMockId, setSelectedMockId] = useState<string | null>(MOCK_DATA_SOURCES[0]?.id || null);
+  
+  const useMockData = sources.length === 0;
+  const displaySources = useMockData ? MOCK_DATA_SOURCES : sources;
+  
+  const filteredSources = displaySources.filter(source => {
+    if (activeTab === 'all') return true;
+    if (useMockData) {
+      const mockSource = source as typeof MOCK_DATA_SOURCES[0];
+      if (activeTab === 'screenshots') return mockSource.type === 'screenshot';
+      if (activeTab === 'files') return mockSource.type === 'file';
+      if (activeTab === 'links') return mockSource.type === 'link';
+    } else {
+      const realSource = source as InsightSource;
+      if (activeTab === 'screenshots') return realSource.sourceType === 'screenshot';
+      if (activeTab === 'files') return realSource.sourceType === 'file';
+      if (activeTab === 'links') return realSource.sourceType === 'link';
+    }
+    return true;
+  });
+  
+  const selectedMockSource = useMockData 
+    ? MOCK_DATA_SOURCES.find(s => s.id === selectedMockId) 
+    : null;
+  
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header with tabs */}
+      <div className="flex-shrink-0 border-b border-[#2A2A2A]">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4 text-[#FF6B35]" />
+            <span className="text-sm font-medium text-white">Data Sources</span>
+            <span className="px-2 py-0.5 bg-[#2A2F3E] rounded-full text-xs text-gray-400">
+              {displaySources.length}
+            </span>
+          </div>
+          <button
+            onClick={onToggle}
+            className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+            title="Collapse Data Sources"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        
+        {/* Tab bar */}
+        <div className="flex items-center gap-1 px-4 pb-2">
+          {(['all', 'screenshots', 'files', 'links'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                activeTab === tab
+                  ? 'bg-[#FF6B35]/20 text-[#FF6B35]'
+                  : 'text-[#6B7280] hover:text-white hover:bg-[#2A2A2A]'
+              }`}
+            >
+              {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      {/* Content area - split view for mock data */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Source list */}
+        <div className="w-64 flex-shrink-0 border-r border-[#2A2A2A] overflow-y-auto">
+          <div className="p-3 space-y-2">
+            {filteredSources.map((source) => {
+              const isMock = useMockData;
+              const mockSource = source as typeof MOCK_DATA_SOURCES[0];
+              const realSource = source as InsightSource;
+              const isSelected = isMock ? mockSource.id === selectedMockId : false;
+              
+              return (
+                <div
+                  key={isMock ? mockSource.id : realSource.id}
+                  onClick={() => isMock && setSelectedMockId(mockSource.id)}
+                  className={`p-3 rounded-lg cursor-pointer transition-all ${
+                    isSelected
+                      ? 'bg-[#FF6B35]/10 border border-[#FF6B35]/30'
+                      : 'bg-[#1A1F2E]/60 border border-[#2A2F3E] hover:border-[#FF6B35]/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    {(isMock ? mockSource.type : realSource.sourceType) === 'screenshot' && (
+                      <Image className="w-4 h-4 text-[#FF6B35]" />
+                    )}
+                    {(isMock ? mockSource.type : realSource.sourceType) === 'file' && (
+                      <FileText className="w-4 h-4 text-emerald-400" />
+                    )}
+                    {(isMock ? mockSource.type : realSource.sourceType) === 'link' && (
+                      <Link2 className="w-4 h-4 text-blue-400" />
+                    )}
+                    <span className="text-sm font-medium text-white truncate">
+                      {isMock ? mockSource.name : realSource.sourceName}
+                    </span>
+                  </div>
+                  {isMock && (
+                    <p className="text-xs text-[#6B7280]">{mockSource.date}</p>
+                  )}
+                </div>
+              );
+            })}
+            
+            <button
+              onClick={() => toast.info('Add data source functionality coming soon!')}
+              className="w-full py-3 border border-dashed border-[#3A3F4E] text-[#6B7280] hover:border-[#FF6B35] hover:text-[#FF6B35] rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Source
+            </button>
+          </div>
+        </div>
+        
+        {/* Detail view */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {selectedMockSource ? (
+            <div className="space-y-4">
+              {/* Preview image */}
+              {selectedMockSource.preview && (
+                <div className="relative group">
+                  <img
+                    src={selectedMockSource.preview}
+                    alt={selectedMockSource.name}
+                    className="w-full h-48 object-cover rounded-lg border border-[#2A2F3E]"
+                  />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                    <button className="px-4 py-2 bg-[#FF6B35] text-white text-sm font-medium rounded-lg">
+                      View Full Size
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Source info */}
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-1">{selectedMockSource.name}</h3>
+                <p className="text-sm text-[#6B7280]">
+                  Captured on {selectedMockSource.date} • {selectedMockSource.type}
+                </p>
+              </div>
+              
+              {/* Extracted data */}
+              <div className="bg-[#1A1F2E]/60 border border-[#2A2F3E] rounded-lg p-4">
+                <h4 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#FF6B35]" />
+                  Extracted Data
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(selectedMockSource.extractedData).map(([key, value]) => (
+                    <div key={key} className="bg-[#0A0D12] rounded-lg p-3">
+                      <p className="text-xs text-[#6B7280] mb-1">{key}</p>
+                      <p className="text-sm font-medium text-white">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                <button className="flex-1 px-4 py-2 bg-[#2A2F3E] text-white text-sm font-medium rounded-lg hover:bg-[#3A3F4E] transition-colors flex items-center justify-center gap-2">
+                  <Copy className="w-4 h-4" />
+                  Copy Data
+                </button>
+                <button className="flex-1 px-4 py-2 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white text-sm font-medium rounded-lg hover:from-[#E55A2B] hover:to-[#D04A1B] transition-all flex items-center justify-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Analyze with AI
+                </button>
+              </div>
+            </div>
+          ) : !useMockData && sources.length > 0 ? (
+            <div className="space-y-4">
+              {sources.map((source) => (
+                <DataSourceCard
+                  key={source.id}
+                  source={source}
+                  sheetData={sheetsData[source.sourceId]}
+                  onEditData={onEditData}
+                  onRemove={onRemoveSource}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <Database className="w-12 h-12 text-[#6B7280] opacity-50 mb-3" />
+              <p className="text-white mb-1">Select a data source</p>
+              <p className="text-xs text-[#6B7280]">Choose from the list to view details</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
