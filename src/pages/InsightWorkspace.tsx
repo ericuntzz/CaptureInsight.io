@@ -247,23 +247,30 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     toast.success('Source removed');
   };
 
-  // Thin resize handle with brand orange color (visible but discrete)
+  // Visible resize handle with grey color, orange on hover
   const ChatCanvasDragHandle = () => (
-    <ResizableHandle className="w-[3px] bg-[#FF6B35]/40 hover:bg-[#FF6B35] transition-colors cursor-col-resize" />
+    <ResizableHandle 
+      style={{ width: '4px', backgroundColor: '#3A3F4E' }}
+      className="hover:bg-[#FF6B35] transition-colors cursor-col-resize"
+    />
   );
   
   // Canvas-Data drag handle with double-click to expand canvas
   const CanvasDataDragHandle = () => (
-    <div onDoubleClick={handleDoubleClickExpandCanvas} className="contents">
-      <ResizableHandle className="w-[3px] bg-[#FF6B35]/40 hover:bg-[#FF6B35] transition-colors cursor-col-resize" />
-    </div>
+    <ResizableHandle 
+      style={{ width: '4px', backgroundColor: '#3A3F4E' }}
+      className="hover:bg-[#FF6B35] transition-colors cursor-col-resize"
+      onDoubleClick={handleDoubleClickExpandCanvas}
+    />
   );
   
   // Data-Canvas drag handle (when swapped) with double-click to expand data
   const DataCanvasDragHandle = () => (
-    <div onDoubleClick={handleDoubleClickExpandData} className="contents">
-      <ResizableHandle className="w-[3px] bg-[#FF6B35]/40 hover:bg-[#FF6B35] transition-colors cursor-col-resize" />
-    </div>
+    <ResizableHandle 
+      style={{ width: '4px', backgroundColor: '#3A3F4E' }}
+      className="hover:bg-[#FF6B35] transition-colors cursor-col-resize"
+      onDoubleClick={handleDoubleClickExpandData}
+    />
   );
 
   // Chat Panel Content
