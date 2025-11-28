@@ -155,6 +155,10 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     dataPanelRef.current?.collapse();
   }, []);
   
+  const handleCollapseCanvas = useCallback(() => {
+    canvasPanelRef.current?.collapse();
+  }, []);
+  
   // Double-click handlers for auto-expand with panel swapping
   const handleDoubleClickExpandCanvas = useCallback(() => {
     // Expand canvas fully, collapse data, normal order
@@ -243,25 +247,23 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     toast.success('Source removed');
   };
 
-  // Thin, discrete resize handle with brand orange color
+  // Thin resize handle with brand orange color (visible but discrete)
   const ChatCanvasDragHandle = () => (
-    <ResizableHandle className="w-[2px] bg-[#FF6B35]/20 hover:bg-[#FF6B35] transition-colors cursor-col-resize" />
+    <ResizableHandle className="w-[3px] bg-[#FF6B35]/40 hover:bg-[#FF6B35] transition-colors cursor-col-resize" />
   );
   
   // Canvas-Data drag handle with double-click to expand canvas
   const CanvasDataDragHandle = () => (
-    <ResizableHandle 
-      className="w-[2px] bg-[#FF6B35]/20 hover:bg-[#FF6B35] transition-colors cursor-col-resize"
-      onDoubleClick={handleDoubleClickExpandCanvas}
-    />
+    <div onDoubleClick={handleDoubleClickExpandCanvas} className="contents">
+      <ResizableHandle className="w-[3px] bg-[#FF6B35]/40 hover:bg-[#FF6B35] transition-colors cursor-col-resize" />
+    </div>
   );
   
   // Data-Canvas drag handle (when swapped) with double-click to expand data
   const DataCanvasDragHandle = () => (
-    <ResizableHandle 
-      className="w-[2px] bg-[#FF6B35]/20 hover:bg-[#FF6B35] transition-colors cursor-col-resize"
-      onDoubleClick={handleDoubleClickExpandData}
-    />
+    <div onDoubleClick={handleDoubleClickExpandData} className="contents">
+      <ResizableHandle className="w-[3px] bg-[#FF6B35]/40 hover:bg-[#FF6B35] transition-colors cursor-col-resize" />
+    </div>
   );
 
   // Chat Panel Content
@@ -408,6 +410,14 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
               title="Slide View"
             >
               <Presentation className="w-5 h-5" />
+            </button>
+            <div className="w-px h-5 bg-[#2A2A2A] mx-1" />
+            <button
+              onClick={handleCollapseCanvas}
+              className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+              title="Collapse Canvas"
+            >
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
