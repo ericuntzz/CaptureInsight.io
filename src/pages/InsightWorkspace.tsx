@@ -142,35 +142,35 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     }
   }, [chatMessages]);
   
-  // Handle panel expand/collapse using imperative panel controls
+  // Handle panel expand/collapse using imperative panel resize
   const handleExpandChat = useCallback(() => {
-    chatPanelRef.current?.expand();
+    chatPanelRef.current?.resize(30);
   }, []);
   
   const handleCollapseChat = useCallback(() => {
-    chatPanelRef.current?.collapse();
+    chatPanelRef.current?.resize(3);
   }, []);
   
   const handleCollapseData = useCallback(() => {
-    dataPanelRef.current?.collapse();
+    dataPanelRef.current?.resize(3);
   }, []);
   
   const handleCollapseCanvas = useCallback(() => {
-    canvasPanelRef.current?.collapse();
+    canvasPanelRef.current?.resize(3);
   }, []);
   
   // Double-click handlers for auto-expand with panel swapping
   const handleDoubleClickExpandCanvas = useCallback(() => {
     // Expand canvas fully, collapse data, normal order
-    canvasPanelRef.current?.expand();
-    dataPanelRef.current?.collapse();
+    canvasPanelRef.current?.resize(67);
+    dataPanelRef.current?.resize(3);
     setPanelOrder('normal');
   }, []);
   
   const handleDoubleClickExpandData = useCallback(() => {
     // Expand data fully, collapse canvas, swap order so data is next to chat
-    dataPanelRef.current?.expand();
-    canvasPanelRef.current?.collapse();
+    dataPanelRef.current?.resize(67);
+    canvasPanelRef.current?.resize(3);
     setPanelOrder('swapped');
   }, []);
   
@@ -247,27 +247,31 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     toast.success('Source removed');
   };
 
-  // Visible resize handle with grip indicator
+  // Thin subtle resize handle - uses child div for visible line
   const ChatCanvasDragHandle = () => (
-    <ResizableHandle withHandle className="bg-[#2A2F3E] hover:bg-[#FF6B35]/30 transition-colors" />
+    <ResizableHandle className="w-2 group cursor-col-resize flex items-center justify-center">
+      <div className="w-0.5 h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+    </ResizableHandle>
   );
   
   // Canvas-Data drag handle with double-click to expand canvas
   const CanvasDataDragHandle = () => (
     <ResizableHandle 
-      withHandle 
-      className="bg-[#2A2F3E] hover:bg-[#FF6B35]/30 transition-colors"
+      className="w-2 group cursor-col-resize flex items-center justify-center"
       onDoubleClick={handleDoubleClickExpandCanvas}
-    />
+    >
+      <div className="w-0.5 h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+    </ResizableHandle>
   );
   
   // Data-Canvas drag handle (when swapped) with double-click to expand data
   const DataCanvasDragHandle = () => (
     <ResizableHandle 
-      withHandle 
-      className="bg-[#2A2F3E] hover:bg-[#FF6B35]/30 transition-colors"
+      className="w-2 group cursor-col-resize flex items-center justify-center"
       onDoubleClick={handleDoubleClickExpandData}
-    />
+    >
+      <div className="w-0.5 h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+    </ResizableHandle>
   );
 
   // Chat Panel Content
@@ -546,12 +550,9 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
         <ResizablePanel 
           ref={chatPanelRef}
           defaultSize={30} 
-          minSize={4}
+          minSize={3}
           maxSize={50}
-          collapsible={true}
-          collapsedSize={4}
-          onCollapse={() => setIsChatCollapsed(true)}
-          onExpand={() => setIsChatCollapsed(false)}
+          onResize={(size) => setIsChatCollapsed(size < 8)}
         >
           {isChatCollapsed ? (
             <CollapsedPanelContent type="chat" onClick={handleExpandChat} direction="left" />
@@ -569,11 +570,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
             <ResizablePanel 
               ref={canvasPanelRef}
               defaultSize={45}
-              minSize={4}
-              collapsible={true}
-              collapsedSize={4}
-              onCollapse={() => setIsCanvasCollapsed(true)}
-              onExpand={() => setIsCanvasCollapsed(false)}
+              minSize={3}
+              onResize={(size) => setIsCanvasCollapsed(size < 8)}
             >
               {isCanvasCollapsed ? (
                 <CollapsedPanelContent type="canvas" onClick={handleDoubleClickExpandCanvas} direction="left" />
@@ -588,11 +586,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
             <ResizablePanel 
               ref={dataPanelRef}
               defaultSize={25}
-              minSize={4}
-              collapsible={true}
-              collapsedSize={4}
-              onCollapse={() => setIsDataCollapsed(true)}
-              onExpand={() => setIsDataCollapsed(false)}
+              minSize={3}
+              onResize={(size) => setIsDataCollapsed(size < 8)}
             >
               {isDataCollapsed ? (
                 <CollapsedPanelContent type="data" onClick={handleDoubleClickExpandData} direction="right" />
@@ -607,11 +602,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
             <ResizablePanel 
               ref={dataPanelRef}
               defaultSize={45}
-              minSize={4}
-              collapsible={true}
-              collapsedSize={4}
-              onCollapse={() => setIsDataCollapsed(true)}
-              onExpand={() => setIsDataCollapsed(false)}
+              minSize={3}
+              onResize={(size) => setIsDataCollapsed(size < 8)}
             >
               {isDataCollapsed ? (
                 <CollapsedPanelContent type="data" onClick={handleDoubleClickExpandData} direction="left" />
@@ -626,11 +618,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
             <ResizablePanel 
               ref={canvasPanelRef}
               defaultSize={25}
-              minSize={4}
-              collapsible={true}
-              collapsedSize={4}
-              onCollapse={() => setIsCanvasCollapsed(true)}
-              onExpand={() => setIsCanvasCollapsed(false)}
+              minSize={3}
+              onResize={(size) => setIsCanvasCollapsed(size < 8)}
             >
               {isCanvasCollapsed ? (
                 <CollapsedPanelContent type="canvas" onClick={handleDoubleClickExpandCanvas} direction="right" />
