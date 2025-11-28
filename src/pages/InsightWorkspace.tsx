@@ -247,19 +247,16 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     toast.success('Source removed');
   };
 
-  // Visible resize handle with grey color, orange on hover
+  // Visible resize handle with grip indicator
   const ChatCanvasDragHandle = () => (
-    <ResizableHandle 
-      style={{ width: '4px', backgroundColor: '#3A3F4E' }}
-      className="hover:bg-[#FF6B35] transition-colors cursor-col-resize"
-    />
+    <ResizableHandle withHandle className="bg-[#2A2F3E] hover:bg-[#FF6B35]/30 transition-colors" />
   );
   
   // Canvas-Data drag handle with double-click to expand canvas
   const CanvasDataDragHandle = () => (
     <ResizableHandle 
-      style={{ width: '4px', backgroundColor: '#3A3F4E' }}
-      className="hover:bg-[#FF6B35] transition-colors cursor-col-resize"
+      withHandle 
+      className="bg-[#2A2F3E] hover:bg-[#FF6B35]/30 transition-colors"
       onDoubleClick={handleDoubleClickExpandCanvas}
     />
   );
@@ -267,8 +264,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   // Data-Canvas drag handle (when swapped) with double-click to expand data
   const DataCanvasDragHandle = () => (
     <ResizableHandle 
-      style={{ width: '4px', backgroundColor: '#3A3F4E' }}
-      className="hover:bg-[#FF6B35] transition-colors cursor-col-resize"
+      withHandle 
+      className="bg-[#2A2F3E] hover:bg-[#FF6B35]/30 transition-colors"
       onDoubleClick={handleDoubleClickExpandData}
     />
   );
