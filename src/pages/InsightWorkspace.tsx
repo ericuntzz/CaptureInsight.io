@@ -40,13 +40,73 @@ import {
   DragOverlay,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   horizontalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
+// Draggable collapsed panel content for canvas and data - must be outside component to use hooks
+function DraggableCollapsedPanel({ 
+  type, 
+  onClick, 
+  direction 
+}: { 
+  type: 'canvas' | 'data'; 
+  onClick: () => void;
+  direction: 'left' | 'right';
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id: type });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    opacity: isDragging ? 0.5 : 1,
+  };
+  
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      className="flex flex-col items-center justify-between py-4 h-full w-full bg-[#1A1A1A] hover:bg-[#252525] transition-colors cursor-grab active:cursor-grabbing"
+      title={`${type === 'canvas' ? 'Expand Canvas' : 'Expand Data Sources'} (drag to reorder)`}
+      aria-label={type === 'canvas' ? 'Expand Canvas' : 'Expand Data Sources'}
+    >
+      {type === 'canvas' ? (
+        <FileText className="w-5 h-5 text-[#6B7280]" />
+      ) : (
+        <Database className="w-5 h-5 text-[#6B7280]" />
+      )}
+      <div className="flex-1 flex items-center justify-center">
+        <GripVertical className="w-4 h-4 text-[#4B5563] opacity-50" />
+      </div>
+      {direction === 'left' ? (
+        <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+      ) : (
+        <ChevronLeft className="w-4 h-4 text-[#6B7280]" />
+      )}
+    </div>
+  );
+}
+
+// Non-draggable collapsed panel content for chat (always stays on left)
+function CollapsedChatPanel({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center justify-between py-4 h-full w-full bg-[#1A1A1A] hover:bg-[#252525] transition-colors cursor-pointer"
+      title="Expand Chat"
+      aria-label="Expand Chat"
+    >
+      <MessageSquare className="w-5 h-5 text-[#6B7280]" />
+      <div className="flex-1" />
+      <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+    </button>
+  );
+}
 
 interface InsightSource {
   id: string;
@@ -89,44 +149,37 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   // Track if chat was manually collapsed by user
   const [chatManuallyCollapsed, setChatManuallyCollapsed] = useState(false);
   
-  // Panel order as array - supports drag-and-drop reordering
-  // Order determines visual position: index 0 = left, index 1 = center, index 2 = right
-  type PanelId = 'chat' | 'canvas' | 'data';
+  // Right panels order - Chat is always fixed on left, only Canvas and Data can swap
+  // 'canvas-data' = Chat | Canvas | Data (default)
+  // 'data-canvas' = Chat | Data | Canvas
+  type RightPanelOrder = 'canvas-data' | 'data-canvas';
   const PANEL_ORDER_STORAGE_KEY = 'insight-workspace-panel-order';
   
-  const getInitialPanelOrder = (): PanelId[] => {
+  const getInitialPanelOrder = (): RightPanelOrder => {
     try {
       const saved = localStorage.getItem(PANEL_ORDER_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length === 3) {
-          return parsed as PanelId[];
-        }
+      if (saved === 'canvas-data' || saved === 'data-canvas') {
+        return saved;
       }
     } catch (e) {
       console.error('Failed to load panel order from localStorage:', e);
     }
-    return ['chat', 'canvas', 'data'];
+    return 'canvas-data';
   };
   
-  const [panelOrder, setPanelOrder] = useState<PanelId[]>(getInitialPanelOrder);
-  const [activeDragId, setActiveDragId] = useState<PanelId | null>(null);
+  const [rightPanelOrder, setRightPanelOrder] = useState<RightPanelOrder>(getInitialPanelOrder);
+  const [activeDragId, setActiveDragId] = useState<'canvas' | 'data' | null>(null);
   
   // Save panel order to localStorage when it changes
   useEffect(() => {
     try {
-      localStorage.setItem(PANEL_ORDER_STORAGE_KEY, JSON.stringify(panelOrder));
+      localStorage.setItem(PANEL_ORDER_STORAGE_KEY, rightPanelOrder);
     } catch (e) {
       console.error('Failed to save panel order to localStorage:', e);
     }
-  }, [panelOrder]);
+  }, [rightPanelOrder]);
   
-  // Get order index for a panel (1-based for react-resizable-panels)
-  const getPanelOrderIndex = (panelId: PanelId): number => {
-    return panelOrder.indexOf(panelId) + 1;
-  };
-  
-  // DnD sensors
+  // DnD sensors - only for canvas and data panels
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -140,20 +193,26 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   
   // Handle drag start
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveDragId(event.active.id as PanelId);
+    const id = event.active.id as string;
+    if (id === 'canvas' || id === 'data') {
+      setActiveDragId(id);
+    }
   };
   
-  // Handle drag end
+  // Handle drag end - swap canvas and data positions
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveDragId(null);
     
     if (over && active.id !== over.id) {
-      setPanelOrder((items) => {
-        const oldIndex = items.indexOf(active.id as PanelId);
-        const newIndex = items.indexOf(over.id as PanelId);
-        return arrayMove(items, oldIndex, newIndex);
-      });
+      // Only allow swapping canvas and data
+      const activeId = active.id as string;
+      const overId = over.id as string;
+      if ((activeId === 'canvas' || activeId === 'data') && 
+          (overId === 'canvas' || overId === 'data')) {
+        // Toggle the order
+        setRightPanelOrder(prev => prev === 'canvas-data' ? 'data-canvas' : 'canvas-data');
+      }
     }
   };
   
@@ -264,7 +323,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     canvasPanelRef.current?.resize(3);
   }, []);
   
-  // Expand canvas - swap to normal order, collapse data, keep chat as-is
+  // Expand canvas - move canvas next to chat, collapse data
   const handleExpandCanvas = useCallback(() => {
     // If canvas is already large (not collapsed), restore to normal sizes
     if (!isCanvasCollapsed && isDataCollapsed) {
@@ -277,23 +336,23 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
       canvasPanelRef.current?.resize(chatManuallyCollapsed ? 72 : 67);
       dataPanelRef.current?.resize(3);
     }
-    setPanelOrder('normal');
+    setRightPanelOrder('canvas-data');
   }, [isCanvasCollapsed, isDataCollapsed, chatManuallyCollapsed]);
   
-  // Expand data - swap to put data next to chat, collapse canvas, keep chat as-is
+  // Expand data - move data next to chat, collapse canvas
   const handleExpandData = useCallback(() => {
     // If data is already large (not collapsed), restore to normal sizes
     if (!isDataCollapsed && isCanvasCollapsed) {
       // Data is expanded, restore both to normal sizes
       dataPanelRef.current?.resize(25);
       canvasPanelRef.current?.resize(45);
-      setPanelOrder('normal');
+      setRightPanelOrder('canvas-data');
     } else {
       // Expand data fully, collapse canvas, swap order so data is next to chat
       // Don't touch chat - respect chatManuallyCollapsed
       dataPanelRef.current?.resize(chatManuallyCollapsed ? 72 : 67);
       canvasPanelRef.current?.resize(3);
-      setPanelOrder('swapped');
+      setRightPanelOrder('data-canvas');
     }
   }, [isCanvasCollapsed, isDataCollapsed, chatManuallyCollapsed]);
   
@@ -600,46 +659,6 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     />
   );
 
-  // Collapsed rail inside a panel
-  const CollapsedPanelContent = ({ 
-    type, 
-    onClick, 
-    direction 
-  }: { 
-    type: 'chat' | 'canvas' | 'data'; 
-    onClick: () => void;
-    direction: 'left' | 'right';
-  }) => {
-    const icons = {
-      chat: <MessageSquare className="w-5 h-5 text-[#6B7280]" />,
-      canvas: <FileText className="w-5 h-5 text-[#6B7280]" />,
-      data: <Database className="w-5 h-5 text-[#6B7280]" />,
-    };
-    
-    const labels = {
-      chat: 'Expand Chat',
-      canvas: 'Expand Canvas',
-      data: 'Expand Data Sources',
-    };
-    
-    return (
-      <button
-        onClick={onClick}
-        className="flex flex-col items-center justify-between py-4 h-full w-full bg-[#1A1A1A] hover:bg-[#252525] transition-colors cursor-pointer"
-        title={labels[type]}
-        aria-label={labels[type]}
-      >
-        {icons[type]}
-        <div className="flex-1" />
-        {direction === 'left' ? (
-          <ChevronRight className="w-4 h-4 text-[#6B7280]" />
-        ) : (
-          <ChevronLeft className="w-4 h-4 text-[#6B7280]" />
-        )}
-      </button>
-    );
-  };
-
   // Panel content wrappers with continuous opacity based on live size
   const PanelContentWrapper = ({ 
     size, 
@@ -681,6 +700,9 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     );
   };
 
+  // Sortable items for DnD - only canvas and data can be reordered
+  const sortableItems = rightPanelOrder === 'canvas-data' ? ['canvas', 'data'] : ['data', 'canvas'];
+
   return (
     <motion.div 
       className="h-screen bg-[#1E1E1E] flex overflow-hidden"
@@ -688,81 +710,158 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      <ResizablePanelGroup direction="horizontal" className="h-full" autoSaveId="insight-workspace-panels">
-        {/* Chat Panel - always first, uses order=1 */}
-        <ResizablePanel 
-          id="chat-panel"
-          ref={chatPanelRef}
-          defaultSize={30} 
-          minSize={3}
-          maxSize={50}
-          order={1}
-          onResize={(size) => setChatSize(size)}
-        >
-          <PanelContentWrapper
-            size={chatSize}
-            collapsedContent={<CollapsedPanelContent type="chat" onClick={handleExpandChat} direction="left" />}
-            expandedContent={<ChatPanelContent />}
-          />
-        </ResizablePanel>
-        
-        <ResizableHandle id="chat-center-handle" className="w-1.5 group cursor-col-resize flex items-center justify-center">
-          <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
-        </ResizableHandle>
-        
-        {/* Canvas Panel - order depends on panelOrder state */}
-        <ResizablePanel 
-          id="canvas-panel"
-          ref={canvasPanelRef}
-          defaultSize={45}
-          minSize={3}
-          order={panelOrder === 'normal' ? 2 : 3}
-          onResize={(size) => setCanvasSize(size)}
-        >
-          <PanelContentWrapper
-            size={canvasSize}
-            collapsedContent={
-              <CollapsedPanelContent 
-                type="canvas" 
-                onClick={handleExpandCanvas} 
-                direction={panelOrder === 'normal' ? 'left' : 'right'} 
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={sortableItems} strategy={horizontalListSortingStrategy}>
+          <ResizablePanelGroup 
+            direction="horizontal" 
+            className="h-full" 
+            autoSaveId={`insight-workspace-panels-${rightPanelOrder}`}
+          >
+            {/* Chat Panel - always first, fixed on left, NOT draggable */}
+            <ResizablePanel 
+              id="chat-panel"
+              ref={chatPanelRef}
+              defaultSize={30} 
+              minSize={3}
+              maxSize={50}
+              onResize={(size) => setChatSize(size)}
+            >
+              <PanelContentWrapper
+                size={chatSize}
+                collapsedContent={<CollapsedChatPanel onClick={handleExpandChat} />}
+                expandedContent={<ChatPanelContent />}
               />
-            }
-            expandedContent={<CanvasPanelContent />}
-          />
-        </ResizablePanel>
+            </ResizablePanel>
+            
+            <ResizableHandle className="w-1.5 group cursor-col-resize flex items-center justify-center">
+              <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+            </ResizableHandle>
+            
+            {/* Center and Right panels - order depends on rightPanelOrder */}
+            {rightPanelOrder === 'canvas-data' ? (
+              <>
+                {/* Canvas Panel (center) */}
+                <ResizablePanel 
+                  id="canvas-panel"
+                  ref={canvasPanelRef}
+                  defaultSize={45}
+                  minSize={3}
+                  onResize={(size) => setCanvasSize(size)}
+                >
+                  <PanelContentWrapper
+                    size={canvasSize}
+                    collapsedContent={
+                      <DraggableCollapsedPanel 
+                        type="canvas" 
+                        onClick={handleExpandCanvas} 
+                        direction="left"
+                      />
+                    }
+                    expandedContent={<CanvasPanelContent />}
+                  />
+                </ResizablePanel>
+                
+                <ResizableHandle 
+                  className="w-1.5 group cursor-col-resize flex items-center justify-center"
+                  onDoubleClick={handleDoubleClickExpandCanvas}
+                >
+                  <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+                </ResizableHandle>
+                
+                {/* Data Panel (right) */}
+                <ResizablePanel 
+                  id="data-panel"
+                  ref={dataPanelRef}
+                  defaultSize={25}
+                  minSize={3}
+                  onResize={(size) => setDataSize(size)}
+                >
+                  <PanelContentWrapper
+                    size={dataSize}
+                    collapsedContent={
+                      <DraggableCollapsedPanel 
+                        type="data" 
+                        onClick={handleExpandData} 
+                        direction="right"
+                      />
+                    }
+                    expandedContent={<DataSourcesPanelContent />}
+                  />
+                </ResizablePanel>
+              </>
+            ) : (
+              <>
+                {/* Data Panel (center - swapped) */}
+                <ResizablePanel 
+                  id="data-panel"
+                  ref={dataPanelRef}
+                  defaultSize={45}
+                  minSize={3}
+                  onResize={(size) => setDataSize(size)}
+                >
+                  <PanelContentWrapper
+                    size={dataSize}
+                    collapsedContent={
+                      <DraggableCollapsedPanel 
+                        type="data" 
+                        onClick={handleExpandData} 
+                        direction="left"
+                      />
+                    }
+                    expandedContent={<DataSourcesPanelContent />}
+                  />
+                </ResizablePanel>
+                
+                <ResizableHandle 
+                  className="w-1.5 group cursor-col-resize flex items-center justify-center"
+                  onDoubleClick={handleDoubleClickExpandData}
+                >
+                  <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+                </ResizableHandle>
+                
+                {/* Canvas Panel (right - swapped) */}
+                <ResizablePanel 
+                  id="canvas-panel"
+                  ref={canvasPanelRef}
+                  defaultSize={25}
+                  minSize={3}
+                  onResize={(size) => setCanvasSize(size)}
+                >
+                  <PanelContentWrapper
+                    size={canvasSize}
+                    collapsedContent={
+                      <DraggableCollapsedPanel 
+                        type="canvas" 
+                        onClick={handleExpandCanvas} 
+                        direction="right"
+                      />
+                    }
+                    expandedContent={<CanvasPanelContent />}
+                  />
+                </ResizablePanel>
+              </>
+            )}
+          </ResizablePanelGroup>
+        </SortableContext>
         
-        {/* Drag handle between center and right panels - double-click behavior depends on which panel is in center */}
-        <ResizableHandle 
-          id="center-right-handle"
-          className="w-1.5 group cursor-col-resize flex items-center justify-center"
-          onDoubleClick={panelOrder === 'normal' ? handleDoubleClickExpandCanvas : handleDoubleClickExpandData}
-        >
-          <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
-        </ResizableHandle>
-        
-        {/* Data Panel - order depends on panelOrder state */}
-        <ResizablePanel 
-          id="data-panel"
-          ref={dataPanelRef}
-          defaultSize={25}
-          minSize={3}
-          order={panelOrder === 'normal' ? 3 : 2}
-          onResize={(size) => setDataSize(size)}
-        >
-          <PanelContentWrapper
-            size={dataSize}
-            collapsedContent={
-              <CollapsedPanelContent 
-                type="data" 
-                onClick={handleExpandData} 
-                direction={panelOrder === 'normal' ? 'right' : 'left'} 
-              />
-            }
-            expandedContent={<DataSourcesPanelContent />}
-          />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        {/* Drag overlay for visual feedback during drag */}
+        <DragOverlay>
+          {activeDragId ? (
+            <div className="w-12 h-24 bg-[#2A2A2A] border border-[#FF6B35] rounded-lg flex items-center justify-center opacity-80">
+              {activeDragId === 'canvas' ? (
+                <FileText className="w-5 h-5 text-[#FF6B35]" />
+              ) : (
+                <Database className="w-5 h-5 text-[#FF6B35]" />
+              )}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </motion.div>
   );
 }

@@ -22,13 +22,23 @@ The application's core features include:
 
 ### Insight Workspace Panel Architecture (`src/pages/InsightWorkspace.tsx`)
 
-**Panel Layout**: Chat (left) | Canvas (center) | Data Sources (right)
+**Panel Layout**: Chat (left, fixed) | Canvas/Data (center/right, swappable via drag)
 
 **Key Implementation Details**:
 - Uses `react-resizable-panels` library with `ResizablePanelGroup`, `ResizablePanel`, and `ResizableHandle`
+- Uses `@dnd-kit/core` and `@dnd-kit/sortable` for drag-and-drop panel reordering
 - Panels have unique IDs (`chat-panel`, `canvas-panel`, `data-panel`) for tracking
-- Uses `autoSaveId="insight-workspace-panels"` for localStorage size persistence
-- Panel order controlled via `order` prop (1=left, 2=center, 3=right)
+- Uses `autoSaveId="insight-workspace-panels-{order}"` for localStorage size persistence per layout
+- Panel order controlled via conditional rendering based on `rightPanelOrder` state
+
+**Drag-and-Drop Panel Reordering**:
+- Chat panel is fixed on the left (not draggable)
+- Canvas and Data panels can be dragged to swap positions
+- `rightPanelOrder` state: 'canvas-data' (default) or 'data-canvas' (swapped)
+- Order persisted to localStorage key `workspace-right-panel-order`
+- `DraggableCollapsedPanel` component (defined outside main component for hooks compliance) enables collapsed panels to be dragged
+- `CollapsedChatPanel` is a non-draggable button component for the chat panel
+- Uses conditional rendering to swap panel DOM order (avoids ResizableHandle ordering issues)
 
 **Smooth Collapse/Expand with Continuous Opacity**:
 - Tracks live panel sizes via `onResize` callbacks: `chatSize`, `canvasSize`, `dataSize`
@@ -39,10 +49,7 @@ The application's core features include:
 - `PanelContentWrapper` component manages opacity and pointer-events based on live size
 
 **Panel Swapping Behavior**:
-- `panelOrder` state: 'normal' (Chat|Canvas|Data) or 'swapped' (Chat|Data|Canvas)
-- When expanding a panel (arrow click or double-click divider):
-  - Expanded panel swaps to center position (next to Chat)
-  - Other panel bumps to right side
+- Expand button or double-click: swaps panel to center, bumps other panel to right
 - Double-click toggle: first click expands, second click restores normal sizes
 
 **Chat Panel Respects User Intent**:
@@ -50,10 +57,10 @@ The application's core features include:
 - When expanding Canvas/Data, Chat stays closed if user previously collapsed it
 - Only re-expands when user clicks Chat expand button
 
-**Drag Handles**:
+**Drag Handles (ResizableHandle)**:
 - Thin subtle design: 1px visible width, 6px hit area (`w-1.5`)
 - Orange hover effect: `group-hover:bg-[#FF6B35]/60`
-- Double-click on center-right handle triggers expand/toggle based on current `panelOrder`
+- Double-click on center-right handle triggers expand/toggle based on current `rightPanelOrder`
 - **Activity Tracking**: Change logs for user actions.
 - **Screenshot Capture**: Chrome extension for direct webpage capture, supporting tab screenshots, file uploads, and link captures.
 - **Multi-Tenant Data Isolation**: Space and entity-level authorization ensures data privacy.
