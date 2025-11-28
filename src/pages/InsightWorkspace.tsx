@@ -159,20 +159,37 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     canvasPanelRef.current?.resize(3);
   }, []);
   
-  // Double-click handlers for auto-expand with panel swapping
+  // Double-click handlers for toggle expand/contract with panel swapping
   const handleDoubleClickExpandCanvas = useCallback(() => {
-    // Expand canvas fully, collapse data, normal order
-    canvasPanelRef.current?.resize(67);
-    dataPanelRef.current?.resize(3);
+    // If canvas is already large (not collapsed), restore to normal sizes
+    // Otherwise expand canvas fully
+    if (!isCanvasCollapsed && isDataCollapsed) {
+      // Canvas is expanded, restore both to normal sizes
+      canvasPanelRef.current?.resize(45);
+      dataPanelRef.current?.resize(25);
+    } else {
+      // Expand canvas fully, collapse data, normal order
+      canvasPanelRef.current?.resize(67);
+      dataPanelRef.current?.resize(3);
+    }
     setPanelOrder('normal');
-  }, []);
+  }, [isCanvasCollapsed, isDataCollapsed]);
   
   const handleDoubleClickExpandData = useCallback(() => {
-    // Expand data fully, collapse canvas, swap order so data is next to chat
-    dataPanelRef.current?.resize(67);
-    canvasPanelRef.current?.resize(3);
-    setPanelOrder('swapped');
-  }, []);
+    // If data is already large (not collapsed), restore to normal sizes
+    // Otherwise expand data fully
+    if (!isDataCollapsed && isCanvasCollapsed) {
+      // Data is expanded, restore both to normal sizes
+      dataPanelRef.current?.resize(25);
+      canvasPanelRef.current?.resize(45);
+      setPanelOrder('normal');
+    } else {
+      // Expand data fully, collapse canvas, swap order so data is next to chat
+      dataPanelRef.current?.resize(67);
+      canvasPanelRef.current?.resize(3);
+      setPanelOrder('swapped');
+    }
+  }, [isCanvasCollapsed, isDataCollapsed]);
   
   // Chat handlers
   const handleSendMessage = async () => {
