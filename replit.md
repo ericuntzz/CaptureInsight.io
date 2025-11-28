@@ -18,7 +18,42 @@ The application's core features include:
 - **Space-scoped Tagging System**: With associations for organization.
 - **Insights Management**: Knowledge cards with status/priority, linked sources, and threaded comments.
 - **AI Chat Integration**: Per insight AI conversations for analysis and RAG-enabled chat.
-- **Insight Workspace**: Unified interface combining data viewing, AI chat, and canvas editing. Features collapsible sections for Data Sources (side-by-side original + extracted data), AI Chat, and a rich text canvas with export options (Markdown, PDF, Slides).
+- **Insight Workspace**: Unified interface combining data viewing, AI chat, and canvas editing. Features a three-panel horizontal layout with advanced resizing behavior.
+
+### Insight Workspace Panel Architecture (`src/pages/InsightWorkspace.tsx`)
+
+**Panel Layout**: Chat (left) | Canvas (center) | Data Sources (right)
+
+**Key Implementation Details**:
+- Uses `react-resizable-panels` library with `ResizablePanelGroup`, `ResizablePanel`, and `ResizableHandle`
+- Panels have unique IDs (`chat-panel`, `canvas-panel`, `data-panel`) for tracking
+- Uses `autoSaveId="insight-workspace-panels"` for localStorage size persistence
+- Panel order controlled via `order` prop (1=left, 2=center, 3=right)
+
+**Smooth Collapse/Expand with Continuous Opacity**:
+- Tracks live panel sizes via `onResize` callbacks: `chatSize`, `canvasSize`, `dataSize`
+- Content opacity calculated continuously between 4-10% panel width (not binary threshold)
+- Both collapsed icon and expanded content always rendered with absolute positioning
+- Uses `getContentOpacity(size)` and `getCollapsedOpacity(size)` helper functions
+- Collapsed threshold: panel size < 8%
+- `PanelContentWrapper` component manages opacity and pointer-events based on live size
+
+**Panel Swapping Behavior**:
+- `panelOrder` state: 'normal' (Chat|Canvas|Data) or 'swapped' (Chat|Data|Canvas)
+- When expanding a panel (arrow click or double-click divider):
+  - Expanded panel swaps to center position (next to Chat)
+  - Other panel bumps to right side
+- Double-click toggle: first click expands, second click restores normal sizes
+
+**Chat Panel Respects User Intent**:
+- `chatManuallyCollapsed` state tracks if user explicitly closed Chat
+- When expanding Canvas/Data, Chat stays closed if user previously collapsed it
+- Only re-expands when user clicks Chat expand button
+
+**Drag Handles**:
+- Thin subtle design: 1px visible width, 6px hit area (`w-1.5`)
+- Orange hover effect: `group-hover:bg-[#FF6B35]/60`
+- Double-click on center-right handle triggers expand/toggle based on current `panelOrder`
 - **Activity Tracking**: Change logs for user actions.
 - **Screenshot Capture**: Chrome extension for direct webpage capture, supporting tab screenshots, file uploads, and link captures.
 - **Multi-Tenant Data Isolation**: Space and entity-level authorization ensures data privacy.
