@@ -1073,7 +1073,7 @@ function DataSourcesPanel({ sources, sheetsData: _sheetsData, onToggle, onEditDa
     : null;
   
   return (
-    <div className="flex flex-col h-full bg-[#212121]">
+    <div className="flex flex-col h-full bg-[#1E1E1E]">
       {/* Header with tabs */}
       <div className="flex-shrink-0 border-b border-[#2A2A2A]">
         <div className="flex items-center justify-between px-4 py-3">
