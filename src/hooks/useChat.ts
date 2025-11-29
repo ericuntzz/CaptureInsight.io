@@ -42,7 +42,6 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
   const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
   const loadedChatIdRef = useRef<string | null>(null);
   const currentChatIdRef = useRef<string | null>(chatId || null);
-  const pendingMessagesRef = useRef<ChatMessage[]>([]);
 
   const clearError = useCallback(() => {
     setError(null);
@@ -74,11 +73,7 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
         citations: m.citations,
       }));
       
-      // Append any pending messages that were sent while loading
-      const allMessages = [...loadedMessages, ...pendingMessagesRef.current];
-      pendingMessagesRef.current = [];
-      
-      setMessages(allMessages);
+      setMessages(loadedMessages);
       loadedChatIdRef.current = targetChatId;
       setHistoryLoadError(null);
     } catch (err) {
@@ -120,7 +115,6 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
   useEffect(() => {
     loadedChatIdRef.current = null;
     currentChatIdRef.current = null;
-    pendingMessagesRef.current = [];
     setMessages([]);
     setError(null);
     setHistoryLoadError(null);
@@ -171,17 +165,18 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
       return;
     }
 
+    // Don't allow sending while history is loading to prevent race conditions
+    if (isLoadingHistory) {
+      toast.error('Please wait for chat history to load.');
+      return;
+    }
+
     const userMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: 'user',
       content: content.trim(),
       timestamp: new Date(),
     };
-
-    // If still loading history, add to pending messages
-    if (isLoadingHistory) {
-      pendingMessagesRef.current.push(userMessage);
-    }
 
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
