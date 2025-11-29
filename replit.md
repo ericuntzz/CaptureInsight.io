@@ -61,6 +61,15 @@ The application's core features include:
 - Thin subtle design: 1px visible width, 6px hit area (`w-1.5`)
 - Orange hover effect: `group-hover:bg-[#FF6B35]/60`
 - Double-click on center-right handle triggers expand/toggle based on current `rightPanelOrder`
+
+**Canvas Auto-Save & Persistence**:
+- Title and content (notes) are synced to tab state in real-time as user types
+- Debounced auto-save (1 second delay) persists changes to database
+- Uses `useCreateInsight` mutation for new insights, `useUpdateInsight` for existing
+- `InsightTab` interface tracks: `id`, `title`, `summary`, `isSaved`, `dbId`
+- `lastSavedContentRef` tracks last saved content to detect actual changes
+- Tab switching preserves content by loading from tab state
+- Existing insights loaded from DB are automatically marked as saved with their `dbId`
 - **Activity Tracking**: Change logs for user actions.
 - **Screenshot Capture**: Chrome extension for direct webpage capture, supporting tab screenshots, file uploads, and link captures.
 - **Multi-Tenant Data Isolation**: Space and entity-level authorization ensures data privacy.
