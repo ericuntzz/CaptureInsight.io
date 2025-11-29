@@ -864,7 +864,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
               />
             </ResizablePanel>
             
-            <ResizableHandle className="w-1.5 group cursor-col-resize flex items-center justify-center">
+            <ResizableHandle className="w-1.5 group cursor-col-resize flex items-center justify-center bg-[#212121]">
               <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
             </ResizableHandle>
             
