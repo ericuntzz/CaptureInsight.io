@@ -15,11 +15,19 @@ import {
   X,
   Presentation,
   GripVertical,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
 import { useInsight, useCreateInsight, useUpdateInsight } from '../hooks/useInsights';
+import { 
+  useChatConversations, 
+  useCreateChatConversation, 
+  useUpdateChatConversation, 
+  useDeleteChatConversation,
+  type ChatConversation 
+} from '../hooks/useChatConversations';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
 import {
@@ -298,11 +306,37 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   const [aiChatInput, setAiChatInput] = useState('');
   const aiChatContainerRef = useRef<HTMLDivElement>(null);
   
+  // Chat tabs state
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editingChatTitle, setEditingChatTitle] = useState('');
+  const chatTabInputRef = useRef<HTMLInputElement>(null);
+  
+  // Fetch chat conversations for this space
+  const { data: chatConversations = [], isLoading: isLoadingChats } = useChatConversations(spaceId);
+  const createChatMutation = useCreateChatConversation();
+  const updateChatMutation = useUpdateChatConversation();
+  const deleteChatMutation = useDeleteChatConversation();
+  
+  // Ensure there's always an active chat - create one if none exist
+  useEffect(() => {
+    if (!isLoadingChats && spaceId && chatConversations.length === 0 && !createChatMutation.isPending) {
+      createChatMutation.mutate({ spaceId, title: 'New Chat' }, {
+        onSuccess: (newChat) => {
+          setActiveChatId(newChat.id);
+        }
+      });
+    } else if (!isLoadingChats && chatConversations.length > 0 && !activeChatId) {
+      setActiveChatId(chatConversations[0].id);
+    }
+  }, [isLoadingChats, spaceId, chatConversations.length, activeChatId]);
+  
   const activeInsightId = insightId || activeTabId;
   
   const { messages: chatMessages, sendMessage, isLoading: isAiTyping } = useChat({
     spaceId,
     insightId: activeInsightId,
+    chatId: activeChatId,
   });
   
   const { data: insight } = useInsight(insightId || null);
@@ -503,12 +537,86 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     if (!aiChatInput.trim()) return;
     const messageContent = aiChatInput.trim();
     setAiChatInput('');
+    
+    // Auto-generate title from first message if chat title is "New Chat"
+    const currentChat = chatConversations.find(c => c.id === activeChatId);
+    if (currentChat && currentChat.title === 'New Chat' && chatMessages.length === 0) {
+      const autoTitle = messageContent.slice(0, 30) + (messageContent.length > 30 ? '...' : '');
+      updateChatMutation.mutate({ chatId: currentChat.id, data: { title: autoTitle } });
+    }
+    
     await sendMessage(messageContent);
   };
   
   const handleCopyMessage = (content: string) => {
     copyToClipboard(content);
     toast.success('Message copied!');
+  };
+  
+  // Chat tab handlers
+  const handleCreateNewChat = () => {
+    if (!spaceId) return;
+    createChatMutation.mutate({ spaceId, title: 'New Chat' }, {
+      onSuccess: (newChat) => {
+        setActiveChatId(newChat.id);
+      }
+    });
+  };
+  
+  const handleSwitchChat = (chatId: string) => {
+    if (chatId !== activeChatId) {
+      setActiveChatId(chatId);
+    }
+  };
+  
+  const handleDeleteChat = (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!spaceId) return;
+    
+    // If deleting active chat, switch to another one first
+    if (chatId === activeChatId) {
+      const otherChat = chatConversations.find(c => c.id !== chatId);
+      if (otherChat) {
+        setActiveChatId(otherChat.id);
+      }
+    }
+    
+    deleteChatMutation.mutate({ chatId, spaceId });
+  };
+  
+  const handleStartRenameChat = (chatId: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingChatId(chatId);
+    setEditingChatTitle(currentTitle);
+    setTimeout(() => {
+      chatTabInputRef.current?.focus();
+      chatTabInputRef.current?.select();
+    }, 0);
+  };
+  
+  const handleDoubleClickChat = (chatId: string, currentTitle: string) => {
+    setEditingChatId(chatId);
+    setEditingChatTitle(currentTitle);
+    setTimeout(() => {
+      chatTabInputRef.current?.focus();
+      chatTabInputRef.current?.select();
+    }, 0);
+  };
+  
+  const handleSaveRenameChat = () => {
+    if (editingChatId && editingChatTitle.trim()) {
+      updateChatMutation.mutate({ 
+        chatId: editingChatId, 
+        data: { title: editingChatTitle.trim() } 
+      });
+    }
+    setEditingChatId(null);
+    setEditingChatTitle('');
+  };
+  
+  const handleCancelRenameChat = () => {
+    setEditingChatId(null);
+    setEditingChatTitle('');
   };
   
   const formatRelativeTime = (date: Date) => {
@@ -607,28 +715,91 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   // Chat Panel Content - using JSX variable instead of component to prevent remounting on re-render
   const chatPanelContent = (
     <div className="flex flex-col h-full bg-[#1A1A1A]">
-      <div className="flex items-center justify-end p-2 border-b border-[#2A2A2A]">
-        <button
-          onClick={handleCollapseChat}
-          className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
-          title="Collapse Chat"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
+      {/* Chat tabs header - darker background to match chat theme */}
+      <div className="flex-shrink-0 bg-[#151515]">
+        <div className="flex items-center justify-between px-2 py-2">
+          {/* Chat tabs - scrollable */}
+          <div className="flex items-center gap-1 overflow-x-auto flex-1 scrollbar-hide">
+            {/* + New Chat button at the start */}
+            <button
+              onClick={handleCreateNewChat}
+              className="flex-shrink-0 px-2 py-1 text-xs text-[#6B7280] hover:text-white hover:bg-[#252525] rounded transition-colors"
+              title="New Chat"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+            
+            {chatConversations.map((chat) => {
+              const isActive = chat.id === activeChatId;
+              const isEditing = chat.id === editingChatId;
+              
+              return (
+                <div
+                  key={chat.id}
+                  className={`group flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors cursor-pointer flex-shrink-0 max-w-[120px] ${
+                    isActive
+                      ? 'bg-[#252525] text-white'
+                      : 'text-[#9CA3AF] hover:text-white hover:bg-[#1E1E1E]'
+                  }`}
+                  onClick={() => handleSwitchChat(chat.id)}
+                  onDoubleClick={() => handleDoubleClickChat(chat.id, chat.title)}
+                >
+                  {isEditing ? (
+                    <input
+                      ref={chatTabInputRef}
+                      type="text"
+                      value={editingChatTitle}
+                      onChange={(e) => setEditingChatTitle(e.target.value)}
+                      onBlur={handleSaveRenameChat}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSaveRenameChat();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          handleCancelRenameChat();
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full bg-[#1A1A1A] text-white text-xs px-1 py-0.5 rounded border border-[#FF6B35] outline-none"
+                    />
+                  ) : (
+                    <>
+                      <span className="truncate" title={chat.title}>
+                        {chat.title}
+                      </span>
+                      {chatConversations.length > 1 && (
+                        <button
+                          onClick={(e) => handleDeleteChat(chat.id, e)}
+                          className="opacity-0 group-hover:opacity-100 text-[#6B7280] hover:text-white transition-all flex-shrink-0"
+                          title="Delete chat"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* Collapse button */}
+          <button
+            onClick={handleCollapseChat}
+            className="flex-shrink-0 p-1 text-[#6B7280] hover:text-white hover:bg-[#252525] rounded transition-colors ml-1"
+            title="Collapse Chat"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+        </div>
       </div>
       
+      {/* Chat messages area */}
       <div
         ref={aiChatContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-hide"
       >
-        {chatMessages.length === 0 && (
-          <div className="text-center py-8">
-            <Sparkles className="w-8 h-8 mx-auto mb-3 text-[#FF6B35] opacity-50" />
-            <p className="text-white mb-1">Start a conversation about this insight</p>
-            <p className="text-xs text-[#6B7280]">Ask questions, get analysis, or brainstorm ideas (only you can see this chat)</p>
-          </div>
-        )}
-        
         {chatMessages.map((message) => (
           <div
             key={message.id}

@@ -18,6 +18,7 @@ export interface ChatMessage {
 export interface UseChatOptions {
   spaceId: string | null;
   insightId: string;
+  chatId?: string | null;
 }
 
 export interface UseChatReturn {
@@ -29,7 +30,7 @@ export interface UseChatReturn {
   clearMessages: () => void;
 }
 
-export function useChat({ spaceId, insightId }: UseChatOptions): UseChatReturn {
+export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChatReturn {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,10 +44,11 @@ export function useChat({ spaceId, insightId }: UseChatOptions): UseChatReturn {
     setMessages([]);
   }, []);
 
+  // Reset messages when chat context changes
   useEffect(() => {
     setMessages([]);
     setError(null);
-  }, [insightId, spaceId]);
+  }, [insightId, spaceId, chatId]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
