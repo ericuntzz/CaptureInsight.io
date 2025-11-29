@@ -108,6 +108,60 @@ function CollapsedChatPanel({ onClick }: { onClick: () => void }) {
   );
 }
 
+// Helper functions for opacity calculation (must be outside component)
+const getContentOpacity = (size: number) => {
+  if (size <= 4) return 0;
+  if (size >= 10) return 1;
+  return (size - 4) / 6;
+};
+
+const getCollapsedOpacity = (size: number) => {
+  if (size <= 4) return 1;
+  if (size >= 10) return 0;
+  return 1 - (size - 4) / 6;
+};
+
+// PanelContentWrapper - MUST be outside the main component to prevent remounting on re-render
+function PanelContentWrapper({ 
+  size, 
+  collapsedContent, 
+  expandedContent 
+}: { 
+  size: number; 
+  collapsedContent: React.ReactNode; 
+  expandedContent: React.ReactNode;
+}) {
+  const contentOpacity = getContentOpacity(size);
+  const collapsedOpacity = getCollapsedOpacity(size);
+  
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      {/* Collapsed content - fades out as panel grows */}
+      <div 
+        className="absolute inset-0 z-10"
+        style={{ 
+          opacity: collapsedOpacity,
+          pointerEvents: collapsedOpacity > 0.5 ? 'auto' : 'none',
+          transition: 'opacity 100ms ease-out'
+        }}
+      >
+        {collapsedContent}
+      </div>
+      {/* Expanded content - fades in as panel grows */}
+      <div 
+        className="absolute inset-0 z-0"
+        style={{ 
+          opacity: contentOpacity,
+          pointerEvents: contentOpacity > 0.5 ? 'auto' : 'none',
+          transition: 'opacity 100ms ease-out'
+        }}
+      >
+        {expandedContent}
+      </div>
+    </div>
+  );
+}
+
 interface InsightSource {
   id: string;
   sourceType: 'screenshot' | 'link' | 'file' | 'chat' | 'datasheet';
@@ -216,19 +270,6 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
         setRightPanelOrder(prev => prev === 'canvas-data' ? 'data-canvas' : 'canvas-data');
       }
     }
-  };
-  
-  // Calculate continuous opacity for smooth fade during drag (fade between 4% and 10%)
-  const getContentOpacity = (size: number) => {
-    if (size <= 4) return 0;
-    if (size >= 10) return 1;
-    return (size - 4) / 6; // Linear fade from 4% to 10%
-  };
-  
-  const getCollapsedOpacity = (size: number) => {
-    if (size <= 4) return 1;
-    if (size >= 10) return 0;
-    return 1 - (size - 4) / 6; // Inverse of content opacity
   };
   
   // Insight tabs state
@@ -783,47 +824,6 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
       onRemoveSource={handleRemoveSource}
     />
   );
-
-  // Panel content wrappers with continuous opacity based on live size
-  const PanelContentWrapper = ({ 
-    size, 
-    collapsedContent, 
-    expandedContent 
-  }: { 
-    size: number; 
-    collapsedContent: React.ReactNode; 
-    expandedContent: React.ReactNode;
-  }) => {
-    const contentOpacity = getContentOpacity(size);
-    const collapsedOpacity = getCollapsedOpacity(size);
-    
-    return (
-      <div className="relative h-full w-full overflow-hidden">
-        {/* Collapsed content - fades out as panel grows */}
-        <div 
-          className="absolute inset-0 z-10"
-          style={{ 
-            opacity: collapsedOpacity,
-            pointerEvents: collapsedOpacity > 0.5 ? 'auto' : 'none',
-            transition: 'opacity 100ms ease-out'
-          }}
-        >
-          {collapsedContent}
-        </div>
-        {/* Expanded content - fades in as panel grows */}
-        <div 
-          className="absolute inset-0 z-0"
-          style={{ 
-            opacity: contentOpacity,
-            pointerEvents: contentOpacity > 0.5 ? 'auto' : 'none',
-            transition: 'opacity 100ms ease-out'
-          }}
-        >
-          {expandedContent}
-        </div>
-      </div>
-    );
-  };
 
   // Sortable items for DnD - only canvas and data can be reordered
   const sortableItems = rightPanelOrder === 'canvas-data' ? ['canvas', 'data'] : ['data', 'canvas'];
