@@ -903,6 +903,14 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
       <div className="flex-shrink-0 bg-[#1E1E1E]">
         <div className="flex items-center justify-between px-6 py-4 bg-[rgb(33,33,33)]">
           <div className="flex items-center gap-2 overflow-x-auto flex-1 scrollbar-hide">
+            <button
+              onClick={handleCreateNewInsight}
+              className="flex-shrink-0 px-3 py-1.5 text-sm text-[#6B7280] hover:text-white hover:bg-[#252525] rounded transition-colors"
+              title="New Insight"
+            >
+              +
+            </button>
+            
             {openTabs.map((tab) => {
               const isActive = tab.id === activeTabId;
               return (
