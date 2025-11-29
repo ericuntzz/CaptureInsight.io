@@ -864,8 +864,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
               />
             </ResizablePanel>
             
-            <ResizableHandle className="w-1.5 group cursor-col-resize flex items-center justify-center bg-[#212121]">
-              <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+            <ResizableHandle className="w-1.5 group cursor-col-resize flex items-center justify-center bg-transparent">
+              <div className="w-[1px] h-full bg-[#3A3F4E]/50 group-hover:bg-[#FF6B35]/60 transition-colors" />
             </ResizableHandle>
             
             {/* Center and Right panels - order depends on rightPanelOrder */}
@@ -893,10 +893,10 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
                 </ResizablePanel>
                 
                 <ResizableHandle 
-                  className="w-1.5 group cursor-col-resize flex items-center justify-center"
+                  className="w-1.5 group cursor-col-resize flex items-center justify-center bg-transparent"
                   onDoubleClick={handleDoubleClickExpandCanvas}
                 >
-                  <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+                  <div className="w-[1px] h-full bg-[#3A3F4E]/50 group-hover:bg-[#FF6B35]/60 transition-colors" />
                 </ResizableHandle>
                 
                 {/* Data Panel (right) */}
@@ -944,10 +944,10 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
                 </ResizablePanel>
                 
                 <ResizableHandle 
-                  className="w-1.5 group cursor-col-resize flex items-center justify-center"
+                  className="w-1.5 group cursor-col-resize flex items-center justify-center bg-transparent"
                   onDoubleClick={handleDoubleClickExpandData}
                 >
-                  <div className="w-[1px] h-full bg-[#3A3F4E] group-hover:bg-[#FF6B35]/60 transition-colors" />
+                  <div className="w-[1px] h-full bg-[#3A3F4E]/50 group-hover:bg-[#FF6B35]/60 transition-colors" />
                 </ResizableHandle>
                 
                 {/* Canvas Panel (right - swapped) */}
