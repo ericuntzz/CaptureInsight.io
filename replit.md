@@ -14,7 +14,7 @@ CaptureInsight is a screenshot-based analytics platform designed for marketing m
 CaptureInsight is a full-stack application with a React 18 (TypeScript) frontend using Vite, Radix UI, Tailwind CSS, TanStack React Query, TipTap, and Motion library. The backend is an Express.js (Node.js) server utilizing PostgreSQL (Neon Serverless) with Drizzle ORM. Authentication is handled via Replit Auth (OAuth), and sessions are managed with `connect-pg-simple`.
 
 The application's core features include:
-- **Hierarchical Workspace Organization**: Spaces > Folders > Sheets.
+- **Hierarchical Organization**: Spaces > Workspaces > Insights/Chats/Sheets. Each Workspace serves as a self-contained container with all data scoped to it. Users can create and switch between multiple Workspaces within a Space.
 - **Space-scoped Tagging System**: With associations for organization.
 - **Insights Management**: Knowledge cards with status/priority, linked sources, and threaded comments.
 - **AI Chat Integration**: Per insight AI conversations for analysis and RAG-enabled chat.
