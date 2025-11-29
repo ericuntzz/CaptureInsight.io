@@ -134,6 +134,7 @@ export const spacesRelations = relations(spaces, ({ one, many }) => ({
   sheets: many(sheets),
   tags: many(tags),
   insights: many(insights),
+  chatThreads: many(chatThreads),
   chatMessages: many(chatMessages),
   changeLogs: many(changeLogs),
 }));
@@ -308,16 +309,27 @@ export const insightCommentsRelations = relations(insightComments, ({ one }) => 
   }),
 }));
 
-// Chat threads table
+// Chat threads table - space-scoped chat conversations with optional insight context
 export const chatThreads = pgTable("chat_threads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title").notNull().default('New Chat'),
+  spaceId: varchar("space_id").references(() => spaces.id).notNull(),
   insightId: varchar("insight_id").references(() => insights.id),
   userId: varchar("user_id").references(() => users.id),
+  savedToMemory: boolean("saved_to_memory").default(false),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
   lastMessageAt: timestamp("last_message_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_chat_threads_space").on(table.spaceId),
+  index("idx_chat_threads_space_last_message").on(table.spaceId, table.lastMessageAt),
+]);
 
 export const chatThreadsRelations = relations(chatThreads, ({ one, many }) => ({
+  space: one(spaces, {
+    fields: [chatThreads.spaceId],
+    references: [spaces.id],
+  }),
   insight: one(insights, {
     fields: [chatThreads.insightId],
     references: [insights.id],

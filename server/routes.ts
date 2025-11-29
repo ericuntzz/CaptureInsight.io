@@ -1307,7 +1307,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ==================== CHAT THREADS & MESSAGES ====================
+  // ==================== CHAT CONVERSATIONS (Space-scoped) ====================
+  
+  // Chat thread ownership validation middleware
+  const requireChatOwner = async (req: any, res: any, next: any) => {
+    try {
+      const chatId = req.params.chatId || req.params.id;
+      const chat = await storage.getChatThread(chatId);
+      
+      if (!chat) {
+        return res.status(404).json({ message: "Chat not found" });
+      }
+      
+      // Verify user owns the space containing this chat
+      const space = await storage.getSpace(chat.spaceId);
+      if (!space || space.ownerId !== req.user.claims.sub) {
+        return res.status(403).json({ message: "Forbidden: you do not have access to this chat" });
+      }
+      
+      req.chat = chat;
+      req.space = space;
+      next();
+    } catch (error) {
+      console.error("Error in requireChatOwner middleware:", error);
+      res.status(500).json({ message: "Failed to validate chat access" });
+    }
+  };
+
+  // Get all chats for a space
+  app.get('/api/spaces/:spaceId/chats', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
+    try {
+      const chats = await storage.getChatThreadsBySpace(req.params.spaceId);
+      res.json(chats);
+    } catch (error) {
+      console.error("Error fetching chats:", error);
+      res.status(500).json({ message: "Failed to fetch chats" });
+    }
+  });
+
+  // Create a new chat in a space
+  app.post('/api/spaces/:spaceId/chats', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { title, insightId } = req.body;
+      
+      const chat = await storage.createChatThread({
+        title: title || 'New Chat',
+        spaceId: req.params.spaceId,
+        userId,
+        insightId: insightId || null,
+        savedToMemory: false,
+      });
+      res.status(201).json(chat);
+    } catch (error) {
+      console.error("Error creating chat:", error);
+      res.status(500).json({ message: "Failed to create chat" });
+    }
+  });
+
+  // Get a specific chat
+  app.get('/api/chats/:chatId', isAuthenticated, requireChatOwner, async (req: any, res) => {
+    try {
+      res.json(req.chat);
+    } catch (error) {
+      console.error("Error fetching chat:", error);
+      res.status(500).json({ message: "Failed to fetch chat" });
+    }
+  });
+
+  // Update a chat (rename, update insight context, etc.)
+  app.patch('/api/chats/:chatId', isAuthenticated, requireChatOwner, async (req: any, res) => {
+    try {
+      const { title, insightId, savedToMemory } = req.body;
+      const updateData: any = {};
+      
+      if (title !== undefined) updateData.title = title;
+      if (insightId !== undefined) updateData.insightId = insightId;
+      if (savedToMemory !== undefined) updateData.savedToMemory = savedToMemory;
+      
+      const chat = await storage.updateChatThread(req.params.chatId, updateData);
+      if (!chat) {
+        return res.status(404).json({ message: "Chat not found" });
+      }
+      res.json(chat);
+    } catch (error) {
+      console.error("Error updating chat:", error);
+      res.status(500).json({ message: "Failed to update chat" });
+    }
+  });
+
+  // Delete a chat
+  app.delete('/api/chats/:chatId', isAuthenticated, requireChatOwner, async (req: any, res) => {
+    try {
+      const deleted = await storage.deleteChatThread(req.params.chatId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Chat not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting chat:", error);
+      res.status(500).json({ message: "Failed to delete chat" });
+    }
+  });
+
+  // Get messages for a chat
+  app.get('/api/chats/:chatId/messages', isAuthenticated, requireChatOwner, async (req: any, res) => {
+    try {
+      const messages = await storage.getChatMessages(req.params.chatId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching chat messages:", error);
+      res.status(500).json({ message: "Failed to fetch chat messages" });
+    }
+  });
+
+  // Add a message to a chat
+  app.post('/api/chats/:chatId/messages', isAuthenticated, requireChatOwner, async (req: any, res) => {
+    try {
+      const { role, content, citations } = req.body;
+      
+      if (!role || !content) {
+        return res.status(400).json({ message: "Role and content are required" });
+      }
+      
+      const message = await storage.createChatMessage({
+        threadId: req.params.chatId,
+        role,
+        content,
+        spaceId: req.chat.spaceId,
+        citations: citations || null,
+      });
+      res.status(201).json(message);
+    } catch (error) {
+      console.error("Error creating chat message:", error);
+      res.status(500).json({ message: "Failed to create chat message" });
+    }
+  });
+
+  // Legacy chat thread endpoints (keeping for backwards compatibility)
   app.get('/api/chat-threads', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

@@ -114,13 +114,16 @@ export interface IStorage {
 
   // Chat thread operations
   getChatThreads(userId: string): Promise<ChatThread[]>;
+  getChatThreadsBySpace(spaceId: string): Promise<ChatThread[]>;
   getChatThread(id: string): Promise<ChatThread | undefined>;
   createChatThread(thread: InsertChatThread): Promise<ChatThread>;
   updateChatThread(id: string, thread: Partial<InsertChatThread>): Promise<ChatThread | undefined>;
+  deleteChatThread(id: string): Promise<boolean>;
 
   // Chat message operations
   getChatMessages(threadId: string): Promise<ChatMessage[]>;
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+  deleteChatMessages(threadId: string): Promise<boolean>;
 
   // Change log operations
   getChangeLogs(spaceId: string): Promise<ChangeLog[]>;
@@ -417,6 +420,14 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(chatThreads.lastMessageAt));
   }
 
+  async getChatThreadsBySpace(spaceId: string): Promise<ChatThread[]> {
+    return await db
+      .select()
+      .from(chatThreads)
+      .where(eq(chatThreads.spaceId, spaceId))
+      .orderBy(desc(chatThreads.lastMessageAt));
+  }
+
   async getChatThread(id: string): Promise<ChatThread | undefined> {
     const [thread] = await db.select().from(chatThreads).where(eq(chatThreads.id, id));
     return thread;
@@ -430,10 +441,16 @@ export class DatabaseStorage implements IStorage {
   async updateChatThread(id: string, thread: Partial<InsertChatThread>): Promise<ChatThread | undefined> {
     const [updated] = await db
       .update(chatThreads)
-      .set(thread)
+      .set({ ...thread, updatedAt: new Date() })
       .where(eq(chatThreads.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteChatThread(id: string): Promise<boolean> {
+    await db.delete(chatMessages).where(eq(chatMessages.threadId, id));
+    const result = await db.delete(chatThreads).where(eq(chatThreads.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Chat message operations
@@ -451,6 +468,11 @@ export class DatabaseStorage implements IStorage {
       await this.updateChatThread(message.threadId, { lastMessageAt: new Date() });
     }
     return created;
+  }
+
+  async deleteChatMessages(threadId: string): Promise<boolean> {
+    const result = await db.delete(chatMessages).where(eq(chatMessages.threadId, threadId));
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Change log operations
