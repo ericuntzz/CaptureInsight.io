@@ -1643,6 +1643,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate a short chat title from a message
+  app.post('/api/ai/generate-chat-title', isAuthenticated, async (req: any, res) => {
+    try {
+      const { message } = req.body;
+
+      if (!message || typeof message !== 'string') {
+        return res.status(400).json({ message: "Message is required" });
+      }
+
+      if (!isGeminiConfigured()) {
+        // Fallback to simple truncation if AI not configured
+        const fallbackTitle = message.slice(0, 25) + (message.length > 25 ? '...' : '');
+        return res.json({ title: fallbackTitle });
+      }
+
+      const result = await chat({
+        messages: [
+          {
+            role: 'user',
+            content: `Generate a very short title (3-5 words max) that summarizes this message. Return ONLY the title text, nothing else. No quotes, no explanation.\n\nMessage: "${message}"`,
+          }
+        ],
+        useRag: false,
+      });
+      
+      // Clean up the title - remove quotes, trim, limit length
+      let title = result.response.trim();
+      title = title.replace(/^["']|["']$/g, ''); // Remove surrounding quotes
+      title = title.replace(/^Title:\s*/i, ''); // Remove "Title:" prefix if present
+      
+      // Ensure it's not too long
+      if (title.length > 40) {
+        title = title.slice(0, 37) + '...';
+      }
+      
+      res.json({ title });
+    } catch (error) {
+      console.error("Error generating chat title:", error);
+      // Fallback to simple truncation on error
+      const message = req.body.message || '';
+      const fallbackTitle = message.slice(0, 25) + (message.length > 25 ? '...' : '');
+      res.json({ title: fallbackTitle });
+    }
+  });
+
   app.post('/api/ai/extract-insights', isAuthenticated, async (req: any, res) => {
     try {
       const { content, spaceGoals } = req.body;

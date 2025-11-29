@@ -541,8 +541,24 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     // Auto-generate title from first message if chat title is "New Chat"
     const currentChat = chatConversations.find(c => c.id === activeChatId);
     if (currentChat && currentChat.title === 'New Chat' && chatMessages.length === 0) {
-      const autoTitle = messageContent.slice(0, 30) + (messageContent.length > 30 ? '...' : '');
-      updateChatMutation.mutate({ chatId: currentChat.id, data: { title: autoTitle } });
+      // Use AI to generate a short summary title
+      fetch('/api/ai/generate-chat-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ message: messageContent }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.title) {
+            updateChatMutation.mutate({ chatId: currentChat.id, data: { title: data.title } });
+          }
+        })
+        .catch(() => {
+          // Fallback to simple truncation if AI fails
+          const fallbackTitle = messageContent.slice(0, 25) + (messageContent.length > 25 ? '...' : '');
+          updateChatMutation.mutate({ chatId: currentChat.id, data: { title: fallbackTitle } });
+        });
     }
     
     await sendMessage(messageContent);
