@@ -333,7 +333,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   
   const activeInsightId = insightId || activeTabId;
   
-  const { messages: chatMessages, sendMessage, isLoading: isAiTyping } = useChat({
+  const { messages: chatMessages, sendMessage, isLoading: isAiTyping, isLoadingHistory, historyLoadError, retryLoadHistory } = useChat({
     spaceId,
     insightId: activeInsightId,
     chatId: activeChatId,
@@ -800,6 +800,19 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
         ref={aiChatContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-hide"
       >
+        {/* Error state with retry */}
+        {historyLoadError && (
+          <div className="text-center py-8">
+            <div className="text-red-400 mb-3 text-sm">{historyLoadError}</div>
+            <button
+              onClick={retryLoadHistory}
+              className="px-4 py-2 text-sm bg-[#FF6B35] hover:bg-[#E55A2B] text-white rounded-lg transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        
         {chatMessages.map((message) => (
           <div
             key={message.id}
@@ -841,13 +854,20 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
           value={aiChatInput}
           onChange={(e) => setAiChatInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !isLoadingHistory && !historyLoadError) {
               e.preventDefault();
               handleSendMessage();
             }
           }}
-          placeholder="Ask about this insight... (Press Enter to send)"
-          className="w-full px-4 py-3 bg-[#1A1F2E] border border-[#2D3B4E] text-white placeholder:text-[#6B7280] outline-none focus:border-[#FF6B35] transition-colors rounded-[43px] text-[13px]"
+          disabled={isLoadingHistory || !!historyLoadError}
+          placeholder={
+            isLoadingHistory 
+              ? "Loading chat history..." 
+              : historyLoadError 
+                ? "Please retry loading chat history above" 
+                : "Ask about this insight... (Press Enter to send)"
+          }
+          className={`w-full px-4 py-3 bg-[#1A1F2E] border border-[#2D3B4E] text-white placeholder:text-[#6B7280] outline-none focus:border-[#FF6B35] transition-colors rounded-[43px] text-[13px] ${(isLoadingHistory || historyLoadError) ? 'opacity-50 cursor-not-allowed' : ''}`}
         />
       </div>
     </div>

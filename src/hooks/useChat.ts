@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
@@ -25,6 +25,9 @@ export interface UseChatReturn {
   messages: ChatMessage[];
   sendMessage: (content: string) => Promise<void>;
   isLoading: boolean;
+  isLoadingHistory: boolean;
+  historyLoadError: string | null;
+  retryLoadHistory: () => void;
   error: string | null;
   clearError: () => void;
   clearMessages: () => void;
@@ -35,6 +38,11 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
+  const loadedChatIdRef = useRef<string | null>(null);
+  const currentChatIdRef = useRef<string | null>(chatId || null);
+  const pendingMessagesRef = useRef<ChatMessage[]>([]);
 
   const clearError = useCallback(() => {
     setError(null);
@@ -42,13 +50,100 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
 
   const clearMessages = useCallback(() => {
     setMessages([]);
+    loadedChatIdRef.current = null;
   }, []);
 
-  // Reset messages when chat context changes
+  // Function to load chat history
+  const loadChatHistory = useCallback(async (targetChatId: string) => {
+    if (!targetChatId) return;
+    
+    setIsLoadingHistory(true);
+    setHistoryLoadError(null);
+    
+    try {
+      const res = await fetch(`/api/chats/${targetChatId}/messages`, { credentials: 'include' });
+      
+      if (!res.ok) throw new Error('Failed to load chat history');
+      
+      const data = await res.json();
+      const loadedMessages: ChatMessage[] = data.map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(m.createdAt),
+        citations: m.citations,
+      }));
+      
+      // Append any pending messages that were sent while loading
+      const allMessages = [...loadedMessages, ...pendingMessagesRef.current];
+      pendingMessagesRef.current = [];
+      
+      setMessages(allMessages);
+      loadedChatIdRef.current = targetChatId;
+      setHistoryLoadError(null);
+    } catch (err) {
+      console.error('Failed to load chat history:', err);
+      setHistoryLoadError('Failed to load chat history');
+      setMessages([]);
+      // Don't set loadedChatIdRef so retry is allowed
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
+
+  // Retry handler for failed history load
+  const retryLoadHistory = useCallback(() => {
+    const targetId = currentChatIdRef.current;
+    if (targetId && historyLoadError) {
+      loadChatHistory(targetId);
+    }
+  }, [loadChatHistory, historyLoadError]);
+
+  // Load messages from database when chatId changes
   useEffect(() => {
+    // Always update currentChatIdRef first so retry works even on initial mount
+    currentChatIdRef.current = chatId || null;
+    
+    if (!chatId) {
+      setMessages([]);
+      loadedChatIdRef.current = null;
+      setHistoryLoadError(null);
+      return;
+    }
+    
+    if (loadedChatIdRef.current === chatId) return;
+    
+    loadChatHistory(chatId);
+  }, [chatId, loadChatHistory]);
+
+  // Reset when spaceId or insightId changes
+  useEffect(() => {
+    loadedChatIdRef.current = null;
+    currentChatIdRef.current = null;
+    pendingMessagesRef.current = [];
     setMessages([]);
     setError(null);
-  }, [insightId, spaceId, chatId]);
+    setHistoryLoadError(null);
+  }, [insightId, spaceId]);
+
+  const persistMessage = useCallback(async (role: 'user' | 'assistant', content: string, citations?: any[]): Promise<boolean> => {
+    if (!chatId) return false;
+    
+    try {
+      const res = await fetch(`/api/chats/${chatId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ role, content, citations }),
+      });
+      
+      if (!res.ok) throw new Error('Failed to save message');
+      return true;
+    } catch (err) {
+      console.error('Failed to persist message:', err);
+      return false;
+    }
+  }, [chatId]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
@@ -70,6 +165,12 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
       return;
     }
 
+    // Don't allow sending if history failed to load
+    if (historyLoadError) {
+      toast.error('Please retry loading chat history first.');
+      return;
+    }
+
     const userMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: 'user',
@@ -77,9 +178,20 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
       timestamp: new Date(),
     };
 
+    // If still loading history, add to pending messages
+    if (isLoadingHistory) {
+      pendingMessagesRef.current.push(userMessage);
+    }
+
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
     setError(null);
+
+    // Persist user message to database
+    const userMsgSaved = await persistMessage('user', content.trim());
+    if (!userMsgSaved && chatId) {
+      toast.error('Failed to save your message. Please try again.');
+    }
 
     try {
       const chatHistory = [...messages, userMessage].map(m => ({
@@ -142,7 +254,17 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
         citations: citations?.length > 0 ? citations : undefined,
       };
 
-      setMessages(prev => [...prev, aiMessage]);
+      // Persist AI message to database first, then update UI
+      const aiMsgSaved = await persistMessage('assistant', data.response, citations?.length > 0 ? citations : undefined);
+      
+      if (aiMsgSaved || !chatId) {
+        // Only add to UI if persisted successfully (or no chatId means no persistence needed)
+        setMessages(prev => [...prev, aiMessage]);
+      } else {
+        // Failed to persist - show error and don't add to UI
+        toast.error('AI response was not saved. Please try again.');
+        setError('AI response was not saved. Please try again.');
+      }
     } catch (err) {
       console.error('Chat error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Failed to get AI response';
@@ -151,12 +273,15 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
     } finally {
       setIsLoading(false);
     }
-  }, [messages, spaceId, isAuthenticated, isAuthLoading]);
+  }, [messages, spaceId, isAuthenticated, isAuthLoading, persistMessage, isLoadingHistory, chatId, historyLoadError]);
 
   return {
     messages,
     sendMessage,
     isLoading,
+    isLoadingHistory,
+    historyLoadError,
+    retryLoadHistory,
     error,
     clearError,
     clearMessages,
