@@ -64,6 +64,9 @@ function DraggableCollapsedPanel({
     opacity: isDragging ? 0.5 : 1,
   };
   
+  // Canvas uses #212121 to match expanded state, Data uses #1E1E1E
+  const bgColor = type === 'canvas' ? 'bg-[#212121]' : 'bg-[#1E1E1E]';
+  
   return (
     <div
       ref={setNodeRef}
@@ -71,7 +74,7 @@ function DraggableCollapsedPanel({
       {...attributes}
       {...listeners}
       onClick={onClick}
-      className="flex flex-col items-center justify-between py-4 h-full w-full bg-[#1E1E1E] hover:bg-[#252525] transition-colors cursor-grab active:cursor-grabbing"
+      className={`flex flex-col items-center justify-between py-4 h-full w-full ${bgColor} hover:bg-[#252525] transition-colors cursor-grab active:cursor-grabbing`}
       title={`${type === 'canvas' ? 'Expand Canvas' : 'Expand Data Sources'} (drag to reorder)`}
       aria-label={type === 'canvas' ? 'Expand Canvas' : 'Expand Data Sources'}
     >
