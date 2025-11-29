@@ -716,8 +716,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   const chatPanelContent = (
     <div className="flex flex-col h-full bg-[#1A1A1A]">
       {/* Chat tabs header - matching canvas panel style */}
-      <div className="flex-shrink-0 bg-[#1E1E1E]">
-        <div className="flex items-center justify-between px-6 py-4 bg-[rgb(33,33,33)]">
+      <div className="flex-shrink-0 bg-[#1A1A1A]">
+        <div className="flex items-center justify-between px-6 py-4 bg-[#1A1A1A]">
           {/* Chat tabs - scrollable */}
           <div className="flex items-center gap-2 overflow-x-auto flex-1 scrollbar-hide">
             {chatConversations.map((chat) => {
