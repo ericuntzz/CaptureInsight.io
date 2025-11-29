@@ -288,6 +288,9 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     { id: 'default', title: 'Untitled Insight', summary: '', isSaved: false }
   ]);
   const [activeTabId, setActiveTabId] = useState('default');
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editingTabTitle, setEditingTabTitle] = useState('');
+  const insightTabInputRef = useRef<HTMLInputElement>(null);
   
   // Canvas state
   const [viewMode, setViewMode] = useState<'default' | 'slide'>('default');
@@ -635,6 +638,42 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     setEditingChatTitle('');
   };
   
+  // Insight tab rename handlers
+  const handleDoubleClickTab = (tabId: string, currentTitle: string) => {
+    setEditingTabId(tabId);
+    setEditingTabTitle(currentTitle);
+    setTimeout(() => {
+      insightTabInputRef.current?.focus();
+      insightTabInputRef.current?.select();
+    }, 0);
+  };
+  
+  const handleSaveRenameTab = () => {
+    if (editingTabId && editingTabTitle.trim()) {
+      const newTitle = editingTabTitle.trim();
+      // Update local tab state
+      setOpenTabs(tabs => tabs.map(t => 
+        t.id === editingTabId ? { ...t, title: newTitle } : t
+      ));
+      // Update localTitle if this is the active tab
+      if (editingTabId === activeTabId) {
+        setLocalTitle(newTitle);
+      }
+      // If the tab has a dbId, also update in database
+      const tab = openTabs.find(t => t.id === editingTabId);
+      if (tab?.dbId) {
+        updateInsightMutation.mutate({ id: tab.dbId, data: { title: newTitle } });
+      }
+    }
+    setEditingTabId(null);
+    setEditingTabTitle('');
+  };
+  
+  const handleCancelRenameTab = () => {
+    setEditingTabId(null);
+    setEditingTabTitle('');
+  };
+  
   const formatRelativeTime = (date: Date) => {
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
@@ -913,29 +952,54 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
             
             {openTabs.map((tab) => {
               const isActive = tab.id === activeTabId;
+              const isEditing = tab.id === editingTabId;
               return (
                 <div
                   key={tab.id}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded transition-colors cursor-pointer ${
+                  className={`group flex items-center gap-2 px-3 py-1.5 rounded transition-colors cursor-pointer max-w-[200px] ${
                     isActive
                       ? 'bg-[#2A2A2A] text-white'
                       : 'text-[#9CA3AF] hover:text-white hover:bg-[#252525]'
                   }`}
                   onClick={() => handleSwitchTab(tab.id)}
+                  onDoubleClick={() => handleDoubleClickTab(tab.id, tab.title)}
                 >
-                  <span className="text-sm whitespace-nowrap max-w-[200px] truncate">
-                    {tab.title}
-                  </span>
-                  {openTabs.length > 1 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCloseTab(tab.id);
+                  {isEditing ? (
+                    <input
+                      ref={insightTabInputRef}
+                      type="text"
+                      value={editingTabTitle}
+                      onChange={(e) => setEditingTabTitle(e.target.value)}
+                      onBlur={handleSaveRenameTab}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSaveRenameTab();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          handleCancelRenameTab();
+                        }
                       }}
-                      className="text-[#6B7280] hover:text-white transition-colors"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full bg-[#1A1A1A] text-white text-sm px-1 py-0.5 rounded border border-[#FF6B35] outline-none"
+                    />
+                  ) : (
+                    <>
+                      <span className="text-sm whitespace-nowrap truncate" title={tab.title}>
+                        {tab.title}
+                      </span>
+                      {openTabs.length > 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCloseTab(tab.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 text-[#6B7280] hover:text-white transition-all flex-shrink-0"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               );
