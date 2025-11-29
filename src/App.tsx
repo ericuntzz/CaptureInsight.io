@@ -1514,7 +1514,7 @@ export default function App() {
           onAnalysisFrequencyChange={handleAnalysisFrequencyChange}
           onAnalysisTimeChange={handleAnalysisTimeChange}
           onSelectedLlmChange={handleSelectedLlmChange}
-          onViewDashboard={() => setCurrentView('data')}
+          onViewDashboard={() => setCurrentView('workspace')}
           forceOpenPopup={forceOpenPopup}
         />
       )}
