@@ -7,6 +7,7 @@ import { SpaceSwitcher } from './SpaceSwitcher';
 import { UserAccountMenu, Company } from './UserAccountMenu';
 import { CreateProjectDialog } from './CreateProjectDialog';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
+import { WorkspaceDeleteDialog } from './WorkspaceDeleteDialog';
 import { toast } from 'sonner';
 import type { DataSource } from './DataSourceSidebar';
 
@@ -25,7 +26,7 @@ interface Sheet {
   dataSource?: DataSource;
 }
 
-interface FolderType {
+interface WorkspaceType {
   id: string;
   name: string;
   sheets: Sheet[];
@@ -35,7 +36,8 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
-  folders: FolderType[];
+  folders: WorkspaceType[];
+  workspaces?: WorkspaceType[];
   goals?: string;
   instructions?: string;
   tags?: import('../data/insightsData').Tag[];
@@ -79,6 +81,10 @@ interface ProjectBrowserProps {
   } | null;
   onNavigateToSettings?: (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies') => void;
   onLogout?: () => void;
+  activeWorkspaceId?: string | null;
+  onWorkspaceChange?: (workspaceId: string) => void;
+  onCreateWorkspace?: (spaceId: string, name: string) => void;
+  onDeleteWorkspace?: (workspaceId: string) => void;
 }
 
 export function ProjectBrowser({ 
@@ -104,6 +110,10 @@ export function ProjectBrowser({
   user,
   onNavigateToSettings,
   onLogout,
+  activeWorkspaceId,
+  onWorkspaceChange,
+  onCreateWorkspace,
+  onDeleteWorkspace,
 }: ProjectBrowserProps) {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set(Array.isArray(projects) ? projects.map(p => p.id) : []));
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -119,6 +129,16 @@ export function ProjectBrowser({
   const [creatingFolder, setCreatingFolder] = useState<{ projectId: string; name: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const createInputRef = useRef<HTMLInputElement>(null);
+  
+  // Workspace creation state
+  const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const workspaceInputRef = useRef<HTMLInputElement>(null);
+  const [showWorkspaceFlyout, setShowWorkspaceFlyout] = useState(false);
+  
+  // Workspace delete dialog state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [workspaceToDelete, setWorkspaceToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Focus input when editing starts
   const prevEditingFolderId = useRef<string | null>(null);
@@ -215,6 +235,42 @@ export function ProjectBrowser({
     setCreatingFolder(null);
   };
 
+  // Focus workspace input when creating starts
+  useEffect(() => {
+    if (isCreatingWorkspace && workspaceInputRef.current) {
+      workspaceInputRef.current.focus();
+      workspaceInputRef.current.select();
+    }
+  }, [isCreatingWorkspace]);
+
+  // Workspace handlers
+  const handleStartCreateWorkspace = () => {
+    setIsCreatingWorkspace(true);
+    setNewWorkspaceName('Untitled Space');
+  };
+
+  const handleSaveCreateWorkspace = () => {
+    if (newWorkspaceName.trim() && currentSpaceId && onCreateWorkspace) {
+      onCreateWorkspace(currentSpaceId, newWorkspaceName.trim());
+      setIsCreatingWorkspace(false);
+      setNewWorkspaceName('');
+      toast.success(`Workspace "${newWorkspaceName.trim()}" created`);
+    } else if (!newWorkspaceName.trim()) {
+      toast.error('Workspace name cannot be empty');
+    }
+  };
+
+  const handleCancelCreateWorkspace = () => {
+    setIsCreatingWorkspace(false);
+    setNewWorkspaceName('');
+  };
+
+  const handleSelectWorkspace = (workspaceId: string) => {
+    onWorkspaceChange?.(workspaceId);
+    onViewChange?.('workspace');
+    setShowWorkspaceFlyout(false);
+  };
+
   const handleProjectsClick = () => {
     // Clicking projects icon in collapsed mode expands the sidebar
     setIsCollapsed(false);
@@ -265,74 +321,6 @@ export function ProjectBrowser({
 
       {/* Navigation Buttons */}
       <div className="px-2 pb-2">
-        {/* Workspace Button - New Unified View */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => onViewChange?.('workspace')}
-              className={`w-full h-10 flex items-center rounded-lg transition-all mb-2 group px-3 ${
-                activeView === 'workspace'
-                  ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
-                  : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
-              }`}
-            >
-              <LayoutGrid className={`w-4 h-4 flex-shrink-0 ${activeView !== 'workspace' && isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
-              <AnimatePresence>
-                {!isCollapsed && (
-                  <motion.span 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-sm whitespace-nowrap overflow-hidden ml-3"
-                  >
-                    Workspace
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </button>
-          </TooltipTrigger>
-          {isCollapsed && (
-            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
-              Workspace
-            </TooltipContent>
-          )}
-        </Tooltip>
-
-        {/* Insights Button (Legacy) */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => onViewChange?.('insights')}
-              className={`w-full h-10 flex items-center rounded-lg transition-all mb-2 group px-3 ${
-                activeView === 'insights'
-                  ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
-                  : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
-              }`}
-            >
-              <Brain className={`w-4 h-4 flex-shrink-0 ${activeView !== 'insights' && isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
-              <AnimatePresence>
-                {!isCollapsed && (
-                  <motion.span 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-sm whitespace-nowrap overflow-hidden ml-3"
-                  >
-                    Insights
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </button>
-          </TooltipTrigger>
-          {isCollapsed && (
-            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
-              Insights
-            </TooltipContent>
-          )}
-        </Tooltip>
-
         {/* Upload Button */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -396,46 +384,205 @@ export function ProjectBrowser({
             </TooltipContent>
           )}
         </Tooltip>
-
-        {/* Files Button */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => onViewChange?.('data')}
-              className={`w-full h-10 flex items-center rounded-lg transition-all mb-2 group px-3 ${
-                activeView === 'data'
-                  ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
-                  : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
-              }`}
-            >
-              <Folder className={`w-4 h-4 flex-shrink-0 ${activeView !== 'data' && isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
-              <AnimatePresence>
-                {!isCollapsed && (
-                  <motion.span 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-sm whitespace-nowrap overflow-hidden ml-3"
-                  >
-                    Files
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </button>
-          </TooltipTrigger>
-          {isCollapsed && (
-            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
-              Files
-            </TooltipContent>
-          )}
-        </Tooltip>
-
-        {/* AI Assistant Button - REMOVED: Now using Canvas mode for AI interactions */}
       </div>
 
-      {/* Spacer - Removed folders section */}
-      <div className="flex-1" />
+      {/* Divider */}
+      <div className="mx-2 mb-2 border-b border-[rgba(255,107,53,0.1)]" />
+
+      {/* Workspaces Section */}
+      <div className="px-2 flex-1 overflow-hidden flex flex-col">
+        {/* Workspaces Header - Collapsed Mode with Flyout */}
+        {isCollapsed ? (
+          <div className="relative">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setShowWorkspaceFlyout(!showWorkspaceFlyout)}
+                  className={`w-full h-10 flex items-center justify-center rounded-lg transition-all mb-2 group ${
+                    activeView === 'workspace'
+                      ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
+                      : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
+                  }`}
+                >
+                  <LayoutGrid className="w-4 h-4 flex-shrink-0" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+                Workspaces
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Flyout Menu for Collapsed Mode */}
+            <AnimatePresence>
+              {showWorkspaceFlyout && (
+                <>
+                  {/* Backdrop to close flyout */}
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowWorkspaceFlyout(false)}
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute left-full top-0 ml-2 w-56 bg-[#1A1F2E] border border-[#2A2F3E] rounded-lg shadow-xl z-50 py-2"
+                  >
+                    {/* Header */}
+                    <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 border-b border-[#2A2F3E] mb-1">
+                      Workspaces
+                    </div>
+                    
+                    {/* New Workspace Button */}
+                    <button
+                      onClick={() => {
+                        handleStartCreateWorkspace();
+                        setShowWorkspaceFlyout(false);
+                        setIsCollapsed(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[#FF6B35] hover:bg-[rgba(255,107,53,0.1)] transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>New Workspace</span>
+                    </button>
+                    
+                    {/* Workspace List */}
+                    <div className="max-h-64 overflow-y-auto">
+                      {(currentSpace?.workspaces || currentSpace?.folders || []).map((workspace) => (
+                        <button
+                          key={workspace.id}
+                          onClick={() => handleSelectWorkspace(workspace.id)}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                            activeWorkspaceId === workspace.id
+                              ? 'bg-[rgba(255,107,53,0.15)] text-[#FF6B35]'
+                              : 'text-gray-300 hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
+                          }`}
+                        >
+                          <LayoutGrid className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">{workspace.name}</span>
+                        </button>
+                      ))}
+                      {(currentSpace?.workspaces || currentSpace?.folders || []).length === 0 && (
+                        <div className="px-3 py-2 text-sm text-gray-500 italic">
+                          No workspaces yet
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        ) : (
+          <>
+            {/* Workspaces Header - Expanded Mode */}
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Workspaces
+              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleStartCreateWorkspace}
+                    className="p-1 text-[#FF6B35] hover:bg-[rgba(255,107,53,0.1)] rounded transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+                  New Workspace
+                </TooltipContent>
+              </Tooltip>
+            </div>
+
+            {/* Inline Create Workspace Input */}
+            <AnimatePresence>
+              {isCreatingWorkspace && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="mb-2"
+                >
+                  <input
+                    ref={workspaceInputRef}
+                    type="text"
+                    value={newWorkspaceName}
+                    onChange={(e) => setNewWorkspaceName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSaveCreateWorkspace();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        handleCancelCreateWorkspace();
+                      }
+                    }}
+                    onBlur={handleSaveCreateWorkspace}
+                    className="w-full px-3 py-2 bg-[#0D1117] text-white text-sm rounded-lg border border-[#FF6B35] outline-none placeholder-gray-500"
+                    placeholder="Workspace name..."
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Workspace List */}
+            <div className="flex-1 overflow-y-auto space-y-1">
+              {(currentSpace?.workspaces || currentSpace?.folders || []).map((workspace) => (
+                <div
+                  key={workspace.id}
+                  className={`w-full h-9 flex items-center gap-2 px-3 rounded-lg transition-all group relative ${
+                    activeWorkspaceId === workspace.id
+                      ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
+                      : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
+                  }`}
+                >
+                  <button
+                    onClick={() => handleSelectWorkspace(workspace.id)}
+                    className="flex-1 flex items-center gap-2 h-full"
+                  >
+                    <LayoutGrid className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-sm truncate">{workspace.name}</span>
+                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWorkspaceToDelete({ id: workspace.id, name: workspace.name });
+                          setShowDeleteDialog(true);
+                        }}
+                        className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                          activeWorkspaceId === workspace.id
+                            ? 'hover:bg-white/20 text-white'
+                            : 'hover:bg-red-500/20 text-gray-400 hover:text-red-400'
+                        }`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+                      Delete Workspace
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              ))}
+              {(currentSpace?.workspaces || currentSpace?.folders || []).length === 0 && !isCreatingWorkspace && (
+                <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                  <p className="mb-2">No workspaces yet</p>
+                  <button
+                    onClick={handleStartCreateWorkspace}
+                    className="text-[#FF6B35] hover:underline text-sm"
+                  >
+                    Create your first workspace
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Footer */}
       <div className="px-2 py-4">
@@ -589,6 +736,25 @@ export function ProjectBrowser({
           currentInstructions={projectSettingsDialog.instructions}
           onSave={onUpdateProject}
           onDelete={onDeleteProject}
+        />
+      )}
+
+      {workspaceToDelete && (
+        <WorkspaceDeleteDialog
+          isOpen={showDeleteDialog}
+          onClose={() => {
+            setShowDeleteDialog(false);
+            setWorkspaceToDelete(null);
+          }}
+          workspaceId={workspaceToDelete.id}
+          workspaceName={workspaceToDelete.name}
+          onConfirmDelete={() => {
+            if (onDeleteWorkspace) {
+              onDeleteWorkspace(workspaceToDelete.id);
+            }
+            setShowDeleteDialog(false);
+            setWorkspaceToDelete(null);
+          }}
         />
       )}
     </motion.div>

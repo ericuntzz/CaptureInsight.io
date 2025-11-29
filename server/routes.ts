@@ -844,6 +844,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/workspaces/:id/export', isAuthenticated, requireEntityOwner('workspace'), async (req: any, res) => {
+    try {
+      const workspace = req.entity;
+      const spaceId = workspace.spaceId;
+      
+      const [sheets, insights, chatThreads] = await Promise.all([
+        storage.getSheetsByWorkspace(req.params.id),
+        storage.getInsights(spaceId),
+        storage.getChatThreadsBySpace(spaceId),
+      ]);
+      
+      const workspaceInsights = insights.filter((insight: any) => insight.workspaceId === req.params.id);
+      const workspaceThreads = chatThreads.filter((thread: any) => thread.workspaceId === req.params.id);
+      
+      const chatMessagesPromises = workspaceThreads.map((thread: any) => 
+        storage.getChatMessages(thread.id)
+      );
+      const allMessages = await Promise.all(chatMessagesPromises);
+      
+      const threadsWithMessages = workspaceThreads.map((thread: any, index: number) => ({
+        ...thread,
+        messages: allMessages[index] || [],
+      }));
+      
+      const exportData = {
+        workspace: {
+          id: workspace.id,
+          name: workspace.name,
+          spaceId: workspace.spaceId,
+          createdAt: workspace.createdAt,
+        },
+        sheets: sheets.map((sheet: any) => ({
+          id: sheet.id,
+          name: sheet.name,
+          rowCount: sheet.rowCount,
+          dataSourceType: sheet.dataSourceType,
+          dataSourceMeta: sheet.dataSourceMeta,
+          createdAt: sheet.createdAt,
+          lastModified: sheet.lastModified,
+        })),
+        insights: workspaceInsights.map((insight: any) => ({
+          id: insight.id,
+          title: insight.title,
+          summary: insight.summary,
+          content: insight.content,
+          insightType: insight.insightType,
+          priority: insight.priority,
+          status: insight.status,
+          createdAt: insight.createdAt,
+          updatedAt: insight.updatedAt,
+        })),
+        chatThreads: threadsWithMessages.map((thread: any) => ({
+          id: thread.id,
+          title: thread.title,
+          createdAt: thread.createdAt,
+          messages: thread.messages.map((msg: any) => ({
+            role: msg.role,
+            content: msg.content,
+            createdAt: msg.createdAt,
+          })),
+        })),
+        exportedAt: new Date().toISOString(),
+      };
+      
+      res.json(exportData);
+    } catch (error) {
+      console.error("Error exporting workspace data:", error);
+      res.status(500).json({ message: "Failed to export workspace data" });
+    }
+  });
+
   // ==================== SHEETS ====================
   app.get('/api/spaces/:spaceId/sheets', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {

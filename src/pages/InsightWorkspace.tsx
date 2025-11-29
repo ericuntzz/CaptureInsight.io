@@ -194,9 +194,17 @@ interface InsightWorkspaceProps {
   spaceId: string | null;
   insightId?: string | null;
   onSidebarCollapse?: (collapsed: boolean) => void;
+  workspaceId?: string | null;
 }
 
-export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: InsightWorkspaceProps) {
+const getStorageKey = (baseKey: string, workspaceId?: string | null) => {
+  if (workspaceId) {
+    return `${baseKey}-${workspaceId}`;
+  }
+  return baseKey;
+};
+
+export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, workspaceId }: InsightWorkspaceProps) {
   useAuth();
   
   // Panel refs for imperative control
@@ -220,11 +228,11 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   // 'canvas-data' = Chat | Canvas | Data (default)
   // 'data-canvas' = Chat | Data | Canvas
   type RightPanelOrder = 'canvas-data' | 'data-canvas';
-  const PANEL_ORDER_STORAGE_KEY = 'insight-workspace-panel-order';
+  const panelOrderStorageKey = getStorageKey('insight-workspace-panel-order', workspaceId);
   
   const getInitialPanelOrder = (): RightPanelOrder => {
     try {
-      const saved = localStorage.getItem(PANEL_ORDER_STORAGE_KEY);
+      const saved = localStorage.getItem(panelOrderStorageKey);
       if (saved === 'canvas-data' || saved === 'data-canvas') {
         return saved;
       }
@@ -240,11 +248,11 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   // Save panel order to localStorage when it changes
   useEffect(() => {
     try {
-      localStorage.setItem(PANEL_ORDER_STORAGE_KEY, rightPanelOrder);
+      localStorage.setItem(panelOrderStorageKey, rightPanelOrder);
     } catch (e) {
       console.error('Failed to save panel order to localStorage:', e);
     }
-  }, [rightPanelOrder]);
+  }, [rightPanelOrder, panelOrderStorageKey]);
   
   // DnD sensors - only for canvas and data panels
   const sensors = useSensors(
@@ -287,10 +295,29 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   const [openTabs, setOpenTabs] = useState<InsightTab[]>([
     { id: 'default', title: 'Untitled Insight', summary: '', isSaved: false }
   ]);
-  const [activeTabId, setActiveTabId] = useState('default');
+  const activeTabStorageKey = getStorageKey('insight-workspace-active-tab', workspaceId);
+  const getInitialActiveTabId = (): string => {
+    try {
+      const saved = localStorage.getItem(activeTabStorageKey);
+      if (saved) return saved;
+    } catch (e) {
+      console.error('Failed to load active tab from localStorage:', e);
+    }
+    return 'default';
+  };
+  const [activeTabId, setActiveTabId] = useState(getInitialActiveTabId);
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingTabTitle, setEditingTabTitle] = useState('');
   const insightTabInputRef = useRef<HTMLInputElement>(null);
+  
+  // Save active tab to localStorage when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(activeTabStorageKey, activeTabId);
+    } catch (e) {
+      console.error('Failed to save active tab to localStorage:', e);
+    }
+  }, [activeTabId, activeTabStorageKey]);
   
   // Canvas state
   const [viewMode, setViewMode] = useState<'default' | 'slide'>('default');
@@ -310,10 +337,31 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   const aiChatContainerRef = useRef<HTMLDivElement>(null);
   
   // Chat tabs state
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const activeChatStorageKey = getStorageKey('insight-workspace-active-chat', workspaceId);
+  const getInitialActiveChatId = (): string | null => {
+    try {
+      const saved = localStorage.getItem(activeChatStorageKey);
+      if (saved) return saved;
+    } catch (e) {
+      console.error('Failed to load active chat from localStorage:', e);
+    }
+    return null;
+  };
+  const [activeChatId, setActiveChatId] = useState<string | null>(getInitialActiveChatId);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editingChatTitle, setEditingChatTitle] = useState('');
   const chatTabInputRef = useRef<HTMLInputElement>(null);
+  
+  // Save active chat to localStorage when it changes
+  useEffect(() => {
+    if (activeChatId) {
+      try {
+        localStorage.setItem(activeChatStorageKey, activeChatId);
+      } catch (e) {
+        console.error('Failed to save active chat to localStorage:', e);
+      }
+    }
+  }, [activeChatId, activeChatStorageKey]);
   
   // Fetch chat conversations for this space
   const { data: chatConversations = [], isLoading: isLoadingChats } = useChatConversations(spaceId);
@@ -330,7 +378,10 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
         }
       });
     } else if (!isLoadingChats && chatConversations.length > 0 && !activeChatId) {
-      setActiveChatId(chatConversations[0].id);
+      // Check if saved chat still exists, otherwise use first available
+      const savedChatId = getInitialActiveChatId();
+      const savedChatExists = savedChatId && chatConversations.some(c => c.id === savedChatId);
+      setActiveChatId(savedChatExists ? savedChatId : chatConversations[0].id);
     }
   }, [isLoadingChats, spaceId, chatConversations.length, activeChatId]);
   
@@ -1136,7 +1187,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
           <ResizablePanelGroup 
             direction="horizontal" 
             className="h-full" 
-            autoSaveId={`insight-workspace-panels-${rightPanelOrder}`}
+            autoSaveId={getStorageKey(`insight-workspace-panels-${rightPanelOrder}`, workspaceId)}
           >
             {/* Chat Panel - always first, fixed on left, NOT draggable */}
             <ResizablePanel 

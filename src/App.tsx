@@ -33,6 +33,8 @@ import {
   useCreateFolder,
   useUpdateFolder,
   useDeleteFolder,
+  useCreateWorkspace,
+  useDeleteWorkspace,
   useCreateSheet,
   useUpdateSheet,
   useCreateTag,
@@ -186,6 +188,8 @@ export default function App() {
   const createFolderMutation = useCreateFolder();
   const updateFolderMutation = useUpdateFolder();
   const deleteFolderMutation = useDeleteFolder();
+  const createWorkspaceMutation = useCreateWorkspace();
+  const deleteWorkspaceMutation = useDeleteWorkspace();
   const createSheetMutation = useCreateSheet();
   const updateSheetMutation = useUpdateSheet();
   const createTagMutation = useCreateTag();
@@ -226,6 +230,75 @@ export default function App() {
       }
     }
   }, [currentSpaceId]);
+  
+  // Active Workspace tracking for Workspace-scoped features
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem('captureinsight_active_workspace');
+      if (saved) {
+        return saved;
+      }
+    } catch (error) {
+      console.error('Error loading active workspace from localStorage:', error);
+    }
+    return null;
+  });
+  
+  // Persist active workspace to localStorage
+  useEffect(() => {
+    if (activeWorkspaceId) {
+      try {
+        localStorage.setItem('captureinsight_active_workspace', activeWorkspaceId);
+      } catch (error) {
+        console.error('Error saving active workspace to localStorage:', error);
+      }
+    }
+  }, [activeWorkspaceId]);
+  
+  // Set activeWorkspaceId to first workspace when spaces/current space changes (if not already set)
+  useEffect(() => {
+    if (!spacesLoading && currentSpace) {
+      const workspaces = currentSpace.workspaces || currentSpace.folders || [];
+      if (workspaces.length > 0 && (!activeWorkspaceId || !workspaces.find(w => w.id === activeWorkspaceId))) {
+        setActiveWorkspaceId(workspaces[0].id);
+      }
+    }
+  }, [currentSpace, spacesLoading, activeWorkspaceId]);
+  
+  // Handle workspace creation
+  const handleCreateWorkspace = async (spaceId: string, name: string) => {
+    try {
+      const newWorkspace = await createWorkspaceMutation.mutateAsync({ spaceId, name });
+      // Optionally select the newly created workspace
+      if (newWorkspace?.id) {
+        setActiveWorkspaceId(newWorkspace.id);
+      }
+    } catch (error) {
+      console.error('Error creating workspace:', error);
+      toast.error('Failed to create workspace');
+    }
+  };
+  
+  // Handle workspace deletion
+  const handleDeleteWorkspace = async (workspaceId: string) => {
+    try {
+      await deleteWorkspaceMutation.mutateAsync(workspaceId);
+      // If deleted workspace was active, switch to another one
+      if (activeWorkspaceId === workspaceId && currentSpace) {
+        const workspaces = currentSpace.workspaces || currentSpace.folders || [];
+        const remaining = workspaces.filter(w => w.id !== workspaceId);
+        if (remaining.length > 0) {
+          setActiveWorkspaceId(remaining[0].id);
+        } else {
+          setActiveWorkspaceId(null);
+        }
+      }
+      toast.success('Workspace deleted successfully');
+    } catch (error) {
+      console.error('Error deleting workspace:', error);
+      toast.error('Failed to delete workspace');
+    }
+  };
   
   // Default destination shared between FloatingCaptureToolbar and CaptureOptionsModal
   const [defaultDestination, setDefaultDestination] = useState<{ spaceId: string; folderId: string } | null>(null);
@@ -1240,6 +1313,10 @@ export default function App() {
           user={user}
           onNavigateToSettings={handleNavigateToSettings}
           onLogout={handleLogout}
+          activeWorkspaceId={activeWorkspaceId}
+          onWorkspaceChange={setActiveWorkspaceId}
+          onCreateWorkspace={handleCreateWorkspace}
+          onDeleteWorkspace={handleDeleteWorkspace}
         />
         
         {/* Main Workspace Content */}
@@ -1248,6 +1325,7 @@ export default function App() {
             onBack={() => handleViewChange('capture')}
             spaceId={currentSpaceId}
             insightId={null}
+            workspaceId={activeWorkspaceId}
           />
         </div>
       </div>

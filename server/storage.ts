@@ -202,6 +202,13 @@ export class DatabaseStorage implements IStorage {
 
   async createSpace(space: InsertSpace): Promise<Space> {
     const [created] = await db.insert(spaces).values(space).returning();
+    
+    // Auto-create a default workspace for the new space
+    await db.insert(workspaces).values({
+      spaceId: created.id,
+      name: 'My Workspace',
+    });
+    
     return created;
   }
 
