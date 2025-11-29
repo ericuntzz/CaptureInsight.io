@@ -684,7 +684,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     <div className="flex flex-col h-full bg-[#212121]">
       <div className="flex-shrink-0 bg-[#1E1E1E]">
         <div className="flex items-center justify-between px-6 py-4 bg-[rgb(33,33,33)]">
-          <div className="flex items-center gap-2 overflow-x-auto flex-1">
+          <div className="flex items-center gap-2 overflow-x-auto flex-1 scrollbar-hide">
             {openTabs.map((tab) => {
               const isActive = tab.id === activeTabId;
               return (
@@ -758,7 +758,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scrollbar-hide">
         {viewMode === 'slide' ? (
           <div className="p-12">
             <div className="flex flex-col items-center justify-center gap-4">
@@ -773,7 +773,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
                     placeholder="Click to add title"
                   />
                 </div>
-                <div className="flex-1 border-2 border-[#E0E0E0] rounded p-6 overflow-y-auto">
+                <div className="flex-1 border-2 border-[#E0E0E0] rounded p-6 overflow-y-auto scrollbar-hide">
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
