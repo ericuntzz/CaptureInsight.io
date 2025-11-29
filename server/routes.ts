@@ -54,7 +54,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Entity-level ownership validation middleware factory
   // Prevents cross-tenant access by validating that the requesting user owns the space containing the entity
-  const requireEntityOwner = (entityType: 'folder' | 'sheet' | 'tag' | 'insight', paramName: string = 'id') => {
+  const requireEntityOwner = (entityType: 'workspace' | 'sheet' | 'tag' | 'insight', paramName: string = 'id') => {
     return async (req: any, res: any, next: any) => {
       try {
         const entityId = req.params[paramName];
@@ -63,9 +63,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Load the entity based on type
         switch (entityType) {
-          case 'folder':
-            entity = await storage.getFolder(entityId);
-            entityName = 'Folder';
+          case 'workspace':
+            entity = await storage.getWorkspace(entityId);
+            entityName = 'Workspace';
             break;
           case 'sheet':
             entity = await storage.getSheet(entityId);
@@ -647,16 +647,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const spacesWithNested = await Promise.all(
         spacesData.map(async (space) => {
-          const [foldersData, tagsData, sheetsData] = await Promise.all([
-            storage.getFolders(space.id),
+          const [workspacesData, tagsData, sheetsData] = await Promise.all([
+            storage.getWorkspaces(space.id),
             storage.getTags(space.id),
             storage.getSheets(space.id),
           ]);
           
-          const foldersWithSheets = foldersData.map((folder) => ({
-            ...folder,
+          const workspacesWithSheets = workspacesData.map((workspace) => ({
+            ...workspace,
             sheets: sheetsData
-              .filter((sheet) => sheet.folderId === folder.id)
+              .filter((sheet) => sheet.workspaceId === workspace.id)
               .map((sheet) => ({
                 id: sheet.id,
                 name: sheet.name,
@@ -671,7 +671,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           return {
             ...space,
-            folders: foldersWithSheets,
+            workspaces: workspacesWithSheets,
             tags: tagsData.map((tag) => ({
               id: tag.id,
               name: tag.name,
@@ -797,50 +797,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ==================== FOLDERS ====================
-  app.get('/api/spaces/:spaceId/folders', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
+  // ==================== WORKSPACES ====================
+  app.get('/api/spaces/:spaceId/workspaces', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
-      const folders = await storage.getFolders(req.params.spaceId);
-      res.json(folders);
+      const workspaces = await storage.getWorkspaces(req.params.spaceId);
+      res.json(workspaces);
     } catch (error) {
-      console.error("Error fetching folders:", error);
-      res.status(500).json({ message: "Failed to fetch folders" });
+      console.error("Error fetching workspaces:", error);
+      res.status(500).json({ message: "Failed to fetch workspaces" });
     }
   });
 
-  app.post('/api/spaces/:spaceId/folders', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
+  app.post('/api/spaces/:spaceId/workspaces', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
-      const folder = await storage.createFolder({ ...req.body, spaceId: req.params.spaceId });
-      res.status(201).json(folder);
+      const workspace = await storage.createWorkspace({ ...req.body, spaceId: req.params.spaceId });
+      res.status(201).json(workspace);
     } catch (error) {
-      console.error("Error creating folder:", error);
-      res.status(500).json({ message: "Failed to create folder" });
+      console.error("Error creating workspace:", error);
+      res.status(500).json({ message: "Failed to create workspace" });
     }
   });
 
-  app.put('/api/folders/:id', isAuthenticated, requireEntityOwner('folder'), async (req: any, res) => {
+  app.put('/api/workspaces/:id', isAuthenticated, requireEntityOwner('workspace'), async (req: any, res) => {
     try {
-      const folder = await storage.updateFolder(req.params.id, req.body);
-      if (!folder) {
-        return res.status(404).json({ message: "Folder not found" });
+      const workspace = await storage.updateWorkspace(req.params.id, req.body);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
       }
-      res.json(folder);
+      res.json(workspace);
     } catch (error) {
-      console.error("Error updating folder:", error);
-      res.status(500).json({ message: "Failed to update folder" });
+      console.error("Error updating workspace:", error);
+      res.status(500).json({ message: "Failed to update workspace" });
     }
   });
 
-  app.delete('/api/folders/:id', isAuthenticated, requireEntityOwner('folder'), async (req: any, res) => {
+  app.delete('/api/workspaces/:id', isAuthenticated, requireEntityOwner('workspace'), async (req: any, res) => {
     try {
-      const deleted = await storage.deleteFolder(req.params.id);
+      const deleted = await storage.deleteWorkspace(req.params.id);
       if (!deleted) {
-        return res.status(404).json({ message: "Folder not found" });
+        return res.status(404).json({ message: "Workspace not found" });
       }
       res.status(204).send();
     } catch (error) {
-      console.error("Error deleting folder:", error);
-      res.status(500).json({ message: "Failed to delete folder" });
+      console.error("Error deleting workspace:", error);
+      res.status(500).json({ message: "Failed to delete workspace" });
     }
   });
 
@@ -877,10 +877,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/folders/:folderId/sheets', isAuthenticated, requireEntityOwner('folder', 'folderId'), async (req: any, res) => {
+  app.get('/api/workspaces/:workspaceId/sheets', isAuthenticated, requireEntityOwner('workspace', 'workspaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const sheets = await storage.getSheetsByFolder(req.params.folderId);
+      const sheets = await storage.getSheetsByWorkspace(req.params.workspaceId);
       const securityMode = await serverEncryption.getSecurityMode(userId);
       
       if (securityMode === 0) {

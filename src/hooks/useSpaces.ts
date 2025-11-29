@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
-import type { Space as UISpace, Folder as UIFolder, Sheet as UISheet } from "../components/SpaceBrowser";
+import type { Space as UISpace, Workspace as UIWorkspace, Sheet as UISheet } from "../components/SpaceBrowser";
 import type { Tag } from "../data/insightsData";
 
 interface APISpace {
@@ -12,11 +12,11 @@ interface APISpace {
   ownerId: string;
   createdAt: Date | string;
   updatedAt: Date | string;
-  folders: APIFolder[];
+  workspaces: APIWorkspace[];
   tags: APITag[];
 }
 
-interface APIFolder {
+interface APIWorkspace {
   id: string;
   name: string;
   spaceId: string;
@@ -42,33 +42,36 @@ interface APITag {
 }
 
 function transformAPISpaceToUISpace(apiSpace: APISpace): UISpace {
+  const workspaces = (apiSpace.workspaces || []).map((workspace): UIWorkspace => ({
+    id: workspace.id,
+    name: workspace.name,
+    sheets: (workspace.sheets || []).map((sheet): UISheet => ({
+      id: sheet.id,
+      name: sheet.name,
+      rowCount: sheet.rowCount ?? 0,
+      lastModified: sheet.lastModified ?? "Never",
+      dataSource: sheet.dataSourceMeta ? {
+        type: sheet.dataSourceType as 'screenshot' | 'link' | 'file',
+        name: sheet.name,
+        captureDate: new Date(),
+        capturedBy: '',
+        folder: workspace.name,
+        space: apiSpace.name,
+        tags: [],
+        ...sheet.dataSourceMeta,
+      } : undefined,
+    })),
+  }));
+  
   return {
     id: apiSpace.id,
     name: apiSpace.name,
     description: apiSpace.description ?? undefined,
     goals: apiSpace.goals ?? undefined,
     instructions: apiSpace.instructions ?? undefined,
-    folders: apiSpace.folders.map((folder): UIFolder => ({
-      id: folder.id,
-      name: folder.name,
-      sheets: folder.sheets.map((sheet): UISheet => ({
-        id: sheet.id,
-        name: sheet.name,
-        rowCount: sheet.rowCount ?? 0,
-        lastModified: sheet.lastModified ?? "Never",
-        dataSource: sheet.dataSourceMeta ? {
-          type: sheet.dataSourceType as 'screenshot' | 'link' | 'file',
-          name: sheet.name,
-          captureDate: new Date(),
-          capturedBy: '',
-          folder: folder.name,
-          space: apiSpace.name,
-          tags: [],
-          ...sheet.dataSourceMeta,
-        } : undefined,
-      })),
-    })),
-    tags: apiSpace.tags.map((tag): Tag => ({
+    workspaces: workspaces,
+    folders: workspaces,
+    tags: (apiSpace.tags || []).map((tag): Tag => ({
       id: tag.id,
       name: tag.name,
       color: tag.color,
@@ -136,33 +139,57 @@ export function useDeleteSpace() {
   });
 }
 
-export function useFolders(spaceId: string | null) {
-  return useQuery<UIFolder[]>({
-    queryKey: ["/api/spaces/" + spaceId + "/folders"],
+export function useWorkspaces(spaceId: string | null) {
+  return useQuery<UIWorkspace[]>({
+    queryKey: ["/api/spaces/" + spaceId + "/workspaces"],
     enabled: !!spaceId,
   });
 }
 
-export function useCreateFolder() {
+export function useFolders(spaceId: string | null) {
+  return useWorkspaces(spaceId);
+}
+
+export function useCreateWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ spaceId, name }: { spaceId: string; name: string }) => {
-      const res = await apiRequest("POST", `/api/spaces/${spaceId}/folders`, { name });
+      const res = await apiRequest("POST", `/api/spaces/${spaceId}/workspaces`, { name });
       return res.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/spaces/" + variables.spaceId + "/folders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/spaces/" + variables.spaceId + "/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
+    },
+  });
+}
+
+export function useCreateFolder() {
+  return useCreateWorkspace();
+}
+
+export function useUpdateWorkspace() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const res = await apiRequest("PUT", `/api/workspaces/${id}`, { name });
+      return res.json();
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
     },
   });
 }
 
 export function useUpdateFolder() {
+  return useUpdateWorkspace();
+}
+
+export function useDeleteWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const res = await apiRequest("PUT", `/api/folders/${id}`, { name });
-      return res.json();
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/workspaces/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
@@ -171,15 +198,7 @@ export function useUpdateFolder() {
 }
 
 export function useDeleteFolder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/folders/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
-    },
-  });
+  return useDeleteWorkspace();
 }
 
 export function useCreateSheet() {
@@ -187,19 +206,21 @@ export function useCreateSheet() {
   return useMutation({
     mutationFn: async ({ 
       spaceId, 
+      workspaceId,
       folderId, 
       name, 
       dataSourceType, 
       dataSourceMeta 
     }: { 
       spaceId: string; 
+      workspaceId?: string;
       folderId?: string; 
       name: string; 
       dataSourceType?: string;
       dataSourceMeta?: any;
     }) => {
       const res = await apiRequest("POST", `/api/spaces/${spaceId}/sheets`, { 
-        folderId, 
+        workspaceId: workspaceId || folderId, 
         name,
         dataSourceType,
         dataSourceMeta,
@@ -215,8 +236,13 @@ export function useCreateSheet() {
 export function useUpdateSheet() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name?: string; folderId?: string; dataSourceType?: string; dataSourceMeta?: any } }) => {
-      const res = await apiRequest("PUT", `/api/sheets/${id}`, data);
+    mutationFn: async ({ id, data }: { id: string; data: { name?: string; workspaceId?: string; folderId?: string; dataSourceType?: string; dataSourceMeta?: any } }) => {
+      const updateData = {
+        ...data,
+        workspaceId: data.workspaceId || data.folderId,
+      };
+      delete updateData.folderId;
+      const res = await apiRequest("PUT", `/api/sheets/${id}`, updateData);
       return res.json();
     },
     onSuccess: () => {

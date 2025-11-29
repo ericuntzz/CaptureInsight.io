@@ -12,17 +12,20 @@ export interface Sheet {
   dataSource?: DataSource;
 }
 
-export interface Folder {
+export interface Workspace {
   id: string;
   name: string;
   sheets: Sheet[];
 }
 
+export interface Folder extends Workspace {}
+
 export interface Project {
   id: string;
   name: string;
   description: string;
-  folders: Folder[];
+  workspaces: Workspace[];
+  folders: Workspace[];
   goals?: string;
   instructions?: string;
   tags?: Tag[];
@@ -32,7 +35,8 @@ export interface Space {
   id: string;
   name: string;
   description?: string;
-  folders: Folder[];
+  workspaces: Workspace[];
+  folders: Workspace[];
   goals?: string;
   instructions?: string;
   tags?: Tag[];
@@ -41,17 +45,20 @@ export interface Space {
 export interface CaptureDestination {
   projectId?: string;
   spaceId?: string;
-  folderId: string;
+  workspaceId: string;
+  folderId?: string;
 }
 
 export interface CaptureDestinationWithSpace {
   spaceId: string;
-  folderId: string;
+  workspaceId: string;
+  folderId?: string;
 }
 
 export interface CaptureDestinationWithProject {
   projectId: string;
-  folderId: string;
+  workspaceId: string;
+  folderId?: string;
 }
 
 export interface CaptureSettings {
@@ -62,7 +69,7 @@ export interface CaptureSettings {
 }
 
 export interface CaptureSettingsData {
-  destination?: { spaceId: string; folderId: string };
+  destination?: { spaceId: string; workspaceId: string; folderId?: string };
   analysisType?: 'one-time' | 'scheduled' | null;
   analysisFrequency?: string;
   analysisTime?: string;
@@ -94,6 +101,7 @@ export function projectsToSpaces(projects: Project[]): Space[] {
 export function convertDestinationToSpace(dest: CaptureDestinationWithProject): CaptureDestinationWithSpace {
   return {
     spaceId: dest.projectId,
+    workspaceId: dest.workspaceId,
     folderId: dest.folderId,
   };
 }
@@ -101,6 +109,7 @@ export function convertDestinationToSpace(dest: CaptureDestinationWithProject): 
 export function convertDestinationToProject(dest: CaptureDestinationWithSpace): CaptureDestinationWithProject {
   return {
     projectId: dest.spaceId,
+    workspaceId: dest.workspaceId,
     folderId: dest.folderId,
   };
 }

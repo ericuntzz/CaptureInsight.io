@@ -27,6 +27,7 @@ export interface DbInsight {
   created_by: string;
   assigned_to?: string;
   space_id: string;
+  workspace_id?: string;
   folder_id?: string;
 }
 
@@ -63,12 +64,13 @@ export interface DbDataSheet {
   id: string;
   name: string;
   space_id: string;
-  folder_id: string;
+  workspace_id: string;
+  folder_id?: string;
   created_at: Date;
   created_by: string;
-  source_file_id?: string; // Link back to original capture
-  tags?: string[]; // Array of tag IDs
-  data: any[][]; // Spreadsheet data
+  source_file_id?: string;
+  tags?: string[];
+  data: any[][];
 }
 
 // Change Log with tags
@@ -77,11 +79,12 @@ export interface DbChangeLog {
   title: string;
   description: string;
   space_id: string;
+  workspace_id?: string;
   folder_id?: string;
   created_at: Date;
   created_by: string;
-  tags?: string[]; // Array of tag IDs
-  changes: any[]; // Array of change objects
+  tags?: string[];
+  changes: any[];
 }
 
 // Chat Message with tags
@@ -95,7 +98,6 @@ export interface DbChatMessage {
   insight_id?: string; // Link to created insight
 }
 
-// Unified tagged item result (for search)
 export interface TaggedItem {
   entity_type: 'chat_message' | 'data_sheet' | 'change_log' | 'insight';
   entity_id: string;
@@ -105,15 +107,16 @@ export interface TaggedItem {
   created_at: Date;
   created_by: string;
   space_id: string;
+  workspace_id?: string;
   folder_id?: string;
 }
 
-// Search filters
 export interface TagSearchFilters {
-  tags?: string[]; // Tag IDs
+  tags?: string[];
+  workspaces?: string[];
   folders?: string[];
   dateRange?: { start: Date; end: Date };
-  people?: string[]; // User IDs
+  people?: string[];
   entityTypes?: ('chat_message' | 'data_sheet' | 'change_log' | 'insight')[];
   searchQuery?: string;
   spaceId: string;

@@ -1,7 +1,7 @@
 import {
   users,
   spaces,
-  folders,
+  workspaces,
   sheets,
   tags,
   tagAssociations,
@@ -19,8 +19,8 @@ import {
   type UpsertUser,
   type Space,
   type InsertSpace,
-  type Folder,
-  type InsertFolder,
+  type Workspace,
+  type InsertWorkspace,
   type Sheet,
   type InsertSheet,
   type Tag,
@@ -67,16 +67,16 @@ export interface IStorage {
   updateSpace(id: string, space: Partial<InsertSpace>): Promise<Space | undefined>;
   deleteSpace(id: string): Promise<boolean>;
 
-  // Folder operations
-  getFolders(spaceId: string): Promise<Folder[]>;
-  getFolder(id: string): Promise<Folder | undefined>;
-  createFolder(folder: InsertFolder): Promise<Folder>;
-  updateFolder(id: string, folder: Partial<InsertFolder>): Promise<Folder | undefined>;
-  deleteFolder(id: string): Promise<boolean>;
+  // Workspace operations
+  getWorkspaces(spaceId: string): Promise<Workspace[]>;
+  getWorkspace(id: string): Promise<Workspace | undefined>;
+  createWorkspace(workspace: InsertWorkspace): Promise<Workspace>;
+  updateWorkspace(id: string, workspace: Partial<InsertWorkspace>): Promise<Workspace | undefined>;
+  deleteWorkspace(id: string): Promise<boolean>;
 
   // Sheet operations
   getSheets(spaceId: string): Promise<Sheet[]>;
-  getSheetsByFolder(folderId: string): Promise<Sheet[]>;
+  getSheetsByWorkspace(workspaceId: string): Promise<Sheet[]>;
   getSheet(id: string): Promise<Sheet | undefined>;
   createSheet(sheet: InsertSheet): Promise<Sheet>;
   updateSheet(id: string, sheet: Partial<InsertSheet>): Promise<Sheet | undefined>;
@@ -219,32 +219,32 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount ?? 0) > 0;
   }
 
-  // Folder operations
-  async getFolders(spaceId: string): Promise<Folder[]> {
-    return await db.select().from(folders).where(eq(folders.spaceId, spaceId)).orderBy(folders.name);
+  // Workspace operations
+  async getWorkspaces(spaceId: string): Promise<Workspace[]> {
+    return await db.select().from(workspaces).where(eq(workspaces.spaceId, spaceId)).orderBy(workspaces.name);
   }
 
-  async getFolder(id: string): Promise<Folder | undefined> {
-    const [folder] = await db.select().from(folders).where(eq(folders.id, id));
-    return folder;
+  async getWorkspace(id: string): Promise<Workspace | undefined> {
+    const [workspace] = await db.select().from(workspaces).where(eq(workspaces.id, id));
+    return workspace;
   }
 
-  async createFolder(folder: InsertFolder): Promise<Folder> {
-    const [created] = await db.insert(folders).values(folder).returning();
+  async createWorkspace(workspace: InsertWorkspace): Promise<Workspace> {
+    const [created] = await db.insert(workspaces).values(workspace).returning();
     return created;
   }
 
-  async updateFolder(id: string, folder: Partial<InsertFolder>): Promise<Folder | undefined> {
+  async updateWorkspace(id: string, workspace: Partial<InsertWorkspace>): Promise<Workspace | undefined> {
     const [updated] = await db
-      .update(folders)
-      .set(folder)
-      .where(eq(folders.id, id))
+      .update(workspaces)
+      .set(workspace)
+      .where(eq(workspaces.id, id))
       .returning();
     return updated;
   }
 
-  async deleteFolder(id: string): Promise<boolean> {
-    const result = await db.delete(folders).where(eq(folders.id, id));
+  async deleteWorkspace(id: string): Promise<boolean> {
+    const result = await db.delete(workspaces).where(eq(workspaces.id, id));
     return (result.rowCount ?? 0) > 0;
   }
 
@@ -253,8 +253,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(sheets).where(eq(sheets.spaceId, spaceId)).orderBy(desc(sheets.lastModified));
   }
 
-  async getSheetsByFolder(folderId: string): Promise<Sheet[]> {
-    return await db.select().from(sheets).where(eq(sheets.folderId, folderId)).orderBy(desc(sheets.lastModified));
+  async getSheetsByWorkspace(workspaceId: string): Promise<Sheet[]> {
+    return await db.select().from(sheets).where(eq(sheets.workspaceId, workspaceId)).orderBy(desc(sheets.lastModified));
   }
 
   async getSheet(id: string): Promise<Sheet | undefined> {

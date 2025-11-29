@@ -16,18 +16,21 @@ export interface Sheet {
   dataSource?: DataSource;
 }
 
-export interface Folder {
+export interface Workspace {
   id: string;
   name: string;
   sheets: Sheet[];
 }
 
+export interface Folder extends Workspace {}
+
 export interface Space {
   id: string;
   name: string;
   description?: string;
-  folders: Folder[];
+  workspaces: Workspace[];
+  folders: Workspace[];
   goals?: string;
   instructions?: string;
-  tags?: Tag[]; // Space-level tag management
+  tags?: Tag[];
 }

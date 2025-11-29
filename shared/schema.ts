@@ -130,7 +130,7 @@ export const spacesRelations = relations(spaces, ({ one, many }) => ({
     fields: [spaces.ownerId],
     references: [users.id],
   }),
-  folders: many(folders),
+  workspaces: many(workspaces),
   sheets: many(sheets),
   tags: many(tags),
   insights: many(insights),
@@ -139,17 +139,17 @@ export const spacesRelations = relations(spaces, ({ one, many }) => ({
   changeLogs: many(changeLogs),
 }));
 
-// Folders table
-export const folders = pgTable("folders", {
+// Workspaces table
+export const workspaces = pgTable("workspaces", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   spaceId: varchar("space_id").references(() => spaces.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const foldersRelations = relations(folders, ({ one, many }) => ({
+export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   space: one(spaces, {
-    fields: [folders.spaceId],
+    fields: [workspaces.spaceId],
     references: [spaces.id],
   }),
   sheets: many(sheets),
@@ -160,7 +160,7 @@ export const foldersRelations = relations(folders, ({ one, many }) => ({
 export const sheets = pgTable("sheets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
-  folderId: varchar("folder_id").references(() => folders.id),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
   spaceId: varchar("space_id").references(() => spaces.id).notNull(),
   rowCount: integer("row_count").default(0),
   lastModified: timestamp("last_modified").defaultNow(),
@@ -175,9 +175,9 @@ export const sheets = pgTable("sheets", {
 });
 
 export const sheetsRelations = relations(sheets, ({ one }) => ({
-  folder: one(folders, {
-    fields: [sheets.folderId],
-    references: [folders.id],
+  workspace: one(workspaces, {
+    fields: [sheets.workspaceId],
+    references: [workspaces.id],
   }),
   space: one(spaces, {
     fields: [sheets.spaceId],
@@ -369,7 +369,7 @@ export const changeLogs = pgTable("change_logs", {
   title: varchar("title").notNull(),
   description: text("description"),
   spaceId: varchar("space_id").references(() => spaces.id).notNull(),
-  folderId: varchar("folder_id").references(() => folders.id),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
   createdAt: timestamp("created_at").defaultNow(),
   createdBy: varchar("created_by").references(() => users.id),
   changes: jsonb("changes"), // Array of change objects
@@ -380,9 +380,9 @@ export const changeLogsRelations = relations(changeLogs, ({ one }) => ({
     fields: [changeLogs.spaceId],
     references: [spaces.id],
   }),
-  folder: one(folders, {
-    fields: [changeLogs.folderId],
-    references: [folders.id],
+  workspace: one(workspaces, {
+    fields: [changeLogs.workspaceId],
+    references: [workspaces.id],
   }),
   creator: one(users, {
     fields: [changeLogs.createdBy],
@@ -510,8 +510,8 @@ export type UserSettings = typeof userSettings.$inferSelect;
 export type InsertSpace = typeof spaces.$inferInsert;
 export type Space = typeof spaces.$inferSelect;
 
-export type InsertFolder = typeof folders.$inferInsert;
-export type Folder = typeof folders.$inferSelect;
+export type InsertWorkspace = typeof workspaces.$inferInsert;
+export type Workspace = typeof workspaces.$inferSelect;
 
 export type InsertSheet = typeof sheets.$inferInsert;
 export type Sheet = typeof sheets.$inferSelect;
