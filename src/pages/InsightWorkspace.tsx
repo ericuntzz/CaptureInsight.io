@@ -19,7 +19,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
-import { useInsight } from '../hooks/useInsights';
+import { useInsight, useCreateInsight, useUpdateInsight } from '../hooks/useInsights';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
 import {
@@ -120,6 +120,8 @@ interface InsightTab {
   id: string;
   title: string;
   summary: string;
+  isSaved?: boolean; // Track if this insight has been saved to database
+  dbId?: string; // The database ID if saved
 }
 
 interface InsightWorkspaceProps {
@@ -231,7 +233,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   
   // Insight tabs state
   const [openTabs, setOpenTabs] = useState<InsightTab[]>([
-    { id: 'default', title: 'Untitled Insight', summary: '' }
+    { id: 'default', title: 'Untitled Insight', summary: '', isSaved: false }
   ]);
   const [activeTabId, setActiveTabId] = useState('default');
   
@@ -239,6 +241,10 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   const [viewMode, setViewMode] = useState<'default' | 'slide'>('default');
   const [notes, setNotes] = useState('');
   const [localTitle, setLocalTitle] = useState('Untitled Insight');
+  
+  // Track pending saves for debouncing
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedContentRef = useRef<{ title: string; summary: string }>({ title: '', summary: '' });
   
   // Data sources state
   const [sources, setSources] = useState<InsightSource[]>([]);
@@ -257,6 +263,88 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   
   const { data: insight } = useInsight(insightId || null);
   
+  // Mutation hooks for database persistence
+  const createInsightMutation = useCreateInsight();
+  const updateInsightMutation = useUpdateInsight();
+  
+  // Sync notes to the current tab's summary as user types
+  useEffect(() => {
+    setOpenTabs(tabs => tabs.map(t => 
+      t.id === activeTabId ? { ...t, summary: notes } : t
+    ));
+  }, [notes, activeTabId]);
+  
+  // Sync title to the current tab as user types
+  useEffect(() => {
+    setOpenTabs(tabs => tabs.map(t => 
+      t.id === activeTabId ? { ...t, title: localTitle } : t
+    ));
+  }, [localTitle, activeTabId]);
+  
+  // Auto-save content to database (debounced)
+  useEffect(() => {
+    const activeTab = openTabs.find(t => t.id === activeTabId);
+    if (!activeTab || !spaceId) return;
+    
+    // Check if content has changed from last saved state
+    const hasChanges = 
+      localTitle !== lastSavedContentRef.current.title || 
+      notes !== lastSavedContentRef.current.summary;
+    
+    if (!hasChanges) return;
+    
+    // Clear any pending save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    // Debounce save by 1 second
+    saveTimeoutRef.current = setTimeout(() => {
+      if (activeTab.isSaved && activeTab.dbId) {
+        // Update existing insight
+        updateInsightMutation.mutate({
+          id: activeTab.dbId,
+          data: {
+            title: localTitle,
+            summary: notes,
+          }
+        }, {
+          onSuccess: () => {
+            lastSavedContentRef.current = { title: localTitle, summary: notes };
+          }
+        });
+      } else if (!activeTab.isSaved) {
+        // Create new insight in database
+        createInsightMutation.mutate({
+          spaceId,
+          data: {
+            title: localTitle || 'Untitled Insight',
+            summary: notes,
+            status: 'Open',
+          }
+        }, {
+          onSuccess: (newInsight) => {
+            // Update the tab with the database ID
+            setOpenTabs(tabs => tabs.map(t => 
+              t.id === activeTabId ? { ...t, isSaved: true, dbId: newInsight.id } : t
+            ));
+            lastSavedContentRef.current = { title: localTitle, summary: notes };
+            toast.success('Insight saved');
+          },
+          onError: () => {
+            toast.error('Failed to save insight');
+          }
+        });
+      }
+    }, 1000);
+    
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [localTitle, notes, activeTabId, spaceId, openTabs, createInsightMutation, updateInsightMutation]);
+  
   // Auto-collapse left sidebar when workspace opens
   useEffect(() => {
     onSidebarCollapse?.(true);
@@ -265,13 +353,19 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     };
   }, [onSidebarCollapse]);
   
-  // Load insight data
+  // Load insight data and mark as saved (for existing insights from DB)
   useEffect(() => {
-    if (insight) {
+    if (insight && insightId) {
       setLocalTitle(insight.title || 'Untitled Insight');
       setNotes(insight.summary || '');
+      // Mark the active tab as saved since it's from the database
+      setOpenTabs(tabs => tabs.map(t => 
+        t.id === activeTabId ? { ...t, isSaved: true, dbId: insightId, title: insight.title || 'Untitled Insight', summary: insight.summary || '' } : t
+      ));
+      // Update the saved content ref to prevent triggering auto-save for loaded content
+      lastSavedContentRef.current = { title: insight.title || 'Untitled Insight', summary: insight.summary || '' };
     }
-  }, [insight]);
+  }, [insight, insightId, activeTabId]);
   
   // Load sources for insight
   useEffect(() => {
@@ -386,13 +480,16 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   const handleCreateNewInsight = () => {
     const newTab: InsightTab = {
       id: `insight-${Date.now()}`,
-      title: 'New Chat Insight',
+      title: 'Untitled Insight',
       summary: '',
+      isSaved: false,
     };
     setOpenTabs([...openTabs, newTab]);
     setActiveTabId(newTab.id);
     setLocalTitle(newTab.title);
     setNotes('');
+    // Reset the saved content tracker for the new tab
+    lastSavedContentRef.current = { title: newTab.title, summary: '' };
   };
   
   const handleCloseTab = (tabId: string) => {
@@ -400,7 +497,12 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     const newTabs = openTabs.filter(t => t.id !== tabId);
     setOpenTabs(newTabs);
     if (activeTabId === tabId) {
-      setActiveTabId(newTabs[newTabs.length - 1].id);
+      const newActiveTab = newTabs[newTabs.length - 1];
+      setActiveTabId(newActiveTab.id);
+      setLocalTitle(newActiveTab.title);
+      setNotes(newActiveTab.summary);
+      // Update the saved content tracker to the new active tab
+      lastSavedContentRef.current = { title: newActiveTab.title, summary: newActiveTab.summary };
     }
   };
   
@@ -410,11 +512,14 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
       setActiveTabId(tabId);
       setLocalTitle(tab.title);
       setNotes(tab.summary);
+      // Update the saved content tracker to the switched tab
+      lastSavedContentRef.current = { title: tab.title, summary: tab.summary };
     }
   };
   
-  // Update tab when title changes
+  // Update tab when title changes - no longer needed as we sync in useEffect
   const handleTitleBlur = () => {
+    // Title is already synced via useEffect, this is just for immediate updates
     setOpenTabs(tabs => tabs.map(t => 
       t.id === activeTabId ? { ...t, title: localTitle } : t
     ));
