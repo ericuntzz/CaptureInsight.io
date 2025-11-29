@@ -803,6 +803,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
             
             <div className="bg-[#1A1A1A] rounded-lg min-h-[400px]">
               <RichTextEditor
+                key={activeTabId}
                 content={notes}
                 onChange={setNotes}
                 placeholder="Start writing your insight..."
