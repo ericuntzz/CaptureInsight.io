@@ -1408,7 +1408,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all chats for a space
   app.get('/api/spaces/:spaceId/chats', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
-      const chats = await storage.getChatThreadsBySpace(req.params.spaceId);
+      const workspaceId = req.query.workspaceId as string | undefined;
+      let chats = await storage.getChatThreadsBySpace(req.params.spaceId);
+      if (workspaceId) {
+        chats = chats.filter(chat => chat.workspaceId === workspaceId);
+      }
       res.json(chats);
     } catch (error) {
       console.error("Error fetching chats:", error);
@@ -1420,11 +1424,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/spaces/:spaceId/chats', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { title, insightId } = req.body;
+      const { title, insightId, workspaceId } = req.body;
       
       const chat = await storage.createChatThread({
         title: title || 'New Chat',
         spaceId: req.params.spaceId,
+        workspaceId: workspaceId || null,
         userId,
         insightId: insightId || null,
         savedToMemory: false,

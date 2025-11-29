@@ -5,6 +5,7 @@ export interface ChatConversation {
   id: string;
   title: string;
   spaceId: string;
+  workspaceId: string | null;
   insightId: string | null;
   userId: string;
   savedToMemory: boolean;
@@ -28,9 +29,17 @@ export interface ChatMessage {
   }>;
 }
 
-export function useChatConversations(spaceId: string | null) {
+export function useChatConversations(spaceId: string | null, workspaceId: string | null) {
   return useQuery<ChatConversation[]>({
-    queryKey: ["/api/spaces/" + spaceId + "/chats"],
+    queryKey: ["/api/spaces/" + spaceId + "/chats", { workspaceId }],
+    queryFn: async () => {
+      const url = workspaceId 
+        ? `/api/spaces/${spaceId}/chats?workspaceId=${workspaceId}`
+        : `/api/spaces/${spaceId}/chats`;
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch chats');
+      return res.json();
+    },
     enabled: !!spaceId,
   });
 }
@@ -49,18 +58,21 @@ export function useCreateChatConversation() {
       spaceId, 
       title,
       insightId,
+      workspaceId,
     }: { 
       spaceId: string; 
       title?: string;
       insightId?: string;
+      workspaceId?: string;
     }) => {
       const res = await apiRequest("POST", `/api/spaces/${spaceId}/chats`, {
         title: title || 'New Chat',
         insightId: insightId || null,
+        workspaceId: workspaceId || null,
       });
       return res.json();
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/spaces/" + variables.spaceId + "/chats"] });
     },
   });

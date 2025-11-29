@@ -314,6 +314,7 @@ export const chatThreads = pgTable("chat_threads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: varchar("title").notNull().default('New Chat'),
   spaceId: varchar("space_id").references(() => spaces.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
   insightId: varchar("insight_id").references(() => insights.id),
   userId: varchar("user_id").references(() => users.id),
   savedToMemory: boolean("saved_to_memory").default(false),
@@ -323,12 +324,17 @@ export const chatThreads = pgTable("chat_threads", {
 }, (table) => [
   index("idx_chat_threads_space").on(table.spaceId),
   index("idx_chat_threads_space_last_message").on(table.spaceId, table.lastMessageAt),
+  index("idx_chat_threads_workspace").on(table.workspaceId),
 ]);
 
 export const chatThreadsRelations = relations(chatThreads, ({ one, many }) => ({
   space: one(spaces, {
     fields: [chatThreads.spaceId],
     references: [spaces.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [chatThreads.workspaceId],
+    references: [workspaces.id],
   }),
   insight: one(insights, {
     fields: [chatThreads.insightId],

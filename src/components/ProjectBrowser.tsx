@@ -135,6 +135,8 @@ export function ProjectBrowser({
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const workspaceInputRef = useRef<HTMLInputElement>(null);
   const [showWorkspaceFlyout, setShowWorkspaceFlyout] = useState(false);
+  const workspaceButtonRef = useRef<HTMLButtonElement>(null);
+  const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number }>({ top: 0, left: 60 });
   
   // Workspace delete dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -242,6 +244,17 @@ export function ProjectBrowser({
       workspaceInputRef.current.select();
     }
   }, [isCreatingWorkspace]);
+
+  // Calculate flyout position when it opens
+  useEffect(() => {
+    if (showWorkspaceFlyout && workspaceButtonRef.current) {
+      const rect = workspaceButtonRef.current.getBoundingClientRect();
+      setFlyoutPosition({
+        top: rect.top,
+        left: 60,
+      });
+    }
+  }, [showWorkspaceFlyout]);
 
   // Workspace handlers
   const handleStartCreateWorkspace = () => {
@@ -397,6 +410,7 @@ export function ProjectBrowser({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  ref={workspaceButtonRef}
                   onClick={() => setShowWorkspaceFlyout(!showWorkspaceFlyout)}
                   className={`w-full h-10 flex items-center justify-center rounded-lg transition-all mb-2 group ${
                     activeView === 'workspace'
@@ -426,7 +440,8 @@ export function ProjectBrowser({
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -10 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute left-full top-0 ml-2 w-56 bg-[#1A1F2E] border border-[#2A2F3E] rounded-lg shadow-xl z-50 py-2"
+                    style={{ top: flyoutPosition.top, left: flyoutPosition.left }}
+                    className="fixed w-56 bg-[#1A1F2E] border border-[#2A2F3E] rounded-lg shadow-xl z-50 py-2"
                   >
                     {/* Header */}
                     <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 border-b border-[#2A2F3E] mb-1">

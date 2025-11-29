@@ -363,16 +363,23 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
     }
   }, [activeChatId, activeChatStorageKey]);
   
-  // Fetch chat conversations for this space
-  const { data: chatConversations = [], isLoading: isLoadingChats } = useChatConversations(spaceId);
+  // Fetch chat conversations for this space and workspace
+  const { data: chatConversations = [], isLoading: isLoadingChats } = useChatConversations(spaceId, workspaceId ?? null);
   const createChatMutation = useCreateChatConversation();
   const updateChatMutation = useUpdateChatConversation();
   const deleteChatMutation = useDeleteChatConversation();
   
+  // Reset chat/insight selections when workspace changes
+  useEffect(() => {
+    setActiveChatId(null);
+    setOpenTabs([{ id: 'new', title: 'Untitled Insight', summary: '', isSaved: false }]);
+    setActiveTabId('new');
+  }, [workspaceId]);
+  
   // Ensure there's always an active chat - create one if none exist
   useEffect(() => {
     if (!isLoadingChats && spaceId && chatConversations.length === 0 && !createChatMutation.isPending) {
-      createChatMutation.mutate({ spaceId, title: 'New Chat' }, {
+      createChatMutation.mutate({ spaceId, title: 'New Chat', workspaceId: workspaceId ?? undefined }, {
         onSuccess: (newChat) => {
           setActiveChatId(newChat.id);
         }
@@ -383,7 +390,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
       const savedChatExists = savedChatId && chatConversations.some(c => c.id === savedChatId);
       setActiveChatId(savedChatExists ? savedChatId : chatConversations[0].id);
     }
-  }, [isLoadingChats, spaceId, chatConversations.length, activeChatId]);
+  }, [isLoadingChats, spaceId, chatConversations.length, activeChatId, workspaceId]);
   
   const activeInsightId = insightId || activeTabId;
   
@@ -626,7 +633,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
   // Chat tab handlers
   const handleCreateNewChat = () => {
     if (!spaceId) return;
-    createChatMutation.mutate({ spaceId, title: 'New Chat' }, {
+    createChatMutation.mutate({ spaceId, title: 'New Chat', workspaceId: workspaceId ?? undefined }, {
       onSuccess: (newChat) => {
         setActiveChatId(newChat.id);
       }
