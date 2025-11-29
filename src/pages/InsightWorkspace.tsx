@@ -267,24 +267,20 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   const createInsightMutation = useCreateInsight();
   const updateInsightMutation = useUpdateInsight();
   
-  // Sync notes to the current tab's summary as user types
-  useEffect(() => {
-    setOpenTabs(tabs => tabs.map(t => 
-      t.id === activeTabId ? { ...t, summary: notes } : t
-    ));
-  }, [notes, activeTabId]);
+  // Track the current tab's saved state using a ref (to avoid re-renders)
+  const currentTabRef = useRef<{ isSaved: boolean; dbId?: string }>({ isSaved: false });
   
-  // Sync title to the current tab as user types
-  useEffect(() => {
-    setOpenTabs(tabs => tabs.map(t => 
-      t.id === activeTabId ? { ...t, title: localTitle } : t
-    ));
-  }, [localTitle, activeTabId]);
-  
-  // Auto-save content to database (debounced)
+  // Update ref when tab changes
   useEffect(() => {
     const activeTab = openTabs.find(t => t.id === activeTabId);
-    if (!activeTab || !spaceId) return;
+    if (activeTab) {
+      currentTabRef.current = { isSaved: activeTab.isSaved || false, dbId: activeTab.dbId };
+    }
+  }, [activeTabId, openTabs]);
+  
+  // Auto-save content to database (debounced) - uses refs to avoid re-render loops
+  useEffect(() => {
+    if (!spaceId) return;
     
     // Check if content has changed from last saved state
     const hasChanges = 
@@ -300,10 +296,12 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     
     // Debounce save by 1 second
     saveTimeoutRef.current = setTimeout(() => {
-      if (activeTab.isSaved && activeTab.dbId) {
+      const { isSaved, dbId } = currentTabRef.current;
+      
+      if (isSaved && dbId) {
         // Update existing insight
         updateInsightMutation.mutate({
-          id: activeTab.dbId,
+          id: dbId,
           data: {
             title: localTitle,
             summary: notes,
@@ -313,7 +311,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
             lastSavedContentRef.current = { title: localTitle, summary: notes };
           }
         });
-      } else if (!activeTab.isSaved) {
+      } else if (!isSaved) {
         // Create new insight in database
         createInsightMutation.mutate({
           spaceId,
@@ -324,7 +322,9 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
           }
         }, {
           onSuccess: (newInsight) => {
-            // Update the tab with the database ID
+            // Update the tab with the database ID using ref to prevent re-render
+            currentTabRef.current = { isSaved: true, dbId: newInsight.id };
+            // Also update the state for persistence
             setOpenTabs(tabs => tabs.map(t => 
               t.id === activeTabId ? { ...t, isSaved: true, dbId: newInsight.id } : t
             ));
@@ -343,7 +343,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [localTitle, notes, activeTabId, spaceId, openTabs, createInsightMutation, updateInsightMutation]);
+  }, [localTitle, notes, activeTabId, spaceId]);
   
   // Auto-collapse left sidebar when workspace opens
   useEffect(() => {
@@ -476,50 +476,70 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     return date.toLocaleDateString();
   };
   
-  // Tab handlers
+  // Tab handlers - save current content to tab before switching
   const handleCreateNewInsight = () => {
+    // Save current content to current tab before creating new one
+    setOpenTabs(tabs => tabs.map(t => 
+      t.id === activeTabId ? { ...t, title: localTitle, summary: notes } : t
+    ));
+    
     const newTab: InsightTab = {
       id: `insight-${Date.now()}`,
       title: 'Untitled Insight',
       summary: '',
       isSaved: false,
     };
-    setOpenTabs([...openTabs, newTab]);
+    setOpenTabs(prev => [...prev.map(t => 
+      t.id === activeTabId ? { ...t, title: localTitle, summary: notes } : t
+    ), newTab]);
     setActiveTabId(newTab.id);
     setLocalTitle(newTab.title);
     setNotes('');
     // Reset the saved content tracker for the new tab
     lastSavedContentRef.current = { title: newTab.title, summary: '' };
+    currentTabRef.current = { isSaved: false };
   };
   
   const handleCloseTab = (tabId: string) => {
     if (openTabs.length <= 1) return;
-    const newTabs = openTabs.filter(t => t.id !== tabId);
+    
+    // Save current content before closing
+    const updatedTabs = openTabs.map(t => 
+      t.id === activeTabId ? { ...t, title: localTitle, summary: notes } : t
+    );
+    const newTabs = updatedTabs.filter(t => t.id !== tabId);
     setOpenTabs(newTabs);
+    
     if (activeTabId === tabId) {
       const newActiveTab = newTabs[newTabs.length - 1];
       setActiveTabId(newActiveTab.id);
       setLocalTitle(newActiveTab.title);
       setNotes(newActiveTab.summary);
-      // Update the saved content tracker to the new active tab
       lastSavedContentRef.current = { title: newActiveTab.title, summary: newActiveTab.summary };
+      currentTabRef.current = { isSaved: newActiveTab.isSaved || false, dbId: newActiveTab.dbId };
     }
   };
   
   const handleSwitchTab = (tabId: string) => {
-    const tab = openTabs.find(t => t.id === tabId);
-    if (tab) {
+    if (tabId === activeTabId) return; // Already on this tab
+    
+    const targetTab = openTabs.find(t => t.id === tabId);
+    if (targetTab) {
+      // Save current content to current tab before switching
+      setOpenTabs(tabs => tabs.map(t => 
+        t.id === activeTabId ? { ...t, title: localTitle, summary: notes } : t
+      ));
+      
       setActiveTabId(tabId);
-      setLocalTitle(tab.title);
-      setNotes(tab.summary);
-      // Update the saved content tracker to the switched tab
-      lastSavedContentRef.current = { title: tab.title, summary: tab.summary };
+      setLocalTitle(targetTab.title);
+      setNotes(targetTab.summary);
+      lastSavedContentRef.current = { title: targetTab.title, summary: targetTab.summary };
+      currentTabRef.current = { isSaved: targetTab.isSaved || false, dbId: targetTab.dbId };
     }
   };
   
-  // Update tab when title changes - no longer needed as we sync in useEffect
+  // Update tab when title input loses focus
   const handleTitleBlur = () => {
-    // Title is already synced via useEffect, this is just for immediate updates
     setOpenTabs(tabs => tabs.map(t => 
       t.id === activeTabId ? { ...t, title: localTitle } : t
     ));
@@ -540,8 +560,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
 
 
 
-  // Chat Panel Content
-  const ChatPanelContent = () => (
+  // Chat Panel Content - using JSX variable instead of component to prevent remounting on re-render
+  const chatPanelContent = (
     <div className="flex flex-col h-full bg-[#1A1A1A]">
       <div className="flex items-center justify-end p-2 border-b border-[#2A2A2A]">
         <button
@@ -618,8 +638,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     </div>
   );
 
-  // Canvas Panel Content
-  const CanvasPanelContent = () => (
+  // Canvas Panel Content - using JSX variable instead of component to prevent remounting on re-render
+  const canvasPanelContent = (
     <div className="flex flex-col h-full bg-[#212121]">
       <div className="flex-shrink-0 bg-[#1E1E1E]">
         <div className="flex items-center justify-between px-6 py-4 bg-[rgb(33,33,33)]">
@@ -753,8 +773,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
     </div>
   );
 
-  // Data Sources Panel Content
-  const DataSourcesPanelContent = () => (
+  // Data Sources Panel Content - using JSX variable instead of component to prevent remounting on re-render
+  const dataSourcesPanelContent = (
     <DataSourcesPanel
       sources={sources}
       sheetsData={sheetsData}
@@ -839,7 +859,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
               <PanelContentWrapper
                 size={chatSize}
                 collapsedContent={<CollapsedChatPanel onClick={handleExpandChat} />}
-                expandedContent={<ChatPanelContent />}
+                expandedContent={chatPanelContent}
               />
             </ResizablePanel>
             
@@ -867,7 +887,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
                         direction="left"
                       />
                     }
-                    expandedContent={<CanvasPanelContent />}
+                    expandedContent={canvasPanelContent}
                   />
                 </ResizablePanel>
                 
@@ -895,7 +915,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
                         direction="right"
                       />
                     }
-                    expandedContent={<DataSourcesPanelContent />}
+                    expandedContent={dataSourcesPanelContent}
                   />
                 </ResizablePanel>
               </>
@@ -918,7 +938,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
                         direction="left"
                       />
                     }
-                    expandedContent={<DataSourcesPanelContent />}
+                    expandedContent={dataSourcesPanelContent}
                   />
                 </ResizablePanel>
                 
@@ -946,7 +966,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
                         direction="right"
                       />
                     }
-                    expandedContent={<CanvasPanelContent />}
+                    expandedContent={canvasPanelContent}
                   />
                 </ResizablePanel>
               </>
