@@ -715,20 +715,11 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
   // Chat Panel Content - using JSX variable instead of component to prevent remounting on re-render
   const chatPanelContent = (
     <div className="flex flex-col h-full bg-[#1A1A1A]">
-      {/* Chat tabs header - darker background to match chat theme */}
-      <div className="flex-shrink-0 bg-[#151515]">
-        <div className="flex items-center justify-between px-2 py-2">
+      {/* Chat tabs header - matching canvas panel style */}
+      <div className="flex-shrink-0 bg-[#1E1E1E]">
+        <div className="flex items-center justify-between px-6 py-4 bg-[rgb(33,33,33)]">
           {/* Chat tabs - scrollable */}
-          <div className="flex items-center gap-1 overflow-x-auto flex-1 scrollbar-hide">
-            {/* + New Chat button at the start */}
-            <button
-              onClick={handleCreateNewChat}
-              className="flex-shrink-0 px-2 py-1 text-xs text-[#6B7280] hover:text-white hover:bg-[#252525] rounded transition-colors"
-              title="New Chat"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-            
+          <div className="flex items-center gap-2 overflow-x-auto flex-1 scrollbar-hide">
             {chatConversations.map((chat) => {
               const isActive = chat.id === activeChatId;
               const isEditing = chat.id === editingChatId;
@@ -736,10 +727,10 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
               return (
                 <div
                   key={chat.id}
-                  className={`group flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors cursor-pointer flex-shrink-0 max-w-[120px] ${
+                  className={`group flex items-center gap-2 px-3 py-1.5 rounded transition-colors cursor-pointer flex-shrink-0 max-w-[200px] ${
                     isActive
-                      ? 'bg-[#252525] text-white'
-                      : 'text-[#9CA3AF] hover:text-white hover:bg-[#1E1E1E]'
+                      ? 'bg-[#2A2A2A] text-white'
+                      : 'text-[#9CA3AF] hover:text-white hover:bg-[#252525]'
                   }`}
                   onClick={() => handleSwitchChat(chat.id)}
                   onDoubleClick={() => handleDoubleClickChat(chat.id, chat.title)}
@@ -761,11 +752,11 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
                         }
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      className="w-full bg-[#1A1A1A] text-white text-xs px-1 py-0.5 rounded border border-[#FF6B35] outline-none"
+                      className="w-full bg-[#1A1A1A] text-white text-sm px-1 py-0.5 rounded border border-[#FF6B35] outline-none"
                     />
                   ) : (
                     <>
-                      <span className="truncate" title={chat.title}>
+                      <span className="text-sm whitespace-nowrap truncate" title={chat.title}>
                         {chat.title}
                       </span>
                       {chatConversations.length > 1 && (
@@ -782,16 +773,25 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse }: Insi
                 </div>
               );
             })}
+            
+            <button
+              onClick={handleCreateNewChat}
+              className="px-3 py-1.5 text-sm text-[#6B7280] hover:text-white transition-colors whitespace-nowrap"
+            >
+              + New Chat
+            </button>
           </div>
           
           {/* Collapse button */}
-          <button
-            onClick={handleCollapseChat}
-            className="flex-shrink-0 p-1 text-[#6B7280] hover:text-white hover:bg-[#252525] rounded transition-colors ml-1"
-            title="Collapse Chat"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1 ml-4">
+            <button
+              onClick={handleCollapseChat}
+              className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+              title="Collapse Chat"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
       
