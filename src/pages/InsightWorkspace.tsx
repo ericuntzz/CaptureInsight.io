@@ -8,14 +8,12 @@ import {
   Link2,
   Copy,
   Plus,
-  Sparkles,
   MessageSquare,
   Database,
   Trash2,
   X,
   Presentation,
   GripVertical,
-  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -26,8 +24,8 @@ import {
   useCreateChatConversation, 
   useUpdateChatConversation, 
   useDeleteChatConversation,
-  type ChatConversation 
 } from '../hooks/useChatConversations';
+import { useWorkspaceSheets, type Sheet } from '../hooks/useSheets';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
 import {
@@ -369,11 +367,18 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
   const updateChatMutation = useUpdateChatConversation();
   const deleteChatMutation = useDeleteChatConversation();
   
-  // Reset chat/insight selections when workspace changes
+  // Fetch sheets (captures) for this workspace
+  const { data: workspaceSheets = [] } = useWorkspaceSheets(spaceId, workspaceId ?? null);
+  
+  // Reset chat/insight selections and data when workspace changes
   useEffect(() => {
     setActiveChatId(null);
     setOpenTabs([{ id: 'new', title: 'Untitled Insight', summary: '', isSaved: false }]);
     setActiveTabId('new');
+    setSources([]);
+    setSheetsData({});
+    setLocalTitle('Untitled Insight');
+    setNotes('');
   }, [workspaceId]);
   
   // Ensure there's always an active chat - create one if none exist
@@ -1166,6 +1171,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
   // Data Sources Panel Content - using JSX variable instead of component to prevent remounting on re-render
   const dataSourcesPanelContent = (
     <DataSourcesPanel
+      sheets={workspaceSheets}
       sources={sources}
       sheetsData={sheetsData}
       onToggle={handleCollapseData}
@@ -1343,50 +1349,8 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
   );
 }
 
-// Mock data for demonstration
-const MOCK_DATA_SOURCES = [
-  {
-    id: 'mock-1',
-    name: 'Q4 Sales Dashboard',
-    type: 'screenshot' as const,
-    preview: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop',
-    date: '2024-11-25',
-    extractedData: {
-      'Total Revenue': '$2.4M',
-      'Growth Rate': '+15.3%',
-      'Active Customers': '12,847',
-      'Top Product': 'Enterprise Plan',
-    },
-  },
-  {
-    id: 'mock-2',
-    name: 'Customer Feedback Survey',
-    type: 'file' as const,
-    preview: null,
-    date: '2024-11-24',
-    extractedData: {
-      'Response Rate': '68%',
-      'NPS Score': '72',
-      'Satisfaction': '4.5/5',
-      'Top Concern': 'Pricing',
-    },
-  },
-  {
-    id: 'mock-3',
-    name: 'Competitor Analysis Report',
-    type: 'link' as const,
-    preview: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop',
-    date: '2024-11-23',
-    extractedData: {
-      'Market Share': '23%',
-      'Key Differentiator': 'AI Features',
-      'Pricing Gap': '-12%',
-      'Feature Parity': '85%',
-    },
-  },
-];
-
 interface DataSourcesPanelProps {
+  sheets: Sheet[];
   sources: InsightSource[];
   sheetsData: Record<string, any>;
   onToggle: () => void;
@@ -1394,34 +1358,79 @@ interface DataSourcesPanelProps {
   onRemoveSource: (sourceId: string) => void;
 }
 
-function DataSourcesPanel({ sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
-  // Note: sheetsData, onEditData, onRemoveSource are reserved for future real data integration
-  void _sheetsData; void _onEditData; void _onRemoveSource;
+interface DisplayableSheet {
+  id: string;
+  name: string;
+  type: 'screenshot' | 'file' | 'link' | 'capture';
+  preview: string | null;
+  date: string;
+  rowCount: number | null;
+  dataSourceMeta: any;
+}
+
+function transformSheetToDisplayable(sheet: Sheet): DisplayableSheet {
+  const meta = sheet.dataSourceMeta as { preview?: string; url?: string; screenshotUrl?: string } | null;
+  const dataType = sheet.dataSourceType?.toLowerCase() || 'capture';
+  
+  let type: DisplayableSheet['type'] = 'capture';
+  if (dataType === 'screenshot' || dataType.includes('screenshot')) {
+    type = 'screenshot';
+  } else if (dataType === 'link' || dataType === 'url' || dataType.includes('link')) {
+    type = 'link';
+  } else if (dataType === 'file' || dataType.includes('file')) {
+    type = 'file';
+  }
+  
+  let preview: string | null = null;
+  if (meta?.preview) {
+    preview = meta.preview;
+  } else if (meta?.screenshotUrl) {
+    preview = meta.screenshotUrl;
+  } else if (sheet.data && typeof sheet.data === 'object') {
+    const sheetData = sheet.data as { screenshot?: string; screenshotUrl?: string; preview?: string };
+    preview = sheetData.screenshot || sheetData.screenshotUrl || sheetData.preview || null;
+  }
+  
+  const date = sheet.lastModified 
+    ? new Date(sheet.lastModified).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    : 'Unknown date';
+  
+  return {
+    id: sheet.id,
+    name: sheet.name,
+    type,
+    preview,
+    date,
+    rowCount: sheet.rowCount,
+    dataSourceMeta: sheet.dataSourceMeta,
+  };
+}
+
+function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
+  void _sources; void _sheetsData; void _onEditData; void _onRemoveSource;
   const [activeTab, setActiveTab] = useState<'all' | 'screenshots' | 'files' | 'links'>('all');
-  const [selectedMockId, setSelectedMockId] = useState<string | null>(MOCK_DATA_SOURCES[0]?.id || null);
+  const [selectedSheetId, setSelectedSheetId] = useState<string | null>(null);
   
-  const useMockData = sources.length === 0;
-  const displaySources = useMockData ? MOCK_DATA_SOURCES : sources;
+  const displayableSheets = sheets.map(transformSheetToDisplayable);
   
-  const filteredSources = displaySources.filter(source => {
-    if (activeTab === 'all') return true;
-    if (useMockData) {
-      const mockSource = source as typeof MOCK_DATA_SOURCES[0];
-      if (activeTab === 'screenshots') return mockSource.type === 'screenshot';
-      if (activeTab === 'files') return mockSource.type === 'file';
-      if (activeTab === 'links') return mockSource.type === 'link';
-    } else {
-      const realSource = source as InsightSource;
-      if (activeTab === 'screenshots') return realSource.sourceType === 'screenshot';
-      if (activeTab === 'files') return realSource.sourceType === 'file';
-      if (activeTab === 'links') return realSource.sourceType === 'link';
+  useEffect(() => {
+    if (displayableSheets.length > 0 && !selectedSheetId) {
+      setSelectedSheetId(displayableSheets[0].id);
+    } else if (displayableSheets.length === 0) {
+      setSelectedSheetId(null);
     }
+  }, [displayableSheets.length, selectedSheetId]);
+  
+  const filteredSheets = displayableSheets.filter(sheet => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'screenshots') return sheet.type === 'screenshot' || sheet.type === 'capture';
+    if (activeTab === 'files') return sheet.type === 'file';
+    if (activeTab === 'links') return sheet.type === 'link';
     return true;
   });
   
-  const selectedMockSource = useMockData 
-    ? MOCK_DATA_SOURCES.find(s => s.id === selectedMockId) 
-    : null;
+  const selectedSheet = displayableSheets.find(s => s.id === selectedSheetId) || null;
+  const originalSheet = sheets.find(s => s.id === selectedSheetId);
   
   return (
     <div className="flex flex-col h-full bg-[#1E1E1E]">
@@ -1432,7 +1441,7 @@ function DataSourcesPanel({ sources, sheetsData: _sheetsData, onToggle, onEditDa
             <Database className="w-4 h-4 text-[#FF6B35]" />
             <span className="text-sm font-medium text-white">Data Sources</span>
             <span className="px-2 py-0.5 bg-[#2A2F3E] rounded-full text-xs text-gray-400">
-              {displaySources.length}
+              {displayableSheets.length}
             </span>
           </div>
           <button
@@ -1466,41 +1475,46 @@ function DataSourcesPanel({ sources, sheetsData: _sheetsData, onToggle, onEditDa
       <div className="flex-1 flex overflow-hidden">
         {/* Sources list */}
         <div className="w-1/3 border-r border-[#2A2A2A] overflow-y-auto">
-          {filteredSources.map((source) => {
-            const mockSource = source as typeof MOCK_DATA_SOURCES[0];
-            const isSelected = useMockData && selectedMockId === mockSource.id;
-            
-            return (
-              <div
-                key={mockSource.id}
-                onClick={() => useMockData && setSelectedMockId(mockSource.id)}
-                className={`p-3 border-b border-[#2A2A2A] cursor-pointer transition-colors ${
-                  isSelected ? 'bg-[#FF6B35]/10 border-l-2 border-l-[#FF6B35]' : 'hover:bg-[#252525]'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  {mockSource.type === 'screenshot' && <Image className="w-3.5 h-3.5 text-blue-400" />}
-                  {mockSource.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
-                  {mockSource.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
-                  <span className="text-xs text-gray-400">{mockSource.type}</span>
+          {filteredSheets.length === 0 ? (
+            <div className="p-4 text-center">
+              <p className="text-gray-500 text-sm">No captures in this workspace</p>
+            </div>
+          ) : (
+            filteredSheets.map((sheet) => {
+              const isSelected = selectedSheetId === sheet.id;
+              
+              return (
+                <div
+                  key={sheet.id}
+                  onClick={() => setSelectedSheetId(sheet.id)}
+                  className={`p-3 border-b border-[#2A2A2A] cursor-pointer transition-colors ${
+                    isSelected ? 'bg-[#FF6B35]/10 border-l-2 border-l-[#FF6B35]' : 'hover:bg-[#252525]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    {(sheet.type === 'screenshot' || sheet.type === 'capture') && <Image className="w-3.5 h-3.5 text-blue-400" />}
+                    {sheet.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
+                    {sheet.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
+                    <span className="text-xs text-gray-400">{sheet.type}</span>
+                  </div>
+                  <p className="text-sm text-white truncate">{sheet.name}</p>
+                  <p className="text-xs text-gray-500 mt-1">{sheet.date}</p>
                 </div>
-                <p className="text-sm text-white truncate">{mockSource.name}</p>
-                <p className="text-xs text-gray-500 mt-1">{mockSource.date}</p>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
         
         {/* Selected source detail */}
         <div className="flex-1 overflow-y-auto p-4">
-          {selectedMockSource ? (
+          {selectedSheet ? (
             <div className="space-y-4">
               {/* Preview image */}
-              {selectedMockSource.preview && (
+              {selectedSheet.preview && (
                 <div className="rounded-lg overflow-hidden border border-[#2A2A2A]">
                   <img 
-                    src={selectedMockSource.preview} 
-                    alt={selectedMockSource.name}
+                    src={selectedSheet.preview} 
+                    alt={selectedSheet.name}
                     className="w-full h-48 object-cover"
                   />
                 </div>
@@ -1508,29 +1522,42 @@ function DataSourcesPanel({ sources, sheetsData: _sheetsData, onToggle, onEditDa
               
               {/* Source info */}
               <div>
-                <h3 className="text-lg font-medium text-white mb-2">{selectedMockSource.name}</h3>
+                <h3 className="text-lg font-medium text-white mb-2">{selectedSheet.name}</h3>
                 <div className="flex items-center gap-2 text-xs text-gray-400">
-                  {selectedMockSource.type === 'screenshot' && <Image className="w-3.5 h-3.5 text-blue-400" />}
-                  {selectedMockSource.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
-                  {selectedMockSource.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
-                  <span className="capitalize">{selectedMockSource.type}</span>
+                  {(selectedSheet.type === 'screenshot' || selectedSheet.type === 'capture') && <Image className="w-3.5 h-3.5 text-blue-400" />}
+                  {selectedSheet.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
+                  {selectedSheet.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
+                  <span className="capitalize">{selectedSheet.type}</span>
                   <span>•</span>
-                  <span>{selectedMockSource.date}</span>
+                  <span>{selectedSheet.date}</span>
+                  {selectedSheet.rowCount !== null && selectedSheet.rowCount > 0 && (
+                    <>
+                      <span>•</span>
+                      <span>{selectedSheet.rowCount} rows</span>
+                    </>
+                  )}
                 </div>
               </div>
               
-              {/* Extracted data */}
-              <div className="bg-[#212121] rounded-lg p-4 border border-[#2A2A2A]">
-                <h4 className="text-sm font-medium text-[#FF6B35] mb-3">Extracted Data</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(selectedMockSource.extractedData).map(([key, value]) => (
-                    <div key={key} className="bg-[#1A1A1A] rounded-lg p-3">
-                      <p className="text-xs text-gray-400 mb-1">{key}</p>
-                      <p className="text-sm font-medium text-white">{value}</p>
-                    </div>
-                  ))}
+              {/* Data preview */}
+              {originalSheet?.data && typeof originalSheet.data === 'object' && (
+                <div className="bg-[#212121] rounded-lg p-4 border border-[#2A2A2A]">
+                  <h4 className="text-sm font-medium text-[#FF6B35] mb-3">Data Preview</h4>
+                  <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto">
+                    {Object.entries(originalSheet.data as Record<string, any>)
+                      .filter(([key]) => !['screenshot', 'screenshotUrl', 'preview'].includes(key))
+                      .slice(0, 10)
+                      .map(([key, value]) => (
+                        <div key={key} className="bg-[#1A1A1A] rounded-lg p-3">
+                          <p className="text-xs text-gray-400 mb-1 truncate">{key}</p>
+                          <p className="text-sm font-medium text-white truncate">
+                            {typeof value === 'object' ? JSON.stringify(value).slice(0, 50) : String(value).slice(0, 50)}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
                 </div>
-              </div>
+              )}
               
               {/* Actions */}
               <div className="flex gap-2">
@@ -1542,10 +1569,7 @@ function DataSourcesPanel({ sources, sheetsData: _sheetsData, onToggle, onEditDa
                 </button>
                 <button
                   onClick={() => {
-                    if (selectedMockId) {
-                      setSelectedMockId(null);
-                      toast.success('Source removed');
-                    }
+                    toast.info('Remove functionality coming soon!');
                   }}
                   className="py-2 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm rounded-lg transition-colors"
                 >
@@ -1556,7 +1580,11 @@ function DataSourcesPanel({ sources, sheetsData: _sheetsData, onToggle, onEditDa
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <Database className="w-12 h-12 text-[#3A3A3A] mb-3" />
-              <p className="text-gray-400 text-sm">Select a data source to view details</p>
+              <p className="text-gray-400 text-sm">
+                {displayableSheets.length === 0 
+                  ? 'No captures in this workspace yet' 
+                  : 'Select a data source to view details'}
+              </p>
             </div>
           )}
         </div>

@@ -980,6 +980,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/sheets', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const spaceId = req.query.spaceId as string;
+      const workspaceId = req.query.workspaceId as string | undefined;
+
+      if (!spaceId) {
+        return res.status(400).json({ message: "spaceId is required" });
+      }
+
+      const space = await storage.getSpace(spaceId);
+      if (!space || space.ownerId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      let sheets;
+      if (workspaceId) {
+        sheets = await storage.getSheetsByWorkspace(workspaceId);
+      } else {
+        sheets = await storage.getSheets(spaceId);
+      }
+
+      const securityMode = await serverEncryption.getSecurityMode(userId);
+      
+      if (securityMode === 0) {
+        for (const sheet of sheets) {
+          if (sheet.encryptedData && sheet.encryptionIv && sheet.encryptionVersion === 1) {
+            try {
+              const decryptedData = await serverEncryption.decryptForUser(userId, sheet.encryptedData, sheet.encryptionIv);
+              if (decryptedData) {
+                try {
+                  (sheet as any).data = JSON.parse(decryptedData);
+                } catch {
+                  (sheet as any).data = decryptedData;
+                }
+              }
+            } catch (decryptError) {
+              console.error("Error decrypting sheet data:", decryptError);
+            }
+          }
+        }
+      }
+
+      res.json(sheets);
+    } catch (error) {
+      console.error("Error fetching sheets:", error);
+      res.status(500).json({ message: "Failed to fetch sheets" });
+    }
+  });
+
   app.post('/api/spaces/:spaceId/sheets', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
