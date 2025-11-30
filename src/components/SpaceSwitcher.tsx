@@ -150,10 +150,10 @@ export function SpaceSwitcher({
             </div>
 
             {/* Add New Space */}
-            <div className="p-1">
+            <div className="px-3 py-2 border-t border-[rgba(255,107,53,0.1)]">
               <button
                 onClick={handleCreateSpaceClick}
-                className="w-full px-3 py-2 text-left text-xs text-[#FF6B35] hover:bg-[rgba(255,107,53,0.1)] transition-colors rounded flex items-center gap-2"
+                className="w-full text-left text-sm text-[#FF6B35] hover:text-[#FFA07A] transition-colors flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add a New Space
