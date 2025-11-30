@@ -376,11 +376,22 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
   // Track if we've initialized for this workspace
   const initializedWorkspaceRef = useRef<string | null>(null);
   
-  // Reset chat selection when workspace changes
+  // Reset state when workspace changes - MUST reset initializedWorkspaceRef so load effect runs
   useEffect(() => {
+    // Reset the initialization tracker so the load effect will run for the new workspace
+    initializedWorkspaceRef.current = null;
+    
+    // Clear workspace-specific state
     setActiveChatId(null);
     setSources([]);
     setSheetsData({});
+    
+    // Reset tabs to loading state - will be populated by load effect
+    setOpenTabs([{ id: 'loading', title: 'Loading...', summary: '', isSaved: false }]);
+    setActiveTabId('loading');
+    setLocalTitle('Loading...');
+    setNotes('');
+    lastSavedContentRef.current = { title: '', summary: '' };
   }, [workspaceId]);
   
   // Update tabs when workspace insights load
@@ -456,6 +467,9 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
   // Auto-save content to database (debounced) - uses refs to avoid re-render loops
   useEffect(() => {
     if (!spaceId) return;
+    
+    // Don't auto-save loading state or placeholder content
+    if (activeTabId === 'loading' || localTitle === 'Loading...') return;
     
     // Check if content has changed from last saved state
     const hasChanges = 
