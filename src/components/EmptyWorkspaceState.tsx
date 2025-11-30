@@ -1,19 +1,19 @@
 import { motion } from 'motion/react';
-import { FolderPlus, Sparkles } from 'lucide-react';
+import { Upload, ArrowRight } from 'lucide-react';
 import { Button } from './ui/button';
 
 interface EmptyWorkspaceStateProps {
-  onCreateWorkspace: () => void;
+  onUploadData: () => void;
 }
 
-export function EmptyWorkspaceState({ onCreateWorkspace }: EmptyWorkspaceStateProps) {
+export function EmptyWorkspaceState({ onUploadData }: EmptyWorkspaceStateProps) {
   return (
     <div className="flex-1 flex items-center justify-center h-full bg-[#0A0D12]">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="text-center max-w-md px-8"
+        className="text-center max-w-lg px-8"
       >
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
@@ -21,7 +21,7 @@ export function EmptyWorkspaceState({ onCreateWorkspace }: EmptyWorkspaceStatePr
           transition={{ delay: 0.1, duration: 0.4 }}
           className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#FF6B35]/20 to-[#FF6B35]/5 border border-[#FF6B35]/20 flex items-center justify-center mx-auto mb-6"
         >
-          <FolderPlus className="w-10 h-10 text-[#FF6B35]" />
+          <Upload className="w-10 h-10 text-[#FF6B35]" />
         </motion.div>
 
         <motion.h2
@@ -30,7 +30,7 @@ export function EmptyWorkspaceState({ onCreateWorkspace }: EmptyWorkspaceStatePr
           transition={{ delay: 0.2, duration: 0.4 }}
           className="text-2xl font-semibold text-white mb-3"
         >
-          No Workspaces Yet
+          Welcome to CaptureInsight
         </motion.h2>
 
         <motion.p
@@ -39,8 +39,8 @@ export function EmptyWorkspaceState({ onCreateWorkspace }: EmptyWorkspaceStatePr
           transition={{ delay: 0.3, duration: 0.4 }}
           className="text-gray-400 text-base leading-relaxed mb-8"
         >
-          Workspaces help you organize your insights, chats, and data sources. 
-          Create your first workspace to get started.
+          Start by uploading your data - capture screenshots, upload files, or add links. 
+          Your first workspace will be created automatically with your data ready to analyze.
         </motion.p>
 
         <motion.div
@@ -85,11 +85,12 @@ export function EmptyWorkspaceState({ onCreateWorkspace }: EmptyWorkspaceStatePr
           <div className="absolute inset-0.5 rounded-[10px] bg-[#0A0D12]" />
 
           <Button
-            onClick={onCreateWorkspace}
+            onClick={onUploadData}
             className="relative h-12 px-8 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] text-white font-medium text-base rounded-xl shadow-lg shadow-[#FF6B35]/25 transition-all duration-200 hover:shadow-xl hover:shadow-[#FF6B35]/30"
           >
-            <Sparkles className="w-5 h-5 mr-2" />
-            Create Workspace
+            <Upload className="w-5 h-5 mr-2" />
+            Upload Data
+            <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </motion.div>
 

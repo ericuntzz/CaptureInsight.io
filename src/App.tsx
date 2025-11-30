@@ -1370,10 +1370,9 @@ export default function App() {
             if (!hasWorkspaces) {
               return (
                 <EmptyWorkspaceState 
-                  onCreateWorkspace={() => {
-                    if (currentSpaceId) {
-                      handleCreateWorkspace(currentSpaceId, 'Untitled Workspace');
-                    }
+                  onUploadData={() => {
+                    // Switch to capture view to show the capture toolbar
+                    handleViewChange('capture');
                   }}
                 />
               );
