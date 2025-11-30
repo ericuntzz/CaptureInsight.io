@@ -86,9 +86,9 @@ export function EmptyWorkspaceState({ onUploadData }: EmptyWorkspaceStateProps) 
 
           <Button
             onClick={onUploadData}
-            className="relative h-12 px-8 bg-[#FF6B35] hover:bg-[#E55A2B] text-white font-medium text-base rounded-xl shadow-lg shadow-[#FF6B35]/25 transition-all duration-200 hover:shadow-xl hover:shadow-[#FF6B35]/30"
+            className="relative h-12 px-8 bg-[#FF6B35] hover:bg-[#E55A2B] text-white font-medium text-base rounded-xl shadow-lg shadow-[#FF6B35]/25 transition-all duration-200 hover:shadow-xl hover:shadow-[#FF6B35]/30 flex items-center justify-center gap-1.5"
           >
-            <Plus className="w-5 h-5 mr-2" />
+            <Plus className="w-5 h-5" />
             Add Data
           </Button>
         </motion.div>
