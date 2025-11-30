@@ -281,9 +281,12 @@ export default function App() {
   
   // Handle workspace deletion
   const handleDeleteWorkspace = async (workspaceId: string) => {
+    if (!currentSpaceId) {
+      toast.error('No space selected');
+      return;
+    }
     try {
-      await deleteWorkspaceMutation.mutateAsync(workspaceId);
-      // If deleted workspace was active, switch to another one
+      // Switch to another workspace first for instant feedback (optimistic)
       if (activeWorkspaceId === workspaceId && currentSpace) {
         const workspaces = currentSpace.workspaces || currentSpace.folders || [];
         const remaining = workspaces.filter(w => w.id !== workspaceId);
@@ -293,6 +296,7 @@ export default function App() {
           setActiveWorkspaceId(null);
         }
       }
+      await deleteWorkspaceMutation.mutateAsync({ id: workspaceId, spaceId: currentSpaceId });
       toast.success('Workspace deleted successfully');
     } catch (error) {
       console.error('Error deleting workspace:', error);
@@ -1165,7 +1169,7 @@ export default function App() {
           }}
           onDeleteFolder={async (spaceId, folderId) => {
             try {
-              await deleteFolderMutation.mutateAsync(folderId);
+              await deleteFolderMutation.mutateAsync({ id: folderId, spaceId });
               toast.success('Folder deleted!');
             } catch (error) {
               console.error('Error deleting folder:', error);
@@ -1268,9 +1272,9 @@ export default function App() {
       }
     };
     
-    const handleWorkspaceDeleteFolder = async (_spaceId: string, folderId: string) => {
+    const handleWorkspaceDeleteFolder = async (spaceId: string, folderId: string) => {
       try {
-        await deleteFolderMutation.mutateAsync(folderId);
+        await deleteFolderMutation.mutateAsync({ id: folderId, spaceId });
         toast.success('Folder deleted');
       } catch (error) {
         console.error('Error deleting folder:', error);

@@ -49,7 +49,7 @@ import {
   type InsertUserSettings,
 } from "../shared/schema";
 import { db, pool } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -252,42 +252,45 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteWorkspace(id: string): Promise<boolean> {
-    // Must delete related records in order to avoid foreign key violations
+    // Batch delete related records for performance
+    // Uses inArray for bulk operations instead of sequential per-record deletes
     
-    // 1. Get all chat threads in this workspace to delete their messages first
+    // 1. Get all chat thread IDs in this workspace
     const workspaceChatThreads = await db.select({ id: chatThreads.id })
       .from(chatThreads)
       .where(eq(chatThreads.workspaceId, id));
+    const threadIds = workspaceChatThreads.map(t => t.id);
     
-    // 2. Delete chat messages for each thread
-    for (const thread of workspaceChatThreads) {
-      await db.delete(chatMessages).where(eq(chatMessages.threadId, thread.id));
+    // 2. Batch delete all chat messages for these threads (single query)
+    if (threadIds.length > 0) {
+      await db.delete(chatMessages).where(inArray(chatMessages.threadId, threadIds));
     }
     
     // 3. Delete chat threads in this workspace
     await db.delete(chatThreads).where(eq(chatThreads.workspaceId, id));
     
-    // 4. Get all insights in this workspace to delete their sources and comments
+    // 4. Get all insight IDs in this workspace
     const workspaceInsights = await db.select({ id: insights.id })
       .from(insights)
       .where(eq(insights.workspaceId, id));
+    const insightIds = workspaceInsights.map(i => i.id);
     
-    // 5. Delete insight comments and sources for each insight
-    for (const insight of workspaceInsights) {
-      await db.delete(insightComments).where(eq(insightComments.insightId, insight.id));
-      await db.delete(insightSources).where(eq(insightSources.insightId, insight.id));
+    // 5. Batch delete insight comments and sources (single query each)
+    if (insightIds.length > 0) {
+      await Promise.all([
+        db.delete(insightComments).where(inArray(insightComments.insightId, insightIds)),
+        db.delete(insightSources).where(inArray(insightSources.insightId, insightIds)),
+      ]);
     }
     
-    // 6. Delete insights in this workspace
-    await db.delete(insights).where(eq(insights.workspaceId, id));
+    // 6. Delete insights, sheets, and change logs in parallel
+    await Promise.all([
+      db.delete(insights).where(eq(insights.workspaceId, id)),
+      db.delete(sheets).where(eq(sheets.workspaceId, id)),
+      db.delete(changeLogs).where(eq(changeLogs.workspaceId, id)),
+    ]);
     
-    // 7. Delete sheets in this workspace
-    await db.delete(sheets).where(eq(sheets.workspaceId, id));
-    
-    // 8. Delete change logs in this workspace
-    await db.delete(changeLogs).where(eq(changeLogs.workspaceId, id));
-    
-    // 9. Finally, delete the workspace itself
+    // 7. Finally, delete the workspace itself
     const result = await db.delete(workspaces).where(eq(workspaces.id, id));
     return (result.rowCount ?? 0) > 0;
   }

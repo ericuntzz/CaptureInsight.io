@@ -74,8 +74,59 @@ export function useCreateChatConversation() {
       });
       return res.json();
     },
-    onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/spaces/" + variables.spaceId + "/chats"] });
+    // Optimistic update - add chat to cache immediately for instant UI feedback
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/spaces/" + variables.spaceId + "/chats"] });
+      
+      // Snapshot the previous value
+      const previousChats = queryClient.getQueryData<ChatConversation[]>(
+        ["/api/spaces/" + variables.spaceId + "/chats", { workspaceId: variables.workspaceId }]
+      );
+      
+      // Create optimistic chat with unique temporary ID
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const optimisticChat: ChatConversation = {
+        id: tempId,
+        title: variables.title || 'New Chat',
+        spaceId: variables.spaceId,
+        workspaceId: variables.workspaceId || null,
+        insightId: variables.insightId || null,
+        userId: '',
+        savedToMemory: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastMessageAt: new Date().toISOString(),
+      };
+      
+      // Add optimistic chat to cache
+      queryClient.setQueryData<ChatConversation[]>(
+        ["/api/spaces/" + variables.spaceId + "/chats", { workspaceId: variables.workspaceId }],
+        (old) => old ? [optimisticChat, ...old] : [optimisticChat]
+      );
+      
+      // Return tempId so we can replace only this specific chat on success
+      return { previousChats, tempId };
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousChats) {
+        queryClient.setQueryData(
+          ["/api/spaces/" + variables.spaceId + "/chats", { workspaceId: variables.workspaceId }],
+          context.previousChats
+        );
+      }
+    },
+    onSuccess: (result, variables, context) => {
+      // Replace only this specific optimistic chat with real one (preserves concurrent creations)
+      queryClient.setQueryData<ChatConversation[]>(
+        ["/api/spaces/" + variables.spaceId + "/chats", { workspaceId: variables.workspaceId }],
+        (old) => {
+          if (!old) return [result];
+          // Replace only the matching temp chat
+          return old.map(c => c.id === context?.tempId ? result : c);
+        }
+      );
     },
   });
 }

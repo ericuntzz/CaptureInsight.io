@@ -157,8 +157,51 @@ export function useCreateWorkspace() {
       const res = await apiRequest("POST", `/api/spaces/${spaceId}/workspaces`, { name });
       return res.json();
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/spaces/" + variables.spaceId + "/workspaces"] });
+    // Optimistic update - add workspace immediately for instant feedback
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/spaces/" + variables.spaceId + "/workspaces"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/spaces"] });
+      
+      const previousWorkspaces = queryClient.getQueryData<UIWorkspace[]>(
+        ["/api/spaces/" + variables.spaceId + "/workspaces"]
+      );
+      
+      // Create unique temp ID for this specific workspace
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const optimisticWorkspace: UIWorkspace = {
+        id: tempId,
+        name: variables.name,
+        sheets: [],
+      };
+      
+      queryClient.setQueryData<UIWorkspace[]>(
+        ["/api/spaces/" + variables.spaceId + "/workspaces"],
+        (old) => old ? [...old, optimisticWorkspace] : [optimisticWorkspace]
+      );
+      
+      return { previousWorkspaces, tempId };
+    },
+    onError: (_err, variables, context) => {
+      if (context?.previousWorkspaces) {
+        queryClient.setQueryData(
+          ["/api/spaces/" + variables.spaceId + "/workspaces"],
+          context.previousWorkspaces
+        );
+      }
+    },
+    onSuccess: (result, variables, context) => {
+      // Replace only this specific temp workspace with real one (preserves concurrent creations)
+      queryClient.setQueryData<UIWorkspace[]>(
+        ["/api/spaces/" + variables.spaceId + "/workspaces"],
+        (old) => {
+          if (!old) return [{ id: result.id, name: result.name, sheets: [] }];
+          return old.map(w => w.id === context?.tempId 
+            ? { id: result.id, name: result.name, sheets: [] } 
+            : w
+          );
+        }
+      );
+      // Background refresh to get full data
       queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
     },
   });
@@ -188,11 +231,48 @@ export function useUpdateFolder() {
 export function useDeleteWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, spaceId }: { id: string; spaceId: string }) => {
       await apiRequest("DELETE", `/api/workspaces/${id}`);
+      return { id, spaceId };
     },
-    onSuccess: () => {
+    // Optimistic update - remove workspace immediately for instant feedback
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/spaces/" + variables.spaceId + "/workspaces"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/spaces"] });
+      
+      const previousWorkspaces = queryClient.getQueryData<UIWorkspace[]>(
+        ["/api/spaces/" + variables.spaceId + "/workspaces"]
+      );
+      
+      // Optimistically remove the workspace from cache
+      queryClient.setQueryData<UIWorkspace[]>(
+        ["/api/spaces/" + variables.spaceId + "/workspaces"],
+        (old) => old ? old.filter(w => w.id !== variables.id) : []
+      );
+      
+      return { previousWorkspaces };
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousWorkspaces) {
+        queryClient.setQueryData(
+          ["/api/spaces/" + variables.spaceId + "/workspaces"],
+          context.previousWorkspaces
+        );
+      }
+    },
+    onSuccess: (_, variables) => {
+      // Background refresh to ensure consistency
       queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
+      // Also invalidate workspace-specific queries
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/spaces/" + variables.spaceId + "/chats"],
+        exact: false 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/spaces/" + variables.spaceId + "/insights"],
+        exact: false 
+      });
     },
   });
 }
