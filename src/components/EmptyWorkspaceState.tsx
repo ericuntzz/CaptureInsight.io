@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Upload, ArrowRight } from 'lucide-react';
+import { Upload, Plus } from 'lucide-react';
 import { Button } from './ui/button';
 
 interface EmptyWorkspaceStateProps {
@@ -88,9 +88,8 @@ export function EmptyWorkspaceState({ onUploadData }: EmptyWorkspaceStateProps) 
             onClick={onUploadData}
             className="relative h-12 px-8 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] text-white font-medium text-base rounded-xl shadow-lg shadow-[#FF6B35]/25 transition-all duration-200 hover:shadow-xl hover:shadow-[#FF6B35]/30"
           >
-            <Upload className="w-5 h-5 mr-2" />
-            Upload Data
-            <ArrowRight className="w-4 h-4 ml-2" />
+            <Plus className="w-5 h-5 mr-2" />
+            Add Data
           </Button>
         </motion.div>
 
