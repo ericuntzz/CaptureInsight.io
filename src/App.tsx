@@ -505,13 +505,16 @@ export default function App() {
     const { analysisSettings } = data;
     
     try {
-      // Check if we need to create a space and/or workspace
+      console.log('[Capture Flow] Starting analysis with destinations:', destinations);
+      console.log('[Capture Flow] Available spaces:', spaces.map(s => ({ id: s.id, name: s.name, workspaces: s.workspaces?.length || 0, folders: s.folders?.length || 0 })));
+      
+      // Step 1: Determine or create the target space
       let targetSpaceId = destinations[0]?.spaceId;
       
-      // If no space exists, create one first
       if (!targetSpaceId || targetSpaceId === '') {
         if (spaces.length === 0) {
-          // Create a default space for the user
+          // No spaces exist - create a default one
+          console.log('[Capture Flow] No spaces exist, creating default space...');
           const newSpace = await createSpaceMutation.mutateAsync({
             name: 'My Captures',
             description: 'Default space for your captured data'
@@ -520,67 +523,106 @@ export default function App() {
           if (newSpace?.id) {
             targetSpaceId = newSpace.id;
             setCurrentSpaceId(newSpace.id);
-            
-            // Update all destinations with the new space
-            destinations = destinations.map(dest => ({
-              ...dest,
-              spaceId: newSpace.id
-            }));
+            console.log('[Capture Flow] Created new space:', newSpace.id);
           }
         } else {
           // Use first existing space
           targetSpaceId = spaces[0].id;
+          console.log('[Capture Flow] Using existing space:', targetSpaceId);
+        }
+        
+        // Update destinations with the space
+        destinations = destinations.map(dest => ({
+          ...dest,
+          spaceId: targetSpaceId
+        }));
+      }
+      
+      // Step 2: Check if we need to create a workspace
+      const targetFolderId = destinations[0]?.folderId;
+      const needsWorkspace = !targetFolderId || targetFolderId === '';
+      
+      console.log('[Capture Flow] Target folderId:', targetFolderId, 'Needs workspace:', needsWorkspace);
+      
+      if (needsWorkspace && targetSpaceId) {
+        // Check the current space for existing workspaces
+        const space = spaces.find(p => p.id === targetSpaceId);
+        const existingWorkspaces = space?.workspaces || space?.folders || [];
+        
+        console.log('[Capture Flow] Space found:', space?.name, 'Existing workspaces:', existingWorkspaces.length);
+        
+        // ALWAYS create a workspace if none exist in this space
+        if (existingWorkspaces.length === 0) {
+          console.log('[Capture Flow] No workspaces in space, creating "My Workspace"...');
+          
+          try {
+            const newWorkspace = await createWorkspaceMutation.mutateAsync({ 
+              spaceId: targetSpaceId, 
+              name: 'My Workspace' 
+            });
+            
+            console.log('[Capture Flow] Workspace creation result:', newWorkspace);
+            
+            if (newWorkspace?.id) {
+              // Update ALL destinations with the new workspace ID
+              destinations = destinations.map(dest => ({
+                ...dest,
+                spaceId: targetSpaceId,
+                folderId: newWorkspace.id
+              }));
+              
+              // Set as active workspace immediately
+              setActiveWorkspaceId(newWorkspace.id);
+              console.log('[Capture Flow] Set active workspace to:', newWorkspace.id);
+            }
+          } catch (workspaceError) {
+            console.error('[Capture Flow] Failed to create workspace:', workspaceError);
+            toast.error('Failed to create workspace');
+            return;
+          }
+        } else {
+          // Use the first existing workspace
+          const firstWorkspace = existingWorkspaces[0];
+          console.log('[Capture Flow] Using existing workspace:', firstWorkspace.id, firstWorkspace.name);
+          
           destinations = destinations.map(dest => ({
             ...dest,
-            spaceId: targetSpaceId
+            folderId: firstWorkspace.id
           }));
+          setActiveWorkspaceId(firstWorkspace.id);
         }
       }
       
-      // Check if any destination has an invalid folderId (workspace) - auto-create one if needed
-      const needsAutoWorkspace = destinations.some(dest => !dest.folderId || dest.folderId === '');
+      // Step 3: Validate we have valid destinations
+      const finalSpaceId = destinations[0]?.spaceId;
+      const finalFolderId = destinations[0]?.folderId;
       
-      if (needsAutoWorkspace && targetSpaceId) {
-        const space = spaces.find(p => p.id === targetSpaceId);
-        const workspaces = space?.workspaces || space?.folders || [];
-        
-        // If no workspaces exist, create one automatically
-        if (workspaces.length === 0) {
-          const newWorkspace = await createWorkspaceMutation.mutateAsync({ 
-            spaceId: targetSpaceId, 
-            name: 'My Workspace' 
-          });
-          
-          if (newWorkspace?.id) {
-            // Update all destinations to use the new workspace
-            destinations = destinations.map(dest => ({
-              ...dest,
-              spaceId: targetSpaceId,
-              folderId: newWorkspace.id
-            }));
-            
-            // Also set this as the active workspace
-            setActiveWorkspaceId(newWorkspace.id);
-          }
-        }
+      console.log('[Capture Flow] Final destination - spaceId:', finalSpaceId, 'folderId:', finalFolderId);
+      
+      if (!finalSpaceId || !finalFolderId) {
+        console.error('[Capture Flow] Missing destination after auto-creation!');
+        toast.error('Could not determine destination for captures');
+        return;
       }
       
-      // Update captures with their destinations
+      // Step 4: Update captures with their destinations
       setCaptures(prev => prev.map((capture, index) => {
         const dest = destinations[index];
-        const space = spaces.find(p => p.id === dest.spaceId);
-        const folder = space?.folders.find(f => f.id === dest.folderId);
         return {
           ...capture,
-          folder: folder && space ? `${space.name} → ${folder.name}` : capture.folder
+          folder: `Workspace`
         };
       }));
       
-      // ⚠️ CRITICAL: Add sheets to space folders for each capture via API
+      // Step 5: Create sheets for each capture via API
+      console.log('[Capture Flow] Creating sheets for', captureItems.length, 'items...');
+      
       for (let index = 0; index < captureItems.length; index++) {
         const item = captureItems[index];
         const dest = destinations[index];
         const settings = analysisSettings[index];
+        
+        console.log('[Capture Flow] Creating sheet:', item.name, 'in workspace:', dest.folderId);
         
         await createSheetMutation.mutateAsync({
           spaceId: dest.spaceId,
@@ -595,22 +637,20 @@ export default function App() {
         });
       }
       
-      // Navigate to workspace view to show captured data
+      // Step 6: Navigate to workspace view
+      console.log('[Capture Flow] Navigating to workspace view...');
       setCurrentView('workspace');
       setShowOptionsModal(false);
       
-      // Show success message
-      const uniqueDestinations = new Set(destinations.map(d => `${d.spaceId}|${d.folderId}`));
-      if (uniqueDestinations.size === 1) {
-        const dest = destinations[0];
-        const space = spaces.find(p => p.id === dest.spaceId);
-        const folder = space?.folders.find(f => f.id === dest.folderId);
-        toast.success(`${captureItems.length} item(s) saved to ${folder?.name}!`);
-      } else {
-        toast.success(`${captureItems.length} items saved to ${uniqueDestinations.size} different folders!`);
-      }
+      // Clear captures after successful save
+      setCaptures([]);
+      setUploadedFiles([]);
+      setShareLinks([]);
+      
+      toast.success(`${captureItems.length} item(s) saved to My Workspace!`);
+      
     } catch (error) {
-      console.error('Error starting analysis:', error);
+      console.error('[Capture Flow] Error:', error);
       toast.error('Failed to save captures');
     }
   };
