@@ -55,6 +55,7 @@ export function buildCsvExportUrl(spreadsheetId: string, gid: string = "0"): str
 /**
  * Parse CSV string into array of objects
  * Handles multi-line quoted fields correctly
+ * Preserves whitespace in quoted fields (CSV semantics)
  */
 export function parseCsv(csvText: string): { headers: string[]; rows: Record<string, string>[]; rawRows: string[][] } {
   if (!csvText || csvText.trim().length === 0) {
@@ -65,6 +66,7 @@ export function parseCsv(csvText: string): { headers: string[]; rows: Record<str
   let currentRow: string[] = [];
   let currentField = '';
   let inQuotes = false;
+  let fieldWasQuoted = false;
   
   // Process character by character to handle multi-line quoted fields
   for (let i = 0; i < csvText.length; i++) {
@@ -89,30 +91,30 @@ export function parseCsv(csvText: string): { headers: string[]; rows: Record<str
       if (char === '"') {
         // Start of quoted field
         inQuotes = true;
+        fieldWasQuoted = true;
       } else if (char === ',') {
-        // Field separator
-        currentRow.push(currentField.trim());
+        // Field separator - only trim unquoted fields
+        currentRow.push(fieldWasQuoted ? currentField : currentField.trim());
         currentField = '';
+        fieldWasQuoted = false;
       } else if (char === '\r') {
         // Handle Windows line endings \r\n
         if (nextChar === '\n') {
           i++; // Skip the \n
         }
-        // End of row
-        currentRow.push(currentField.trim());
-        if (currentRow.some(field => field.length > 0)) {
-          allRows.push(currentRow);
-        }
+        // End of row - only trim unquoted fields
+        currentRow.push(fieldWasQuoted ? currentField : currentField.trim());
+        allRows.push(currentRow);
         currentRow = [];
         currentField = '';
+        fieldWasQuoted = false;
       } else if (char === '\n') {
         // Unix line ending - end of row
-        currentRow.push(currentField.trim());
-        if (currentRow.some(field => field.length > 0)) {
-          allRows.push(currentRow);
-        }
+        currentRow.push(fieldWasQuoted ? currentField : currentField.trim());
+        allRows.push(currentRow);
         currentRow = [];
         currentField = '';
+        fieldWasQuoted = false;
       } else {
         currentField += char;
       }
@@ -120,8 +122,8 @@ export function parseCsv(csvText: string): { headers: string[]; rows: Record<str
   }
   
   // Don't forget the last field/row
-  currentRow.push(currentField.trim());
-  if (currentRow.some(field => field.length > 0)) {
+  currentRow.push(fieldWasQuoted ? currentField : currentField.trim());
+  if (currentRow.length > 0) {
     allRows.push(currentRow);
   }
 
@@ -129,12 +131,19 @@ export function parseCsv(csvText: string): { headers: string[]; rows: Record<str
     return { headers: [], rows: [], rawRows: [] };
   }
 
-  const headers = allRows[0];
+  // Filter out completely empty rows (all empty strings)
+  const nonEmptyRows = allRows.filter(row => row.some(field => field.length > 0));
+  
+  if (nonEmptyRows.length === 0) {
+    return { headers: [], rows: [], rawRows: [] };
+  }
+
+  const headers = nonEmptyRows[0];
   const rawRows: string[][] = [];
   const rows: Record<string, string>[] = [];
 
-  for (let i = 1; i < allRows.length; i++) {
-    const values = allRows[i];
+  for (let i = 1; i < nonEmptyRows.length; i++) {
+    const values = nonEmptyRows[i];
     rawRows.push(values);
     
     const row: Record<string, string> = {};

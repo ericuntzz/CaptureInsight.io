@@ -84,6 +84,19 @@ The application's core features include:
 **AI Integration**:
 A hybrid AI architecture uses Gemini 2.5 Pro/Flash (via Replit AI Integrations) for screenshot and data analysis, and chat conversations. OpenAI (requires API key) is used for text embeddings (text-embedding-3-small, 1536 dimensions) to enable semantic search via `pgvector` with IVFFlat index.
 
+**Data Ingestion Pipeline** (`server/ai/dataIngestion.ts`):
+- **Google Sheets Import**: Users can share a Google Sheets link (must be set to "Anyone with the link can view") and the system automatically:
+  1. Extracts the spreadsheet ID and GID from the URL
+  2. Constructs a CSV export URL (no API key required)
+  3. Fetches and parses the CSV data with full RFC 4180 compliance:
+     - Multi-line quoted fields are preserved
+     - Embedded commas and quotes handled correctly
+     - Quoted whitespace preserved, unquoted fields trimmed
+  4. Stores parsed data in the sheet's `data` field
+  5. Generates text embeddings via OpenAI for RAG retrieval
+- **Background Processing**: Ingestion runs asynchronously after sheet creation to avoid blocking the user
+- **RAG Integration**: The AI chat (`server/ai/index.ts`) automatically searches embeddings when `useRag=true` (default), finding relevant data from sheets and insights to include as context
+
 **Chrome Extension**:
 The Chrome extension, built with Manifest V3 and React in a shadow DOM, provides a floating toolbar for capturing content. It integrates with the backend for saving captures, selecting spaces and tags, and performing AI analysis with configurable LLM models.
 
