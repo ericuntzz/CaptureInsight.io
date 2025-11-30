@@ -96,6 +96,7 @@ export interface IStorage {
 
   // Insight operations
   getInsights(spaceId: string): Promise<Insight[]>;
+  getInsightsByWorkspace(workspaceId: string): Promise<Insight[]>;
   getInsight(id: string): Promise<Insight | undefined>;
   createInsight(insight: InsertInsight): Promise<Insight>;
   updateInsight(id: string, insight: Partial<InsertInsight>): Promise<Insight | undefined>;
@@ -346,7 +347,11 @@ export class DatabaseStorage implements IStorage {
 
   // Insight operations
   async getInsights(spaceId: string): Promise<Insight[]> {
-    return await db.select().from(insights).where(eq(insights.spaceId, spaceId)).orderBy(desc(insights.createdAt));
+    return await db.select().from(insights).where(eq(insights.spaceId, spaceId)).orderBy(desc(insights.updatedAt));
+  }
+
+  async getInsightsByWorkspace(workspaceId: string): Promise<Insight[]> {
+    return await db.select().from(insights).where(eq(insights.workspaceId, workspaceId)).orderBy(desc(insights.updatedAt));
   }
 
   async getInsight(id: string): Promise<Insight | undefined> {

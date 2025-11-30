@@ -1225,7 +1225,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/spaces/:spaceId/insights', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const insights = await storage.getInsights(req.params.spaceId);
+      const { workspaceId } = req.query;
+      
+      let insights;
+      if (workspaceId) {
+        insights = await storage.getInsightsByWorkspace(workspaceId as string);
+      } else {
+        insights = await storage.getInsights(req.params.spaceId);
+      }
+      
       const securityMode = await serverEncryption.getSecurityMode(userId);
       
       if (securityMode === 0) {
@@ -1255,7 +1263,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const securityMode = await serverEncryption.getSecurityMode(userId);
       
-      let insightData = { ...req.body, spaceId: req.params.spaceId, createdBy: userId };
+      let insightData = { 
+        ...req.body, 
+        spaceId: req.params.spaceId, 
+        createdBy: userId,
+        workspaceId: req.body.workspaceId || null,
+      };
       
       if (securityMode === 0 && insightData.summary !== undefined && insightData.summary !== null) {
         const summaryString = String(insightData.summary);

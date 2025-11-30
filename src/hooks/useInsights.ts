@@ -18,7 +18,7 @@ interface InsightComment {
   parentId?: string;
 }
 
-interface Insight {
+export interface Insight {
   id: string;
   title: string;
   summary: string;
@@ -32,11 +32,19 @@ interface Insight {
   comments: InsightComment[];
   folderId?: string;
   spaceId?: string;
+  workspaceId?: string;
 }
 
-export function useInsights(spaceId: string | null) {
+export function useInsights(spaceId: string | null, workspaceId?: string | null) {
   return useQuery<Insight[]>({
-    queryKey: ["/api/spaces/" + spaceId + "/insights"],
+    queryKey: ["/api/spaces/" + spaceId + "/insights", { workspaceId }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (workspaceId) params.append('workspaceId', workspaceId);
+      const res = await fetch(`/api/spaces/${spaceId}/insights?${params}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch insights');
+      return res.json();
+    },
     enabled: !!spaceId,
   });
 }
@@ -53,9 +61,11 @@ export function useCreateInsight() {
   return useMutation({
     mutationFn: async ({ 
       spaceId, 
+      workspaceId,
       data 
     }: { 
       spaceId: string; 
+      workspaceId?: string;
       data: {
         title: string;
         summary: string;
@@ -65,7 +75,10 @@ export function useCreateInsight() {
         tags?: string[];
       }
     }) => {
-      const res = await apiRequest("POST", `/api/spaces/${spaceId}/insights`, data);
+      const res = await apiRequest("POST", `/api/spaces/${spaceId}/insights`, {
+        ...data,
+        workspaceId: workspaceId || undefined,
+      });
       return res.json();
     },
     onSuccess: (_, variables) => {

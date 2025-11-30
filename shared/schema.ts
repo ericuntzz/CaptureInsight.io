@@ -154,6 +154,7 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   }),
   sheets: many(sheets),
   changeLogs: many(changeLogs),
+  insights: many(insights),
 }));
 
 // Sheets table
@@ -243,6 +244,7 @@ export const insights = pgTable("insights", {
   status: varchar("status").default("Open"), // 'Open' | 'Closed'
   priority: varchar("priority"), // 'High' | 'Medium' | 'Low'
   spaceId: varchar("space_id").references(() => spaces.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
   assignedTo: varchar("assigned_to").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   createdBy: varchar("created_by").references(() => users.id),
@@ -253,6 +255,10 @@ export const insightsRelations = relations(insights, ({ one, many }) => ({
   space: one(spaces, {
     fields: [insights.spaceId],
     references: [spaces.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [insights.workspaceId],
+    references: [workspaces.id],
   }),
   assignee: one(users, {
     fields: [insights.assignedTo],

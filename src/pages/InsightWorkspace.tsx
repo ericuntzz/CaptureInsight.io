@@ -18,7 +18,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
-import { useInsight, useCreateInsight, useUpdateInsight } from '../hooks/useInsights';
+import { useInsights, useInsight, useCreateInsight, useUpdateInsight } from '../hooks/useInsights';
 import { 
   useChatConversations, 
   useCreateChatConversation, 
@@ -370,16 +370,47 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
   // Fetch sheets (captures) for this workspace
   const { data: workspaceSheets = [] } = useWorkspaceSheets(spaceId, workspaceId ?? null);
   
-  // Reset chat/insight selections and data when workspace changes
+  // Fetch insights for current workspace
+  const { data: workspaceInsights = [], isLoading: isLoadingInsights } = useInsights(spaceId, workspaceId ?? null);
+  
+  // Track if we've initialized for this workspace
+  const initializedWorkspaceRef = useRef<string | null>(null);
+  
+  // Reset chat selection when workspace changes
   useEffect(() => {
     setActiveChatId(null);
-    setOpenTabs([{ id: 'new', title: 'Untitled Insight', summary: '', isSaved: false }]);
-    setActiveTabId('new');
     setSources([]);
     setSheetsData({});
-    setLocalTitle('Untitled Insight');
-    setNotes('');
   }, [workspaceId]);
+  
+  // Update tabs when workspace insights load
+  useEffect(() => {
+    if (isLoadingInsights) return;
+    if (initializedWorkspaceRef.current === workspaceId) return;
+    
+    if (workspaceInsights.length > 0) {
+      const insightTabs = workspaceInsights.map(insight => ({
+        id: insight.id,
+        title: insight.title,
+        summary: insight.summary || '',
+        isSaved: true,
+        dbId: insight.id,
+      }));
+      setOpenTabs(insightTabs);
+      setActiveTabId(insightTabs[0].id);
+      setLocalTitle(insightTabs[0].title);
+      setNotes(insightTabs[0].summary);
+      lastSavedContentRef.current = { title: insightTabs[0].title, summary: insightTabs[0].summary };
+    } else {
+      setOpenTabs([{ id: 'new', title: 'Untitled Insight', summary: '', isSaved: false }]);
+      setActiveTabId('new');
+      setLocalTitle('Untitled Insight');
+      setNotes('');
+      lastSavedContentRef.current = { title: '', summary: '' };
+    }
+    
+    initializedWorkspaceRef.current = workspaceId ?? null;
+  }, [workspaceInsights, isLoadingInsights, workspaceId]);
   
   // Ensure there's always an active chat - create one if none exist
   useEffect(() => {
@@ -459,6 +490,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
         // Create new insight in database
         createInsightMutation.mutate({
           spaceId,
+          workspaceId: workspaceId || undefined,
           data: {
             title: localTitle || 'Untitled Insight',
             summary: notes,
@@ -470,8 +502,9 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
             currentTabRef.current = { isSaved: true, dbId: newInsight.id };
             // Also update the state for persistence
             setOpenTabs(tabs => tabs.map(t => 
-              t.id === activeTabId ? { ...t, isSaved: true, dbId: newInsight.id } : t
+              t.id === activeTabId ? { ...t, isSaved: true, dbId: newInsight.id, id: newInsight.id } : t
             ));
+            setActiveTabId(newInsight.id);
             lastSavedContentRef.current = { title: localTitle, summary: notes };
             toast.success('Insight saved');
           },
@@ -487,7 +520,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [localTitle, notes, activeTabId, spaceId]);
+  }, [localTitle, notes, activeTabId, spaceId, workspaceId]);
   
   // Auto-collapse left sidebar when workspace opens
   useEffect(() => {
