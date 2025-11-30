@@ -1038,6 +1038,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let sheetData = { ...req.body, spaceId: req.params.spaceId, createdBy: userId };
       
+      // Validate workspaceId exists if provided
+      if (sheetData.workspaceId) {
+        const workspace = await storage.getWorkspace(sheetData.workspaceId);
+        if (!workspace) {
+          console.warn(`[Routes] Invalid workspaceId provided: ${sheetData.workspaceId}, setting to null`);
+          sheetData.workspaceId = null;
+        }
+      }
+      
       if (securityMode === 0 && sheetData.data !== undefined && sheetData.data !== null) {
         const dataString = typeof sheetData.data === 'string' 
           ? sheetData.data 

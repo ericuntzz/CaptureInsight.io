@@ -540,15 +540,18 @@ export default function App() {
       
       // Step 2: Check if we need to create a workspace
       const targetFolderId = destinations[0]?.folderId;
-      const needsWorkspace = !targetFolderId || targetFolderId === '';
       
-      console.log('[Capture Flow] Target folderId:', targetFolderId, 'Needs workspace:', needsWorkspace);
+      // Check if the target workspace actually exists in the loaded spaces
+      const space = spaces.find(p => p.id === targetSpaceId);
+      const existingWorkspaces = space?.workspaces || space?.folders || [];
+      const workspaceExists = existingWorkspaces.some(w => w.id === targetFolderId);
+      
+      // Need workspace if folderId is empty OR if the referenced workspace doesn't exist
+      const needsWorkspace = !targetFolderId || targetFolderId === '' || !workspaceExists;
+      
+      console.log('[Capture Flow] Target folderId:', targetFolderId, 'Workspace exists:', workspaceExists, 'Needs workspace:', needsWorkspace);
       
       if (needsWorkspace && targetSpaceId) {
-        // Check the current space for existing workspaces
-        const space = spaces.find(p => p.id === targetSpaceId);
-        const existingWorkspaces = space?.workspaces || space?.folders || [];
-        
         console.log('[Capture Flow] Space found:', space?.name, 'Existing workspaces:', existingWorkspaces.length);
         
         // ALWAYS create a workspace if none exist in this space
