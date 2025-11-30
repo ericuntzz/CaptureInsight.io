@@ -122,25 +122,6 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
     setHistoryLoadError(null);
   }, [spaceId]);
 
-  const persistMessage = useCallback(async (role: 'user' | 'assistant', content: string, citations?: any[]): Promise<boolean> => {
-    if (!chatId) return false;
-    
-    try {
-      const res = await fetch(`/api/chats/${chatId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ role, content, citations }),
-      });
-      
-      if (!res.ok) throw new Error('Failed to save message');
-      return true;
-    } catch (err) {
-      console.error('Failed to persist message:', err);
-      return false;
-    }
-  }, [chatId]);
-
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
 
@@ -173,6 +154,11 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
       return;
     }
 
+    // IMPORTANT: Capture chatId at the start to prevent race conditions
+    // If user switches chats during AI response, we still save to the original chat
+    const originalChatId = chatId;
+    const originalMessages = messages;
+
     const userMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: 'user',
@@ -184,14 +170,34 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
     setIsLoading(true);
     setError(null);
 
+    // Helper to persist message to the ORIGINAL chat (not current)
+    const persistToOriginalChat = async (role: 'user' | 'assistant', msgContent: string, citations?: any[]): Promise<boolean> => {
+      if (!originalChatId) return false;
+      
+      try {
+        const res = await fetch(`/api/chats/${originalChatId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ role, content: msgContent, citations }),
+        });
+        
+        if (!res.ok) throw new Error('Failed to save message');
+        return true;
+      } catch (err) {
+        console.error('Failed to persist message:', err);
+        return false;
+      }
+    };
+
     // Persist user message to database
-    const userMsgSaved = await persistMessage('user', content.trim());
-    if (!userMsgSaved && chatId) {
+    const userMsgSaved = await persistToOriginalChat('user', content.trim());
+    if (!userMsgSaved && originalChatId) {
       toast.error('Failed to save your message. Please try again.');
     }
 
     try {
-      const chatHistory = [...messages, userMessage].map(m => ({
+      const chatHistory = [...originalMessages, userMessage].map(m => ({
         role: m.role,
         content: m.content,
       }));
@@ -251,16 +257,24 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
         citations: citations?.length > 0 ? citations : undefined,
       };
 
-      // Persist AI message to database first, then update UI
-      const aiMsgSaved = await persistMessage('assistant', data.response, citations?.length > 0 ? citations : undefined);
+      // Persist AI message to the ORIGINAL chat
+      const aiMsgSaved = await persistToOriginalChat('assistant', data.response, citations?.length > 0 ? citations : undefined);
       
-      if (aiMsgSaved || !chatId) {
-        // Only add to UI if persisted successfully (or no chatId means no persistence needed)
-        setMessages(prev => [...prev, aiMessage]);
+      // Only add to UI if we're still on the same chat
+      // This prevents the AI response from appearing in the wrong chat's UI
+      if (currentChatIdRef.current === originalChatId) {
+        if (aiMsgSaved || !originalChatId) {
+          setMessages(prev => [...prev, aiMessage]);
+        } else {
+          toast.error('AI response was not saved. Please try again.');
+          setError('AI response was not saved. Please try again.');
+        }
       } else {
-        // Failed to persist - show error and don't add to UI
-        toast.error('AI response was not saved. Please try again.');
-        setError('AI response was not saved. Please try again.');
+        // User switched chats - message was saved to original chat, just don't show in UI
+        // They'll see it when they switch back to that chat
+        if (!aiMsgSaved && originalChatId) {
+          toast.error('AI response was not saved. Please try again.');
+        }
       }
     } catch (err) {
       console.error('Chat error:', err);
@@ -270,7 +284,7 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
     } finally {
       setIsLoading(false);
     }
-  }, [messages, spaceId, isAuthenticated, isAuthLoading, persistMessage, isLoadingHistory, chatId, historyLoadError]);
+  }, [messages, spaceId, isAuthenticated, isAuthLoading, isLoadingHistory, chatId, historyLoadError]);
 
   return {
     messages,
