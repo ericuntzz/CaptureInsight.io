@@ -93,14 +93,6 @@ export function EmptyWorkspaceState({ onCreateWorkspace }: EmptyWorkspaceStatePr
           </Button>
         </motion.div>
 
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6, duration: 0.4 }}
-          className="text-gray-500 text-sm mt-6"
-        >
-          You can also use the <span className="text-[#FF6B35]">+</span> button in the sidebar
-        </motion.p>
       </motion.div>
     </div>
   );
