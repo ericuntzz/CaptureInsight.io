@@ -25,7 +25,8 @@ import {
   useUpdateChatConversation, 
   useDeleteChatConversation,
 } from '../hooks/useChatConversations';
-import { useWorkspaceSheets, type Sheet } from '../hooks/useSheets';
+import { useWorkspaceSheets, useUpdateSheetCleanedData, useRetrySheetProcessing, type Sheet } from '../hooks/useSheets';
+import { ChevronDown } from 'lucide-react';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
 import {
@@ -1571,6 +1572,13 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const [viewMode, setViewMode] = useState<'files' | 'data'>('files');
   const [selectedSheetId, setSelectedSheetId] = useState<string | null>(null);
   const [showRawJson, setShowRawJson] = useState(false);
+  const [showQualityDetails, setShowQualityDetails] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedJson, setEditedJson] = useState('');
+  const [jsonError, setJsonError] = useState<string | null>(null);
+  
+  const updateCleanedDataMutation = useUpdateSheetCleanedData();
+  const retryProcessingMutation = useRetrySheetProcessing();
   
   const displayableSheets = sheets.map(transformSheetToDisplayable);
   
@@ -1586,6 +1594,78 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const originalSheet = sheets.find(s => s.id === selectedSheetId);
   const cleanedData = originalSheet?.cleanedData as any;
   const cleaningStatus = (originalSheet as any)?.cleaningStatus || 'pending';
+  const qualityScore = (originalSheet as any)?.qualityScore as number | null;
+  const qualityDetails = (originalSheet as any)?.qualityDetails as {
+    confidence: number;
+    completeness: number;
+    dataRichness: number;
+    issues?: string[];
+  } | null;
+  const validationResult = (originalSheet as any)?.validationResult as {
+    isValid: boolean;
+    failureType?: string;
+    message?: string;
+  } | null;
+
+  const getQualityColor = (score: number) => {
+    if (score >= 80) return 'text-emerald-400';
+    if (score >= 60) return 'text-amber-400';
+    return 'text-red-400';
+  };
+
+  const getQualityBgColor = (score: number) => {
+    if (score >= 80) return 'bg-emerald-500/20';
+    if (score >= 60) return 'bg-amber-500/20';
+    return 'bg-red-500/20';
+  };
+
+  const handleStartEdit = () => {
+    if (cleanedData?.data) {
+      setEditedJson(JSON.stringify(cleanedData.data, null, 2));
+      setJsonError(null);
+      setIsEditing(true);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      const parsed = JSON.parse(editedJson);
+      setJsonError(null);
+      
+      if (!selectedSheetId) return;
+      
+      const newCleanedData = {
+        ...cleanedData,
+        data: parsed,
+      };
+      
+      await updateCleanedDataMutation.mutateAsync({
+        sheetId: selectedSheetId,
+        cleanedData: newCleanedData,
+      });
+      
+      toast.success('Data saved successfully!');
+      setIsEditing(false);
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        setJsonError('Invalid JSON syntax');
+      } else {
+        setJsonError((e as Error).message || 'Failed to save');
+        toast.error('Failed to save changes');
+      }
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!selectedSheetId) return;
+    
+    try {
+      await retryProcessingMutation.mutateAsync(selectedSheetId);
+      toast.success('Processing restarted');
+    } catch (e) {
+      toast.error((e as Error).message || 'Failed to retry processing');
+    }
+  };
   
   return (
     <div className="flex flex-col h-full bg-[#1E1E1E]">
@@ -1761,23 +1841,96 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
             ) : (
               /* DATA VIEW - Cleaned JSON data display */
               <div className="space-y-4">
-                {/* Data header */}
+                {/* Data header with quality score */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-lg font-medium text-white">
                       {cleanedData?.title || selectedSheet.name}
                     </h3>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      cleaningStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
-                      cleaningStatus === 'processing' ? 'bg-amber-500/20 text-amber-400' :
-                      cleaningStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
-                      'bg-gray-500/20 text-gray-400'
-                    }`}>
-                      {cleaningStatus === 'completed' ? 'AI Processed' :
-                       cleaningStatus === 'processing' ? 'Processing...' :
-                       cleaningStatus === 'failed' ? 'Processing Failed' : 'Awaiting Processing'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {/* Quality Score Badge */}
+                      {cleaningStatus === 'completed' && qualityScore !== null && (
+                        <button
+                          onClick={() => setShowQualityDetails(!showQualityDetails)}
+                          className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded cursor-pointer transition-colors ${getQualityBgColor(qualityScore)} ${getQualityColor(qualityScore)} hover:opacity-80`}
+                          title="Click to see quality details"
+                        >
+                          <span className="font-semibold">{qualityScore}%</span>
+                          <span>Quality</span>
+                          <ChevronDown className={`w-3 h-3 transition-transform ${showQualityDetails ? 'rotate-180' : ''}`} />
+                        </button>
+                      )}
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        cleaningStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                        cleaningStatus === 'processing' ? 'bg-amber-500/20 text-amber-400' :
+                        cleaningStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
+                        'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {cleaningStatus === 'completed' ? 'AI Processed' :
+                         cleaningStatus === 'processing' ? 'Processing...' :
+                         cleaningStatus === 'failed' ? 'Processing Failed' : 'Awaiting Processing'}
+                      </span>
+                    </div>
                   </div>
+                  
+                  {/* Expandable Quality Details Panel */}
+                  {showQualityDetails && qualityDetails && (
+                    <div className="bg-[#212121] rounded-lg p-4 border border-[#2A2A2A] mb-3 animate-in slide-in-from-top-2">
+                      <h4 className="text-sm font-medium text-white mb-3">Quality Breakdown</h4>
+                      <div className="grid grid-cols-3 gap-4 mb-3">
+                        <div className="text-center">
+                          <div className={`text-2xl font-bold ${getQualityColor(qualityDetails.confidence)}`}>
+                            {qualityDetails.confidence}%
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">Confidence</div>
+                          <div className="w-full h-1.5 bg-[#2A2A2A] rounded-full mt-2">
+                            <div 
+                              className={`h-full rounded-full ${qualityDetails.confidence >= 80 ? 'bg-emerald-500' : qualityDetails.confidence >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                              style={{ width: `${qualityDetails.confidence}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className={`text-2xl font-bold ${getQualityColor(qualityDetails.completeness)}`}>
+                            {qualityDetails.completeness}%
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">Completeness</div>
+                          <div className="w-full h-1.5 bg-[#2A2A2A] rounded-full mt-2">
+                            <div 
+                              className={`h-full rounded-full ${qualityDetails.completeness >= 80 ? 'bg-emerald-500' : qualityDetails.completeness >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                              style={{ width: `${qualityDetails.completeness}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className={`text-2xl font-bold ${getQualityColor(qualityDetails.dataRichness)}`}>
+                            {qualityDetails.dataRichness}%
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">Data Richness</div>
+                          <div className="w-full h-1.5 bg-[#2A2A2A] rounded-full mt-2">
+                            <div 
+                              className={`h-full rounded-full ${qualityDetails.dataRichness >= 80 ? 'bg-emerald-500' : qualityDetails.dataRichness >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                              style={{ width: `${qualityDetails.dataRichness}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      {qualityDetails.issues && qualityDetails.issues.length > 0 && (
+                        <div className="border-t border-[#2A2A2A] pt-3">
+                          <p className="text-xs text-gray-400 mb-2">Issues Found:</p>
+                          <ul className="space-y-1">
+                            {qualityDetails.issues.map((issue, i) => (
+                              <li key={i} className="text-xs text-amber-400 flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                {issue}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
                   {cleanedData?.description && (
                     <p className="text-sm text-gray-400">{cleanedData.description}</p>
                   )}
@@ -1796,23 +1949,31 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
 
                 {cleaningStatus === 'completed' && cleanedData?.data ? (
                   <>
-                    {/* View toggle: Table vs Raw JSON */}
+                    {/* View toggle: Table vs Raw JSON + Edit */}
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setShowRawJson(false)}
+                        onClick={() => { setShowRawJson(false); setIsEditing(false); }}
                         className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                          !showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
+                          !showRawJson && !isEditing ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
                         }`}
                       >
                         Table View
                       </button>
                       <button
-                        onClick={() => setShowRawJson(true)}
+                        onClick={() => { setShowRawJson(true); setIsEditing(false); }}
                         className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                          showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
+                          showRawJson && !isEditing ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
                         }`}
                       >
                         Raw JSON
+                      </button>
+                      <button
+                        onClick={handleStartEdit}
+                        className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                          isEditing ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        Edit Data
                       </button>
                       <button
                         onClick={() => {
@@ -1827,7 +1988,45 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                       </button>
                     </div>
 
-                    {showRawJson ? (
+                    {isEditing ? (
+                      /* Edit JSON View */
+                      <div className="space-y-3">
+                        <div className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden">
+                          <textarea
+                            value={editedJson}
+                            onChange={(e) => {
+                              setEditedJson(e.target.value);
+                              try {
+                                JSON.parse(e.target.value);
+                                setJsonError(null);
+                              } catch {
+                                setJsonError('Invalid JSON syntax');
+                              }
+                            }}
+                            className="w-full h-[400px] p-4 text-xs text-gray-300 bg-transparent font-mono resize-none outline-none"
+                            spellCheck={false}
+                          />
+                        </div>
+                        {jsonError && (
+                          <p className="text-xs text-red-400">{jsonError}</p>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleSaveEdit}
+                            disabled={!!jsonError || updateCleanedDataMutation.isPending}
+                            className="flex-1 py-2 px-4 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all"
+                          >
+                            {updateCleanedDataMutation.isPending ? 'Saving...' : 'Save Changes'}
+                          </button>
+                          <button
+                            onClick={() => setIsEditing(false)}
+                            className="py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-sm rounded-lg transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : showRawJson ? (
                       /* Raw JSON View */
                       <div className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden">
                         <pre className="p-4 text-xs text-gray-300 overflow-auto max-h-[400px] font-mono">
@@ -1888,12 +2087,26 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                     <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-3">
                       <X className="w-6 h-6 text-red-400" />
                     </div>
-                    <p className="text-gray-400 text-sm">Failed to process this data source</p>
+                    <p className="text-white font-medium mb-2">
+                      {validationResult?.failureType === 'empty_image' ? 'Empty Screenshot Detected' :
+                       validationResult?.failureType === 'low_quality' ? 'Low Quality Image' :
+                       validationResult?.failureType === 'no_data_found' ? 'No Data Found' :
+                       'Processing Failed'}
+                    </p>
+                    <p className="text-gray-400 text-sm max-w-md mx-auto">
+                      {validationResult?.message || 'Failed to process this data source. Please try again or upload a different file.'}
+                    </p>
+                    {validationResult?.failureType === 'empty_image' && (
+                      <p className="text-amber-400 text-xs mt-2">
+                        Please upload a clearer screenshot with visible data.
+                      </p>
+                    )}
                     <button
-                      onClick={() => toast.info('Retry functionality coming soon!')}
-                      className="mt-3 px-4 py-1.5 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-xs rounded-lg transition-colors"
+                      onClick={handleRetry}
+                      disabled={retryProcessingMutation.isPending}
+                      className="mt-4 px-4 py-2 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all"
                     >
-                      Retry Processing
+                      {retryProcessingMutation.isPending ? 'Retrying...' : 'Retry Processing'}
                     </button>
                   </div>
                 ) : (

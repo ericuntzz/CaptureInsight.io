@@ -1,4 +1,25 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+export interface QualityDetails {
+  confidence: number; // 0-100: How confident AI is in extraction
+  completeness: number; // 0-100: Data completeness (no missing values)
+  dataRichness: number; // 0-100: Amount of useful data found
+  issues?: string[]; // List of quality issues found
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  failureType?: 'empty_image' | 'low_quality' | 'unsupported_format' | 'no_data_found' | 'ai_error' | 'parse_error' | 'file_too_small';
+  message?: string;
+  warnings?: string[];
+  details?: {
+    textDensity?: number;
+    contrast?: number;
+    fileSize?: number;
+    dimensions?: { width: number; height: number };
+    colorVariance?: number;
+  };
+}
 
 export interface Sheet {
   id: string;
@@ -29,6 +50,10 @@ export interface Sheet {
   } | null;
   cleanedAt: string | null;
   cleaningStatus: 'pending' | 'processing' | 'completed' | 'failed' | null;
+  // Quality scoring fields
+  qualityScore: number | null; // 0-100 overall quality
+  qualityDetails: QualityDetails | null;
+  validationResult: ValidationResult | null;
   encryptedData: string | null;
   encryptionIv: string | null;
   encryptionVersion: number | null;
@@ -55,4 +80,48 @@ export function useWorkspaceSheets(spaceId: string | null, workspaceId: string |
 
 export function useSheets(spaceId: string | null) {
   return useWorkspaceSheets(spaceId, null);
+}
+
+export function useUpdateSheetCleanedData() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ sheetId, cleanedData }: { sheetId: string; cleanedData: any }) => {
+      const res = await fetch(`/api/sheets/${sheetId}/cleaned-data`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ cleanedData }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to update cleaned data');
+      }
+      return res.json();
+    },
+    onSuccess: (_, { sheetId }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/sheets'] });
+    },
+  });
+}
+
+export function useRetrySheetProcessing() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (sheetId: string) => {
+      const res = await fetch(`/api/sheets/${sheetId}/retry`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to retry processing');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/sheets'] });
+    },
+  });
 }

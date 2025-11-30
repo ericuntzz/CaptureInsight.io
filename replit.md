@@ -1,7 +1,7 @@
 # CaptureInsight - Full Stack Application
 
 ## Overview
-CaptureInsight is a screenshot-based analytics platform designed for marketing managers. It facilitates the capture, organization, and AI-powered analysis of data from various sources. The platform offers a complete backend infrastructure and aims to provide comprehensive insights to users.
+CaptureInsight is a screenshot-based analytics platform for marketing managers. It provides tools for capturing, organizing, and analyzing data from various sources using AI. The platform aims to deliver comprehensive insights through a complete backend infrastructure.
 
 ## User Preferences
 - I want iterative development.
@@ -11,201 +11,59 @@ CaptureInsight is a screenshot-based analytics platform designed for marketing m
 - Do not make changes to the file `Y`.
 
 ## System Architecture
-CaptureInsight is a full-stack application with a React 18 (TypeScript) frontend using Vite, Radix UI, Tailwind CSS, TanStack React Query, TipTap, and Motion library. The backend is an Express.js (Node.js) server utilizing PostgreSQL (Neon Serverless) with Drizzle ORM. Authentication is handled via Replit Auth (OAuth), and sessions are managed with `connect-pg-simple`.
+CaptureInsight is a full-stack application. The frontend uses React 18 (TypeScript) with Vite, Radix UI, Tailwind CSS, TanStack React Query, TipTap, and Motion library. The backend is an Express.js (Node.js) server with PostgreSQL (Neon Serverless) and Drizzle ORM. Authentication is handled via Replit Auth (OAuth), and sessions use `connect-pg-simple`.
 
-The application's core features include:
-- **Hierarchical Organization**: Spaces > Workspaces > Insights/Chats/Sheets. Each Workspace serves as a self-contained container with all data scoped to it. Users can create and switch between multiple Workspaces within a Space.
-- **New User Onboarding Flow**: 
-  - New users without workspaces see "Welcome to CaptureInsight" with "Upload Data" button
-  - Data upload takes priority over workspace creation - workspace is auto-created when user uploads data
-  - When a user captures data with no existing workspaces, a "My Workspace" is automatically created
-  - Menu bar stays expanded when no workspaces exist, collapses after first workspace is created
-  - Sidebar shows "Add Data" to guide users to the capture flow
-- **Space-scoped Tagging System**: With associations for organization.
-- **Insights Management**: Knowledge cards with status/priority, linked sources, and threaded comments.
-- **AI Chat Integration**: Per insight AI conversations for analysis and RAG-enabled chat.
-- **Insight Workspace**: Unified interface combining data viewing, AI chat, and canvas editing. Features a three-panel horizontal layout with advanced resizing behavior.
+**Key Features:**
+-   **Hierarchical Data Organization**: Spaces > Workspaces > Insights/Chats/Sheets, with all data scoped to Workspaces.
+-   **New User Onboarding**: Streamlined flow with automatic workspace creation upon data upload.
+-   **Space-scoped Tagging System**: For robust organization and association.
+-   **Insights Management**: Knowledge cards with status, priority, linked sources, and threaded comments.
+-   **AI Chat Integration**: Per-insight AI conversations with RAG capabilities.
+-   **Insight Workspace**: A unified three-panel interface (Chat, Canvas, Data) with advanced resizing and drag-and-drop reordering, persistence for panel sizes and order, and smooth collapse/expand animations.
+-   **Activity Tracking**: Logs for user actions.
+-   **Screenshot Capture**: Chrome extension for web content capture, file uploads, and link captures.
+-   **Multi-Tenant Data Isolation**: Ensures data privacy through space and entity-level authorization.
+-   **AI Consent & PII Filtering**: Configurable PII scrubbing and explicit AI feature consent per space.
 
-### Insight Workspace Panel Architecture (`src/pages/InsightWorkspace.tsx`)
+**AI Integration:**
+A hybrid AI architecture leverages Gemini 2.5 Pro/Flash (via Replit AI Integrations) for screenshot/data analysis and chat. OpenAI (text-embedding-3-small) is used for text embeddings with `pgvector` for semantic search.
 
-**Panel Layout**: Chat (left, fixed) | Canvas/Data (center/right, swappable via drag)
+**Data Ingestion Pipeline:**
+Supports Google Sheets import, parsing CSV data, generating text embeddings for RAG, and background processing for asynchronous ingestion.
 
-**Key Implementation Details**:
-- Uses `react-resizable-panels` library with `ResizablePanelGroup`, `ResizablePanel`, and `ResizableHandle`
-- Uses `@dnd-kit/core` and `@dnd-kit/sortable` for drag-and-drop panel reordering
-- Panels have unique IDs (`chat-panel`, `canvas-panel`, `data-panel`) for tracking
-- Uses `autoSaveId="insight-workspace-panels-{order}"` for localStorage size persistence per layout
-- Panel order controlled via conditional rendering based on `rightPanelOrder` state
+**Data Quality Scoring & Validation:**
+Includes a pre-validation layer with a quality score (Confidence, Completeness, Data Richness), failure type classification, user data correction via JSON editing, and a retry mechanism.
 
-**Drag-and-Drop Panel Reordering**:
-- Chat panel is fixed on the left (not draggable)
-- Canvas and Data panels can be dragged to swap positions
-- `rightPanelOrder` state: 'canvas-data' (default) or 'data-canvas' (swapped)
-- Order persisted to localStorage key `workspace-right-panel-order`
-- `DraggableCollapsedPanel` component (defined outside main component for hooks compliance) enables collapsed panels to be dragged
-- `CollapsedChatPanel` is a non-draggable button component for the chat panel
-- Uses conditional rendering to swap panel DOM order (avoids ResizableHandle ordering issues)
+**Chrome Extension:**
+Manifest V3 React-based extension for capturing content, integrating with the backend for saving captures, and AI analysis.
 
-**Smooth Collapse/Expand with Continuous Opacity**:
-- Tracks live panel sizes via `onResize` callbacks: `chatSize`, `canvasSize`, `dataSize`
-- Content opacity calculated continuously between 4-10% panel width (not binary threshold)
-- Both collapsed icon and expanded content always rendered with absolute positioning
-- Uses `getContentOpacity(size)` and `getCollapsedOpacity(size)` helper functions
-- Collapsed threshold: panel size < 8%
-- `PanelContentWrapper` component manages opacity and pointer-events based on live size
+**Security:**
+-   `requireSpaceOwner` and `requireEntityOwner` middlewares for access control.
+-   Configurable PII filtering module (`server/ai/piiFilter.ts`) with 14 pattern types, enabled/disabled per space.
+-   **Two-Tier Encryption System**:
+    -   **Simple Protection (securityMode: 0)**: Server-side AES-256-GCM encryption with per-user keys.
+    -   **Maximum Security (securityMode: 1)**: End-to-end encryption (E2EE) with zero-knowledge architecture, client-side encryption using Web Crypto API, PBKDF2 for key derivation, TOTP 2FA, and backup codes.
+-   **Login 2FA**: Optional TOTP-based two-factor authentication for login, independent of encryption security mode.
 
-**Panel Swapping Behavior**:
-- Expand button or double-click: swaps panel to center, bumps other panel to right
-- Double-click toggle: first click expands, second click restores normal sizes
-
-**Chat Panel Respects User Intent**:
-- `chatManuallyCollapsed` state tracks if user explicitly closed Chat
-- When expanding Canvas/Data, Chat stays closed if user previously collapsed it
-- Only re-expands when user clicks Chat expand button
-
-**Drag Handles (ResizableHandle)**:
-- Thin subtle design: 1px visible width, 6px hit area (`w-1.5`)
-- Orange hover effect: `group-hover:bg-[#FF6B35]/60`
-- Double-click on center-right handle triggers expand/toggle based on current `rightPanelOrder`
-
-**Canvas Auto-Save & Persistence**:
-- Title and content (notes) are synced to tab state in real-time as user types
-- Debounced auto-save (1 second delay) persists changes to database
-- Uses `useCreateInsight` mutation for new insights, `useUpdateInsight` for existing
-- `InsightTab` interface tracks: `id`, `title`, `summary`, `isSaved`, `dbId`
-- `lastSavedContentRef` tracks last saved content to detect actual changes
-- Tab switching preserves content by loading from tab state
-- Existing insights loaded from DB are automatically marked as saved with their `dbId`
-- **Activity Tracking**: Change logs for user actions.
-- **Screenshot Capture**: Chrome extension for direct webpage capture, supporting tab screenshots, file uploads, and link captures.
-- **Multi-Tenant Data Isolation**: Space and entity-level authorization ensures data privacy.
-- **AI Consent & PII Filtering**: Configurable PII scrubbing for AI interactions and explicit AI feature consent per space.
-
-**AI Integration**:
-A hybrid AI architecture uses Gemini 2.5 Pro/Flash (via Replit AI Integrations) for screenshot and data analysis, and chat conversations. OpenAI (requires API key) is used for text embeddings (text-embedding-3-small, 1536 dimensions) to enable semantic search via `pgvector` with IVFFlat index.
-
-**Data Ingestion Pipeline** (`server/ai/dataIngestion.ts`):
-- **Google Sheets Import**: Users can share a Google Sheets link (must be set to "Anyone with the link can view") and the system automatically:
-  1. Extracts the spreadsheet ID and GID from the URL
-  2. Constructs a CSV export URL (no API key required)
-  3. Fetches and parses the CSV data with full RFC 4180 compliance:
-     - Multi-line quoted fields are preserved
-     - Embedded commas and quotes handled correctly
-     - Quoted whitespace preserved, unquoted fields trimmed
-  4. Stores parsed data in the sheet's `data` field
-  5. Generates text embeddings via OpenAI for RAG retrieval
-- **Background Processing**: Ingestion runs asynchronously after sheet creation to avoid blocking the user
-- **RAG Integration**: The AI chat (`server/ai/index.ts`) automatically searches embeddings when `useRag=true` (default), finding relevant data from sheets and insights to include as context
-
-**Chrome Extension**:
-The Chrome extension, built with Manifest V3 and React in a shadow DOM, provides a floating toolbar for capturing content. It integrates with the backend for saving captures, selecting spaces and tags, and performing AI analysis with configurable LLM models.
-
-**Security**:
-- `requireSpaceOwner` and `requireEntityOwner` middlewares enforce access control based on user ownership for all space-scoped and entity-level operations.
-- PII filtering module (`server/ai/piiFilter.ts`) with 14 pattern types can be enabled/disabled and configured per space.
-- AI consent settings are stored in the `spaces` table (`aiSettings` JSONB field) to control `enableAI`, `piiFiltering`, and `allowedPatterns`.
-
-**Two-Tier Encryption System**:
-- **Simple Protection (securityMode: 0)**: Server-side encryption using AES-256-GCM. Data is automatically encrypted/decrypted by the server. Per-user keys are stored encrypted with a master key. Provides protection against external attacks while allowing account recovery.
-- **Maximum Security (securityMode: 1)**: End-to-end encryption (E2EE) with zero-knowledge architecture. Requires password + TOTP 2FA + 8 backup codes. Data is encrypted client-side using Web Crypto API. Server stores only encrypted blobs and cannot access user data.
-- Key derivation uses PBKDF2 with 100,000 iterations for password-based key generation.
-- TOTP uses SHA1/6-digit/30-second standard (OTPAuth library).
-- Backup codes are SHA-256 hashed, one-time use, stored with used codes tracked.
-- Session-based DEK (Data Encryption Key) management clears keys on browser close.
-- Important: Set `ENCRYPTION_MASTER_KEY` environment variable for production (auto-generates in dev).
-
-**Login 2FA** (separate from encryption):
-- Optional TOTP-based two-factor authentication for all users during login.
-- Managed independently from encryption security mode.
-- Available at `/settings/security`.
+**Design System (Stripe-Inspired Premium UI):**
+-   **Brand Colors**: Primary Orange (`#FF6B35`), Dark Background (`#0A0D12`), Card Background (`#1A1F2E`).
+-   **Spacing**: Generous page padding, section spacing, and card padding for visual breathing room.
+-   **Typography**: Defined styles for titles, labels, and body text using specific font weights and sizes.
+-   **Component Patterns**:
+    -   **Cards**: `rounded-2xl` with subtle borders, hover effects, and `whileHover` animations using Motion library.
+    -   **Icon Containers**: Large, rounded, subtle gradient backgrounds.
+    -   **Buttons**: Primary, secondary, and destructive styles with distinct gradients and shadows.
+    -   **Badges/Tags**: Varied styles for status, recommendations, and features.
+    -   **Section Dividers**: Gradient lines.
+-   **Animations (Motion Library)**: Page entry, staggered elements, content slide, hover lift effects.
+-   **Loading States**: Spinner with accent color, pulse effect, and loading text.
 
 ## External Dependencies
-- **Database**: PostgreSQL (Neon Serverless)
-- **ORM**: Drizzle ORM
-- **Authentication**: Replit Auth (Google, GitHub, X, Apple, email OAuth)
-- **Session Management**: `connect-pg-simple`
-- **AI Services**:
-    - Gemini 2.5 Pro/Flash (via Replit AI Integrations)
-    - OpenAI API (for text embeddings)
-- **Frontend Libraries**: React, Radix UI, Tailwind CSS, TanStack React Query, TipTap, Motion library
-
-## Design System (Stripe-Inspired Premium UI)
-
-### Brand Colors
-- **Primary Orange**: `#FF6B35` (main accent)
-- **Secondary Orange**: `#E55A2B` (hover states, gradients)
-- **Dark Orange**: `#D04A1B` (pressed states)
-- **Background Dark**: `#0A0D12` (page backgrounds)
-- **Card Background**: `#1A1F2E` (cards, containers)
-- **Card Background Alt**: `#161A24` (gradient endpoints)
-- **Border Color**: `#2A2F3E` (subtle borders)
-- **Border Hover**: `#3A3F4E` (interactive borders)
-
-### Spacing Guidelines
-- **Page Padding**: `py-16 px-8 lg:px-16` (generous breathing room)
-- **Section Spacing**: `space-y-16` (large gaps between sections)
-- **Card Padding**: `p-8` (comfortable internal spacing)
-- **Card Gap**: `gap-8` (space between cards in grids)
-- **Header to Content**: `mb-16` (page header to first section)
-- **Section Header to Content**: `mb-8` (section title to cards)
-- **Back Button Margin**: `mb-12` (back button to page header)
-- **Title to Description**: `mb-2` to `mb-3` (tight coupling)
-- **Description to Content**: `mb-6` to `mb-8` (clear separation)
-- **Feature Tags to Button**: `mb-8` (adequate button spacing)
-
-### Typography
-- **Page Title**: `text-3xl font-bold tracking-tight`
-- **Card Title**: `text-xl font-semibold tracking-tight`
-- **Section Label**: `text-xs font-semibold uppercase tracking-[0.2em] text-gray-500`
-- **Body Text**: `text-base leading-relaxed text-gray-400`
-- **Card Description**: `text-sm leading-relaxed text-gray-400`
-- **Button Text**: `font-medium`
-- **Badge Text**: `text-xs font-semibold`
-
-### Component Patterns
-
-#### Cards
-- **Border Radius**: `rounded-2xl`
-- **Default State**: `bg-[#1A1F2E]/60 border border-[#2A2F3E]`
-- **Hover State**: `hover:bg-[#1A1F2E] hover:border-[#FF6B35]/30 hover:shadow-xl hover:shadow-[#FF6B35]/5`
-- **Active/Selected**: `ring-2 ring-[#FF6B35] shadow-xl shadow-[#FF6B35]/10`
-- **Gradient Background**: `bg-gradient-to-br from-[#1A1F2E] to-[#161A24]`
-- **Hover Animation**: `whileHover={{ y: -3 }}` with Motion library
-
-#### Icon Containers
-- **Size**: `w-14 h-14` (large) or `w-12 h-12` (medium)
-- **Border Radius**: `rounded-xl`
-- **Background**: `bg-gradient-to-br from-[#FF6B35]/20 to-[#FF6B35]/5`
-- **Border**: `border border-[#FF6B35]/10`
-
-#### Buttons
-- **Primary**: `bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] shadow-lg shadow-[#FF6B35]/25`
-- **Secondary/Outline**: `border-[#3A3F4E] hover:border-[#FF6B35]/50 hover:bg-[#FF6B35]/5`
-- **Destructive**: `border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50`
-- **Height**: `h-11` or `h-12` for prominence
-- **Transition**: `transition-all duration-200`
-
-#### Badges/Tags
-- **Status Active**: `bg-[#FF6B35]/15 text-[#FF6B35]` with icon
-- **Status Success**: `bg-emerald-500/15 text-emerald-400`
-- **Recommended**: `bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400`
-- **Feature Tag**: `px-3 py-1.5 rounded-lg bg-[#2A2F3E]/80 text-xs text-gray-300 font-medium`
-- **Padding**: `px-3 py-1.5` or `px-3.5 py-1.5`
-- **Border Radius**: `rounded-full` for status, `rounded-lg` for features
-
-#### Section Dividers
-- **Gradient Line**: `h-px bg-gradient-to-r from-transparent via-[#2A2F3E] to-transparent`
-
-### Animations (Motion Library)
-- **Page Enter**: `initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}`
-- **Stagger Elements**: Use `delay: 0.1`, `delay: 0.15`, `delay: 0.2`, etc.
-- **Content Slide**: `initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}`
-- **Back Button**: `initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}`
-- **Hover Lift**: `whileHover={{ y: -3 }} transition={{ duration: 0.2 }}`
-- **Icon Hover**: `group-hover:-translate-x-1 transition-transform duration-200`
-
-### Loading States
-- **Spinner**: Use Loader2 icon with `animate-spin`
-- **Accent Color**: `text-[#FF6B35]`
-- **Pulse Effect**: `animate-ping` on accent element behind main loader
-- **Loading Text**: `text-gray-400 text-sm font-medium`
+-   **Database**: PostgreSQL (Neon Serverless)
+-   **ORM**: Drizzle ORM
+-   **Authentication**: Replit Auth (Google, GitHub, X, Apple, email OAuth)
+-   **Session Management**: `connect-pg-simple`
+-   **AI Services**:
+    -   Gemini 2.5 Pro/Flash (via Replit AI Integrations)
+    -   OpenAI API (for text embeddings)
+-   **Frontend Libraries**: React, Radix UI, Tailwind CSS, TanStack React Query, TipTap, Motion library

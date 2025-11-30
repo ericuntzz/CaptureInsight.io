@@ -1180,6 +1180,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update cleaned data (user corrections)
+  app.put('/api/sheets/:id/cleaned-data', isAuthenticated, requireEntityOwner('sheet'), async (req: any, res) => {
+    try {
+      const { cleanedData } = req.body;
+      if (!cleanedData) {
+        return res.status(400).json({ message: "cleanedData is required" });
+      }
+
+      const sheet = await storage.getSheet(req.params.id);
+      if (!sheet) {
+        return res.status(404).json({ message: "Sheet not found" });
+      }
+
+      // Update the cleaned data and recalculate quality score
+      const { calculateQualityScore } = await import('./ai/dataValidation');
+      const qualityScore = calculateQualityScore(cleanedData);
+
+      const updated = await storage.updateSheet(req.params.id, {
+        cleanedData,
+        cleanedAt: new Date(),
+        qualityScore: qualityScore.overall,
+        qualityDetails: {
+          confidence: qualityScore.confidence,
+          completeness: qualityScore.completeness,
+          dataRichness: qualityScore.dataRichness,
+          issues: qualityScore.issues,
+        },
+      } as any);
+
+      if (!updated) {
+        return res.status(404).json({ message: "Sheet not found" });
+      }
+
+      // Regenerate embeddings with updated data
+      try {
+        const { embedAndStoreSheet } = await import('./ai/embeddings');
+        if (updated.spaceId) {
+          await embedAndStoreSheet({
+            ...updated,
+            cleanedData,
+          } as any, updated.spaceId);
+          console.log(`[Routes] Regenerated embeddings for sheet ${req.params.id} after user edit`);
+        }
+      } catch (embeddingError) {
+        console.warn(`[Routes] Failed to regenerate embeddings for sheet ${req.params.id}:`, embeddingError);
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating cleaned data:", error);
+      res.status(500).json({ message: "Failed to update cleaned data" });
+    }
+  });
+
+  // Retry data processing for failed sheets
+  app.post('/api/sheets/:id/retry', isAuthenticated, requireEntityOwner('sheet'), async (req: any, res) => {
+    try {
+      const sheet = await storage.getSheet(req.params.id);
+      if (!sheet) {
+        return res.status(404).json({ message: "Sheet not found" });
+      }
+
+      // Reset status and trigger reprocessing
+      await storage.updateSheet(req.params.id, {
+        cleaningStatus: "pending",
+        qualityScore: null,
+        qualityDetails: null,
+        validationResult: null,
+      } as any);
+
+      // Trigger cleaning in background with proper error handling
+      const { triggerDataCleaning } = await import('./ai/dataCleaning');
+      
+      // Fire and forget with logging - the cleaning is async and will update status
+      triggerDataCleaning(req.params.id).catch((error: Error) => {
+        console.error(`[Routes] Background processing failed for sheet ${req.params.id}:`, error);
+        // Update status to failed if background processing throws
+        storage.updateSheet(req.params.id, {
+          cleaningStatus: "failed",
+          validationResult: {
+            isValid: false,
+            failureType: 'ai_error' as const,
+            message: error.message || 'Processing failed. Please try again.',
+          },
+        } as any).catch((updateError: Error) => {
+          console.error(`[Routes] Failed to update sheet status after error:`, updateError);
+        });
+      });
+
+      res.json({ message: "Processing restarted", sheetId: req.params.id });
+    } catch (error) {
+      console.error("Error retrying sheet processing:", error);
+      res.status(500).json({ message: "Failed to retry processing" });
+    }
+  });
+
   // ==================== TAGS ====================
   app.get('/api/spaces/:spaceId/tags', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
