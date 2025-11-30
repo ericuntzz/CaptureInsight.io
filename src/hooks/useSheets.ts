@@ -33,6 +33,8 @@ export function useWorkspaceSheets(spaceId: string | null, workspaceId: string |
       return res.json();
     },
     enabled: !!spaceId,
+    staleTime: 0, // Always refetch to ensure deleted items don't reappear
+    refetchOnMount: true,
   });
 }
 

@@ -46,6 +46,8 @@ export function useInsights(spaceId: string | null, workspaceId?: string | null)
       return res.json();
     },
     enabled: !!spaceId,
+    staleTime: 0, // Always refetch to ensure deleted items don't reappear
+    refetchOnMount: true,
   });
 }
 
@@ -119,12 +121,17 @@ export function useUpdateInsight() {
 export function useDeleteInsight() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, spaceId }: { id: string; spaceId: string }) => {
       await apiRequest("DELETE", `/api/insights/${id}`);
-      return id;
+      return { id, spaceId };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
+    onSuccess: (variables) => {
+      // Invalidate all insight queries for this space (all workspaces)
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/spaces/" + variables.spaceId + "/insights"],
+      });
+      // Also invalidate the specific insight query
+      queryClient.invalidateQueries({ queryKey: ["/api/insights/" + variables.id] });
     },
   });
 }

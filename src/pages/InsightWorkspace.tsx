@@ -373,31 +373,41 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
   // Fetch insights for current workspace
   const { data: workspaceInsights = [], isLoading: isLoadingInsights } = useInsights(spaceId, workspaceId ?? null);
   
-  // Track if we've initialized for this workspace
-  const initializedWorkspaceRef = useRef<string | null>(null);
+  // Track the last known insight IDs to detect changes (additions/deletions)
+  const lastInsightIdsRef = useRef<string>('');
+  const lastWorkspaceIdRef = useRef<string | null>(null);
   
-  // Reset state when workspace changes - MUST reset initializedWorkspaceRef so load effect runs
+  // Reset state when workspace changes
   useEffect(() => {
-    // Reset the initialization tracker so the load effect will run for the new workspace
-    initializedWorkspaceRef.current = null;
-    
     // Clear workspace-specific state
     setActiveChatId(null);
     setSources([]);
     setSheetsData({});
     
-    // Reset tabs to loading state - will be populated by load effect
+    // Reset tabs to loading state - will be populated by sync effect
     setOpenTabs([{ id: 'loading', title: 'Loading...', summary: '', isSaved: false }]);
     setActiveTabId('loading');
     setLocalTitle('Loading...');
     setNotes('');
     lastSavedContentRef.current = { title: '', summary: '' };
+    lastInsightIdsRef.current = '';
+    lastWorkspaceIdRef.current = workspaceId ?? null;
   }, [workspaceId]);
   
-  // Update tabs when workspace insights load
+  // Sync tabs with API data - runs whenever workspaceInsights changes (including after deletions)
   useEffect(() => {
     if (isLoadingInsights) return;
-    if (initializedWorkspaceRef.current === workspaceId) return;
+    
+    // Create a signature of current insight IDs to detect changes
+    const currentInsightIds = workspaceInsights.map(i => i.id).sort().join(',');
+    const workspaceChanged = lastWorkspaceIdRef.current !== workspaceId;
+    const insightsChanged = lastInsightIdsRef.current !== currentInsightIds;
+    
+    // Only update if workspace changed or insights changed (including deletions)
+    if (!workspaceChanged && !insightsChanged) return;
+    
+    lastWorkspaceIdRef.current = workspaceId ?? null;
+    lastInsightIdsRef.current = currentInsightIds;
     
     if (workspaceInsights.length > 0) {
       const insightTabs = workspaceInsights.map(insight => ({
@@ -407,11 +417,18 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
         isSaved: true,
         dbId: insight.id,
       }));
+      
+      // If current active tab was deleted, switch to first available
+      const activeTabStillExists = insightTabs.some(t => t.id === activeTabId);
+      
       setOpenTabs(insightTabs);
-      setActiveTabId(insightTabs[0].id);
-      setLocalTitle(insightTabs[0].title);
-      setNotes(insightTabs[0].summary);
-      lastSavedContentRef.current = { title: insightTabs[0].title, summary: insightTabs[0].summary };
+      
+      if (!activeTabStillExists || activeTabId === 'loading' || activeTabId === 'new') {
+        setActiveTabId(insightTabs[0].id);
+        setLocalTitle(insightTabs[0].title);
+        setNotes(insightTabs[0].summary);
+        lastSavedContentRef.current = { title: insightTabs[0].title, summary: insightTabs[0].summary };
+      }
     } else {
       setOpenTabs([{ id: 'new', title: 'Untitled Insight', summary: '', isSaved: false }]);
       setActiveTabId('new');
@@ -419,9 +436,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
       setNotes('');
       lastSavedContentRef.current = { title: '', summary: '' };
     }
-    
-    initializedWorkspaceRef.current = workspaceId ?? null;
-  }, [workspaceInsights, isLoadingInsights, workspaceId]);
+  }, [workspaceInsights, isLoadingInsights, workspaceId, activeTabId]);
   
   // Ensure there's always an active chat - create one if none exist
   useEffect(() => {
