@@ -840,14 +840,21 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
     const tabToClose = openTabs.find(t => t.id === tabId);
     
     // If this tab is saved in the database, delete it from the database
-    if (tabToClose?.isSaved && tabToClose?.dbId && spaceId) {
+    if (tabToClose?.isSaved && tabToClose?.dbId) {
+      if (!spaceId) {
+        console.error('Cannot delete insight: spaceId is missing');
+        toast.error('Cannot delete insight - please refresh the page');
+        return; // Don't remove from UI if we can't delete from DB
+      }
+      
       deleteInsightMutation.mutate(
         { id: tabToClose.dbId, spaceId },
         {
           onSuccess: () => {
             toast.success('Insight deleted');
           },
-          onError: () => {
+          onError: (error) => {
+            console.error('Failed to delete insight:', error);
             toast.error('Failed to delete insight');
           }
         }
