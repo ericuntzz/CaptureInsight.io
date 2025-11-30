@@ -394,43 +394,115 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
     lastWorkspaceIdRef.current = workspaceId ?? null;
   }, [workspaceId]);
   
-  // Sync tabs with API data - runs whenever workspaceInsights changes (including after deletions)
+  // Sync tabs with API data - MERGES insights instead of replacing to prevent data loss
   useEffect(() => {
     if (isLoadingInsights) return;
     
     // Create a signature of current insight IDs to detect changes
     const currentInsightIds = workspaceInsights.map(i => i.id).sort().join(',');
     const workspaceChanged = lastWorkspaceIdRef.current !== workspaceId;
-    const insightsChanged = lastInsightIdsRef.current !== currentInsightIds;
     
-    // Only update if workspace changed or insights changed (including deletions)
-    if (!workspaceChanged && !insightsChanged) return;
-    
-    lastWorkspaceIdRef.current = workspaceId ?? null;
-    lastInsightIdsRef.current = currentInsightIds;
-    
-    if (workspaceInsights.length > 0) {
-      const insightTabs = workspaceInsights.map(insight => ({
-        id: insight.id,
-        title: insight.title,
-        summary: insight.summary || '',
-        isSaved: true,
-        dbId: insight.id,
-      }));
+    // On workspace change, do a full reset
+    if (workspaceChanged) {
+      lastWorkspaceIdRef.current = workspaceId ?? null;
+      lastInsightIdsRef.current = currentInsightIds;
       
-      // If current active tab was deleted, switch to first available
-      const activeTabStillExists = insightTabs.some(t => t.id === activeTabId);
-      
-      setOpenTabs(insightTabs);
-      
-      if (!activeTabStillExists || activeTabId === 'loading' || activeTabId === 'new') {
+      if (workspaceInsights.length > 0) {
+        const insightTabs = workspaceInsights.map(insight => ({
+          id: insight.id,
+          title: insight.title,
+          summary: insight.summary || '',
+          isSaved: true,
+          dbId: insight.id,
+        }));
+        setOpenTabs(insightTabs);
         setActiveTabId(insightTabs[0].id);
         setLocalTitle(insightTabs[0].title);
         setNotes(insightTabs[0].summary);
         lastSavedContentRef.current = { title: insightTabs[0].title, summary: insightTabs[0].summary };
+      } else {
+        setOpenTabs([{ id: 'new', title: 'Untitled Insight', summary: '', isSaved: false }]);
+        setActiveTabId('new');
+        setLocalTitle('Untitled Insight');
+        setNotes('');
+        lastSavedContentRef.current = { title: '', summary: '' };
       }
-    } else {
-      setOpenTabs([{ id: 'new', title: 'Untitled Insight', summary: '', isSaved: false }]);
+      return;
+    }
+    
+    // For same workspace, MERGE instead of replace to prevent losing tabs during refetch
+    const insightsChanged = lastInsightIdsRef.current !== currentInsightIds;
+    if (!insightsChanged) return;
+    
+    // Build a map of DB insights for quick lookup
+    const dbInsightMap = new Map(workspaceInsights.map(i => [i.id, i]));
+    
+    // Get IDs of insights that exist in DB
+    const dbInsightIds = new Set(workspaceInsights.map(i => i.id));
+    
+    // Get previous insight IDs to detect deletions
+    const previousIds = new Set(lastInsightIdsRef.current.split(',').filter(Boolean));
+    
+    // Update the ref AFTER we've used it for comparison
+    lastInsightIdsRef.current = currentInsightIds;
+    
+    setOpenTabs(currentTabs => {
+      // Start with existing tabs that are still valid (exist in DB or are unsaved)
+      const mergedTabs: InsightTab[] = [];
+      const seenIds = new Set<string>();
+      
+      // First, keep existing tabs that are still in DB or are unsaved local tabs
+      for (const tab of currentTabs) {
+        if (tab.dbId && dbInsightIds.has(tab.dbId)) {
+          // Tab exists in DB - update with latest data
+          const dbInsight = dbInsightMap.get(tab.dbId)!;
+          mergedTabs.push({
+            ...tab,
+            id: dbInsight.id,
+            title: dbInsight.title,
+            summary: dbInsight.summary || '',
+            isSaved: true,
+            dbId: dbInsight.id,
+          });
+          seenIds.add(dbInsight.id);
+        } else if (!tab.isSaved && !tab.dbId) {
+          // Unsaved local tab - keep it
+          mergedTabs.push(tab);
+          seenIds.add(tab.id);
+        }
+        // Tabs with dbId that no longer exist in DB are dropped (deleted)
+      }
+      
+      // Add any NEW insights from DB that we don't have yet
+      for (const insight of workspaceInsights) {
+        if (!seenIds.has(insight.id)) {
+          mergedTabs.push({
+            id: insight.id,
+            title: insight.title,
+            summary: insight.summary || '',
+            isSaved: true,
+            dbId: insight.id,
+          });
+        }
+      }
+      
+      // If no tabs left, create a new empty one
+      if (mergedTabs.length === 0) {
+        return [{ id: 'new', title: 'Untitled Insight', summary: '', isSaved: false }];
+      }
+      
+      return mergedTabs;
+    });
+    
+    // Check if active tab was deleted and switch if needed
+    const activeTabDeleted = previousIds.has(activeTabId) && !dbInsightIds.has(activeTabId);
+    if (activeTabDeleted && workspaceInsights.length > 0) {
+      const firstInsight = workspaceInsights[0];
+      setActiveTabId(firstInsight.id);
+      setLocalTitle(firstInsight.title);
+      setNotes(firstInsight.summary || '');
+      lastSavedContentRef.current = { title: firstInsight.title, summary: firstInsight.summary || '' };
+    } else if (workspaceInsights.length === 0 && activeTabId !== 'new') {
       setActiveTabId('new');
       setLocalTitle('Untitled Insight');
       setNotes('');
