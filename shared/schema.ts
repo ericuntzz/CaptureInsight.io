@@ -168,6 +168,9 @@ export const sheets = pgTable("sheets", {
   dataSourceType: varchar("data_source_type"),
   dataSourceMeta: jsonb("data_source_meta"),
   data: jsonb("data"), // Unencrypted data (legacy/migration)
+  cleanedData: jsonb("cleaned_data"), // AI-cleaned structured JSON data for RAG
+  cleanedAt: timestamp("cleaned_at"), // When data was last cleaned by AI
+  cleaningStatus: varchar("cleaning_status").default("pending"), // pending, processing, completed, failed
   encryptedData: text("encrypted_data"), // E2EE: Base64 encrypted data
   encryptionIv: text("encryption_iv"), // E2EE: Base64 IV for decryption
   encryptionVersion: integer("encryption_version").default(0), // 0=unencrypted, 1+=E2EE version
