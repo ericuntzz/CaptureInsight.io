@@ -223,6 +223,75 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteSpace(id: string): Promise<boolean> {
+    // Must cascade delete all related records before deleting the space
+    // Order matters due to foreign key constraints
+    
+    // 1. Get all workspaces in this space
+    const spaceWorkspaces = await db.select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.spaceId, id));
+    const workspaceIds = spaceWorkspaces.map(w => w.id);
+    
+    // 2. Get all chat threads in this space (both workspace-level and space-level)
+    const spaceChatThreads = await db.select({ id: chatThreads.id })
+      .from(chatThreads)
+      .where(eq(chatThreads.spaceId, id));
+    const threadIds = spaceChatThreads.map(t => t.id);
+    
+    // 3. Delete chat messages for all threads
+    if (threadIds.length > 0) {
+      await db.delete(chatMessages).where(inArray(chatMessages.threadId, threadIds));
+    }
+    
+    // 4. Delete chat threads
+    await db.delete(chatThreads).where(eq(chatThreads.spaceId, id));
+    
+    // 5. Get all insights in this space
+    const spaceInsights = await db.select({ id: insights.id })
+      .from(insights)
+      .where(eq(insights.spaceId, id));
+    const insightIds = spaceInsights.map(i => i.id);
+    
+    // 6. Delete insight comments and sources
+    if (insightIds.length > 0) {
+      await Promise.all([
+        db.delete(insightComments).where(inArray(insightComments.insightId, insightIds)),
+        db.delete(insightSources).where(inArray(insightSources.insightId, insightIds)),
+      ]);
+    }
+    
+    // 7. Delete insights
+    await db.delete(insights).where(eq(insights.spaceId, id));
+    
+    // 8. Get all sheets in this space
+    const spaceSheets = await db.select({ id: sheets.id })
+      .from(sheets)
+      .where(eq(sheets.spaceId, id));
+    const sheetIds = spaceSheets.map(s => s.id);
+    
+    // 9. Delete document embeddings for sheets
+    if (sheetIds.length > 0) {
+      await db.delete(documentEmbeddings).where(inArray(documentEmbeddings.sheetId, sheetIds));
+    }
+    
+    // 10. Delete sheets
+    await db.delete(sheets).where(eq(sheets.spaceId, id));
+    
+    // 11. Delete change logs
+    await db.delete(changeLogs).where(eq(changeLogs.spaceId, id));
+    
+    // 12. Delete tag associations for this space
+    await db.delete(tagAssociations).where(eq(tagAssociations.spaceId, id));
+    
+    // 13. Delete tags in this space
+    await db.delete(tags).where(eq(tags.spaceId, id));
+    
+    // 14. Delete workspaces
+    if (workspaceIds.length > 0) {
+      await db.delete(workspaces).where(inArray(workspaces.id, workspaceIds));
+    }
+    
+    // 15. Finally delete the space itself
     const result = await db.delete(spaces).where(eq(spaces.id, id));
     return (result.rowCount ?? 0) > 0;
   }

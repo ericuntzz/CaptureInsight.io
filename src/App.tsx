@@ -973,6 +973,12 @@ export default function App() {
         description: '',
       });
       setCurrentSpaceId(newSpace.id);
+      
+      // Auto-navigate to capture view to prompt data collection
+      setCurrentView('capture');
+      setShowToolbar(true);
+      toast.success('Space created! Add your first data capture.');
+      
       return newSpace.id;
     } catch (error) {
       console.error('Error creating blank space:', error);
@@ -1252,13 +1258,18 @@ export default function App() {
           onCreateBlankSpace={handleCreateBlankSpace}
           onCreateSpace={async (data) => {
             try {
-              await createSpaceMutation.mutateAsync({
+              const newSpace = await createSpaceMutation.mutateAsync({
                 name: data.name,
                 description: data.description,
                 goals: data.goals,
                 instructions: data.instructions,
               });
-              toast.success(`Space \"${data.name}\" created!`);
+              setCurrentSpaceId(newSpace.id);
+              
+              // Auto-navigate to capture view to prompt data collection
+              setCurrentView('capture');
+              setShowToolbar(true);
+              toast.success(`Space "${data.name}" created! Add your first data capture.`);
             } catch (error) {
               console.error('Error creating space:', error);
               toast.error('Failed to create space');
@@ -1352,13 +1363,18 @@ export default function App() {
     
     const handleWorkspaceCreateProject = async (data: { name: string; description: string; goals: string; instructions: string }) => {
       try {
-        await createSpaceMutation.mutateAsync({
+        const newSpace = await createSpaceMutation.mutateAsync({
           name: data.name,
           description: data.description,
           goals: data.goals,
           instructions: data.instructions,
         });
-        toast.success(`Space "${data.name}" created!`);
+        setCurrentSpaceId(newSpace.id);
+        
+        // Auto-navigate to capture view to prompt data collection
+        setCurrentView('capture');
+        setShowToolbar(true);
+        toast.success(`Space "${data.name}" created! Add your first data capture.`);
       } catch (error) {
         console.error('Error creating space:', error);
         toast.error('Failed to create space');
