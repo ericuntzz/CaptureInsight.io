@@ -324,6 +324,17 @@ export function ProjectBrowser({
     }
   }, [editingWorkspaceId]);
 
+  const handleProjectsClick = () => {
+    // Clicking projects icon in collapsed mode expands the sidebar
+    setIsCollapsed(false);
+  };
+
+  // ⚠️ CRITICAL: Get current Space for Space-scoped architecture
+  // Only show folders from the current Space
+  const safeProjects = Array.isArray(projects) ? projects : [];
+  const currentSpace = currentSpaceId ? safeProjects.find(p => p.id === currentSpaceId) : safeProjects[0];
+  const foldersToDisplay = currentSpace?.folders || [];
+
   // Auto-start editing when a new workspace is created
   useEffect(() => {
     if (newlyCreatedWorkspaceId) {
@@ -336,17 +347,6 @@ export function ProjectBrowser({
       }
     }
   }, [newlyCreatedWorkspaceId, currentSpace?.workspaces, currentSpace?.folders]);
-
-  const handleProjectsClick = () => {
-    // Clicking projects icon in collapsed mode expands the sidebar
-    setIsCollapsed(false);
-  };
-
-  // ⚠️ CRITICAL: Get current Space for Space-scoped architecture
-  // Only show folders from the current Space
-  const safeProjects = Array.isArray(projects) ? projects : [];
-  const currentSpace = currentSpaceId ? safeProjects.find(p => p.id === currentSpaceId) : safeProjects[0];
-  const foldersToDisplay = currentSpace?.folders || [];
 
   // Handle create blank Space with auto-edit
   const handleCreateBlankSpace = async () => {
