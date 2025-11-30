@@ -258,6 +258,9 @@ export default function App() {
   // Track temp workspace ID to update when real ID comes back
   const pendingWorkspaceRef = useRef<string | null>(null);
   
+  // Track newly created workspace ID to auto-edit its name
+  const [newlyCreatedWorkspaceId, setNewlyCreatedWorkspaceId] = useState<string | null>(null);
+  
   // Set activeWorkspaceId to first workspace when spaces/current space changes (if not already set)
   useEffect(() => {
     // Skip if we have a pending optimistic workspace (don't override temp ID)
@@ -273,7 +276,7 @@ export default function App() {
     }
   }, [currentSpace, spacesLoading, activeWorkspaceId]);
   
-  // Handle workspace creation - switches to new workspace immediately
+  // Handle workspace creation - switches to new workspace immediately AND enables rename
   const handleCreateWorkspace = async (spaceId: string, name: string) => {
     try {
       const newWorkspace = await createWorkspaceMutation.mutateAsync({ 
@@ -283,6 +286,8 @@ export default function App() {
         onOptimisticId: (tempId) => {
           pendingWorkspaceRef.current = tempId;
           setActiveWorkspaceId(tempId);
+          // Also set as newly created to enable inline editing
+          setNewlyCreatedWorkspaceId(tempId);
         }
       });
       // Update to real ID when server responds
@@ -291,12 +296,17 @@ export default function App() {
         if (pendingWorkspaceRef.current && activeWorkspaceId?.startsWith('temp-')) {
           setActiveWorkspaceId(newWorkspace.id);
         }
+        // Update the editing ID if we're still editing the temp one
+        if (newlyCreatedWorkspaceId?.startsWith('temp-')) {
+          setNewlyCreatedWorkspaceId(newWorkspace.id);
+        }
         pendingWorkspaceRef.current = null;
       }
     } catch (error) {
       console.error('Error creating workspace:', error);
       toast.error('Failed to create workspace');
       pendingWorkspaceRef.current = null;
+      setNewlyCreatedWorkspaceId(null);
     }
   };
   
@@ -1342,6 +1352,8 @@ export default function App() {
           onWorkspaceChange={setActiveWorkspaceId}
           onCreateWorkspace={handleCreateWorkspace}
           onDeleteWorkspace={handleDeleteWorkspace}
+          newlyCreatedWorkspaceId={newlyCreatedWorkspaceId}
+          onNewlyCreatedWorkspaceHandled={() => setNewlyCreatedWorkspaceId(null)}
         />
         
         {/* Main Workspace Content */}

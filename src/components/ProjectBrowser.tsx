@@ -85,6 +85,8 @@ interface ProjectBrowserProps {
   onWorkspaceChange?: (workspaceId: string) => void;
   onCreateWorkspace?: (spaceId: string, name: string) => void;
   onDeleteWorkspace?: (workspaceId: string) => void;
+  newlyCreatedWorkspaceId?: string | null;
+  onNewlyCreatedWorkspaceHandled?: () => void;
 }
 
 export function ProjectBrowser({ 
@@ -114,6 +116,8 @@ export function ProjectBrowser({
   onWorkspaceChange,
   onCreateWorkspace,
   onDeleteWorkspace,
+  newlyCreatedWorkspaceId,
+  onNewlyCreatedWorkspaceHandled,
 }: ProjectBrowserProps) {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set(Array.isArray(projects) ? projects.map(p => p.id) : []));
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -319,6 +323,19 @@ export function ProjectBrowser({
       workspaceEditInputRef.current.select();
     }
   }, [editingWorkspaceId]);
+
+  // Auto-start editing when a new workspace is created
+  useEffect(() => {
+    if (newlyCreatedWorkspaceId) {
+      // Find the workspace with this ID to get its name
+      const workspaces = currentSpace?.workspaces || currentSpace?.folders || [];
+      const newWorkspace = workspaces.find(w => w.id === newlyCreatedWorkspaceId);
+      if (newWorkspace) {
+        handleStartEditWorkspace(newlyCreatedWorkspaceId, newWorkspace.name);
+        onNewlyCreatedWorkspaceHandled?.();
+      }
+    }
+  }, [newlyCreatedWorkspaceId, currentSpace?.workspaces, currentSpace?.folders]);
 
   const handleProjectsClick = () => {
     // Clicking projects icon in collapsed mode expands the sidebar
