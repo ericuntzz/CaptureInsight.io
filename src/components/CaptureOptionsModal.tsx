@@ -483,6 +483,14 @@ export function CaptureOptionsModal({
   // Check if all captures are assigned
   const areAllCapturesAssigned = () => {
     if (assignmentMode === 'unified') {
+      // Allow proceeding if project is selected - workspace will be auto-created if needed
+      const currentProject = projects.find(p => p.id === selectedProject);
+      const hasNoWorkspaces = !currentProject?.folders || currentProject.folders.length === 0;
+      
+      // If no workspaces exist, allow proceeding with just a project selected
+      if (hasNoWorkspaces && selectedProject) {
+        return true;
+      }
       return selectedProject && selectedFolder;
     } else {
       // In individual mode, check if all captures have valid destinations

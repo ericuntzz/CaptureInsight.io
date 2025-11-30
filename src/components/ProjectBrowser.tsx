@@ -387,7 +387,7 @@ export function ProjectBrowser({
 
       {/* Navigation Buttons */}
       <div className="px-2 pb-2">
-        {/* Upload Button */}
+        {/* Add Data Button */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -404,7 +404,7 @@ export function ProjectBrowser({
                     transition={{ duration: 0.2 }}
                     className="text-sm whitespace-nowrap overflow-hidden ml-3"
                   >
-                    Upload
+                    Add Data
                   </motion.span>
                 )}
               </AnimatePresence>
@@ -412,7 +412,7 @@ export function ProjectBrowser({
           </TooltipTrigger>
           {isCollapsed && (
             <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
-              Upload
+              Add Data
             </TooltipContent>
           )}
         </Tooltip>

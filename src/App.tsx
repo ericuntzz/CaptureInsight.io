@@ -502,9 +502,38 @@ export default function App() {
       schedule?: { frequency: string; time: string };
     }>
   }) => {
-    const { destinations, analysisSettings } = data;
+    let { destinations } = data;
+    const { analysisSettings } = data;
     
     try {
+      // Check if any destination has an invalid folderId (workspace) - auto-create one if needed
+      const needsAutoWorkspace = destinations.some(dest => !dest.folderId || dest.folderId === '');
+      
+      if (needsAutoWorkspace && destinations[0]?.spaceId) {
+        const spaceId = destinations[0].spaceId;
+        const space = spaces.find(p => p.id === spaceId);
+        const workspaces = space?.workspaces || space?.folders || [];
+        
+        // If no workspaces exist, create one automatically
+        if (workspaces.length === 0) {
+          const newWorkspace = await createWorkspaceMutation.mutateAsync({ 
+            spaceId, 
+            name: 'My Workspace' 
+          });
+          
+          if (newWorkspace?.id) {
+            // Update all destinations to use the new workspace
+            destinations = destinations.map(dest => ({
+              ...dest,
+              folderId: newWorkspace.id
+            }));
+            
+            // Also set this as the active workspace
+            setActiveWorkspaceId(newWorkspace.id);
+          }
+        }
+      }
+      
       // Update captures with their destinations
       setCaptures(prev => prev.map((capture, index) => {
         const dest = destinations[index];
@@ -535,8 +564,8 @@ export default function App() {
         });
       }
       
-      // Navigate to Data Management View
-      setCurrentView('data');
+      // Navigate to workspace view to show captured data
+      setCurrentView('workspace');
       setShowOptionsModal(false);
       
       // Show success message
