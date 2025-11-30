@@ -252,6 +252,42 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteWorkspace(id: string): Promise<boolean> {
+    // Must delete related records in order to avoid foreign key violations
+    
+    // 1. Get all chat threads in this workspace to delete their messages first
+    const workspaceChatThreads = await db.select({ id: chatThreads.id })
+      .from(chatThreads)
+      .where(eq(chatThreads.workspaceId, id));
+    
+    // 2. Delete chat messages for each thread
+    for (const thread of workspaceChatThreads) {
+      await db.delete(chatMessages).where(eq(chatMessages.threadId, thread.id));
+    }
+    
+    // 3. Delete chat threads in this workspace
+    await db.delete(chatThreads).where(eq(chatThreads.workspaceId, id));
+    
+    // 4. Get all insights in this workspace to delete their sources and comments
+    const workspaceInsights = await db.select({ id: insights.id })
+      .from(insights)
+      .where(eq(insights.workspaceId, id));
+    
+    // 5. Delete insight comments and sources for each insight
+    for (const insight of workspaceInsights) {
+      await db.delete(insightComments).where(eq(insightComments.insightId, insight.id));
+      await db.delete(insightSources).where(eq(insightSources.insightId, insight.id));
+    }
+    
+    // 6. Delete insights in this workspace
+    await db.delete(insights).where(eq(insights.workspaceId, id));
+    
+    // 7. Delete sheets in this workspace
+    await db.delete(sheets).where(eq(sheets.workspaceId, id));
+    
+    // 8. Delete change logs in this workspace
+    await db.delete(changeLogs).where(eq(changeLogs.workspaceId, id));
+    
+    // 9. Finally, delete the workspace itself
     const result = await db.delete(workspaces).where(eq(workspaces.id, id));
     return (result.rowCount ?? 0) > 0;
   }
