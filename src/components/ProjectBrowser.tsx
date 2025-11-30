@@ -261,10 +261,12 @@ export function ProjectBrowser({
     }
   }, [showWorkspaceFlyout]);
 
-  // Workspace handlers
+  // Workspace handlers - create immediately on "+" click, then allow renaming
   const handleStartCreateWorkspace = () => {
-    setIsCreatingWorkspace(true);
-    setNewWorkspaceName('Untitled Space');
+    if (currentSpaceId && onCreateWorkspace) {
+      // Create workspace immediately with default name and switch to it
+      onCreateWorkspace(currentSpaceId, 'Untitled Workspace');
+    }
   };
 
   const handleSaveCreateWorkspace = () => {
