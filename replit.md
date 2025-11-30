@@ -15,6 +15,12 @@ CaptureInsight is a full-stack application with a React 18 (TypeScript) frontend
 
 The application's core features include:
 - **Hierarchical Organization**: Spaces > Workspaces > Insights/Chats/Sheets. Each Workspace serves as a self-contained container with all data scoped to it. Users can create and switch between multiple Workspaces within a Space.
+- **New User Onboarding Flow**: 
+  - New users without workspaces see "Welcome to CaptureInsight" with "Upload Data" button
+  - Data upload takes priority over workspace creation - workspace is auto-created when user uploads data
+  - When a user captures data with no existing workspaces, a "My Workspace" is automatically created
+  - Menu bar stays expanded when no workspaces exist, collapses after first workspace is created
+  - Sidebar shows "Add Data" to guide users to the capture flow
 - **Space-scoped Tagging System**: With associations for organization.
 - **Insights Management**: Knowledge cards with status/priority, linked sources, and threaded comments.
 - **AI Chat Integration**: Per insight AI conversations for analysis and RAG-enabled chat.
