@@ -135,24 +135,26 @@ export function SpaceSwitcher({
             )}
 
             {/* Space List */}
-            <div className="max-h-[400px] overflow-y-auto py-1">
-              {safeSpaces.map(space => (
-                <button
-                  key={space.id}
-                  onClick={() => handleSpaceSelect(space.id)}
-                  className={`w-full px-3 py-2 text-left text-sm transition-colors ${
-                    space.id === currentSpaceId ? 'text-[#FF6B35]' : 'text-white hover:text-[#FFA07A]'
-                  }`}
-                >
-                  <div className="truncate">{space.name}</div>
-                </button>
-              ))}
-            </div>
+            {safeSpaces.length > 0 && (
+              <div className="max-h-[400px] overflow-y-auto py-1">
+                {safeSpaces.map(space => (
+                  <button
+                    key={space.id}
+                    onClick={() => handleSpaceSelect(space.id)}
+                    className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                      space.id === currentSpaceId ? 'text-[#FF6B35]' : 'text-white hover:text-[#FFA07A]'
+                    }`}
+                  >
+                    <div className="truncate">{space.name}</div>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Add New Space */}
             <button
               onClick={handleCreateSpaceClick}
-              className="w-full px-3 py-2 text-left text-sm text-[#FF6B35] hover:text-[#FFA07A] transition-colors flex items-center gap-2"
+              className="w-full px-3 py-2.5 text-left text-sm text-[#FF6B35] hover:text-[#FFA07A] transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Add a New Space
