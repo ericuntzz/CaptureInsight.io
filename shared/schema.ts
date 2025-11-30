@@ -170,7 +170,25 @@ export const sheets = pgTable("sheets", {
   data: jsonb("data"), // Unencrypted data (legacy/migration)
   cleanedData: jsonb("cleaned_data"), // AI-cleaned structured JSON data for RAG
   cleanedAt: timestamp("cleaned_at"), // When data was last cleaned by AI
-  cleaningStatus: varchar("cleaning_status").default("pending"), // pending, processing, completed, failed
+  cleaningStatus: varchar("cleaning_status").default("pending"), // pending, processing, completed, failed, validation_failed
+  // Quality scoring fields for world-class data processing
+  qualityScore: integer("quality_score"), // Overall quality 0-100
+  qualityDetails: jsonb("quality_details").$type<{
+    confidence: number; // 0-100: How confident AI is in extraction
+    completeness: number; // 0-100: Data completeness (no missing values)
+    dataRichness: number; // 0-100: Amount of useful data found
+    issues?: string[]; // List of quality issues found
+  }>(),
+  validationResult: jsonb("validation_result").$type<{
+    isValid: boolean;
+    failureType?: 'empty_image' | 'low_quality' | 'unsupported_format' | 'no_data_found' | 'ai_error' | 'parse_error';
+    message?: string;
+    details?: {
+      textDensity?: number; // For screenshots: estimated text coverage
+      contrast?: number; // For screenshots: image contrast score
+      fileSize?: number; // For all: file size in bytes
+    };
+  }>(),
   encryptedData: text("encrypted_data"), // E2EE: Base64 encrypted data
   encryptionIv: text("encryption_iv"), // E2EE: Base64 IV for decryption
   encryptionVersion: integer("encryption_version").default(0), // 0=unencrypted, 1+=E2EE version
