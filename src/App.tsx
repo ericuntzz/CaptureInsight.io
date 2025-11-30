@@ -472,21 +472,25 @@ export default function App() {
       return;
     }
     
-    if (!settings || !settings.destination) {
+    // For new users, destination may be minimal (just spaceId, no folderId)
+    // This is allowed - workspace will be auto-created in handleStartAnalysis
+    const resolvedSpaceId = settings?.destination?.spaceId || settings?.destination?.projectId || spaces[0]?.id || '';
+    
+    if (!resolvedSpaceId) {
       toast.error('Please select a destination for your data');
       return;
     }
     
-    // Build destinations array with normalized spaceId (all items go to same destination for now)
-    const resolvedSpaceId = settings.destination.spaceId || settings.destination.projectId || '';
-    const destinations = captureItems.map(() => ({ spaceId: resolvedSpaceId, folderId: settings.destination.folderId }));
+    // Build destinations array - folderId may be empty for new users (will be auto-created)
+    const folderId = settings?.destination?.folderId || '';
+    const destinations = captureItems.map(() => ({ spaceId: resolvedSpaceId, folderId }));
     
     // Build analysis settings array (all items get same settings for now)
     const analysisSettings = captureItems.map(item => ({
       captureId: item.id,
-      analysisType: settings.llmProvider ? 'llm-integration' as const : settings.analysisType,
-      llmProvider: settings.llmProvider,
-      schedule: settings.schedule
+      analysisType: settings?.llmProvider ? 'llm-integration' as const : settings?.analysisType || null,
+      llmProvider: settings?.llmProvider,
+      schedule: settings?.schedule
     }));
     
     // Use the same logic as the modal

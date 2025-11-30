@@ -259,13 +259,24 @@ export function FloatingCaptureToolbar({
   ];
 
   const handleFinalCapture = () => {
-    if (!defaultDestination) {
+    // Check if user has any workspaces
+    const currentSpace = spaces.find(s => s.id === defaultDestination?.spaceId) || spaces[0];
+    const hasNoWorkspaces = !currentSpace?.folders || currentSpace.folders.length === 0;
+    
+    // For new users without workspaces, allow proceeding - workspace will be auto-created
+    if (!defaultDestination && !hasNoWorkspaces) {
       toast.error('Please select a destination first');
       return;
     }
+    
+    // Build destination - use spaceId even if folderId is missing (will be auto-created)
+    const destination = defaultDestination || {
+      spaceId: currentSpace?.id || '',
+      folderId: '' // Empty - will trigger auto-create in App.tsx
+    };
 
     const settings: CaptureSettings = {
-      destination: defaultDestination,
+      destination,
       analysisType: selectedLlmId ? 'llm-integration' : analysisType,
       llmProvider: selectedLlmId ? llmProviders.find(p => p.id === selectedLlmId) : undefined,
       schedule: analysisType === 'scheduled' ? { frequency, time } : undefined
