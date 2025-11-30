@@ -141,6 +141,10 @@ export function ProjectBrowser({
   // Workspace delete dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<{ id: string; name: string } | null>(null);
+  
+  // Workspace editing state
+  const [editingWorkspace, setEditingWorkspace] = useState<{ id: string; name: string } | null>(null);
+  const workspaceEditInputRef = useRef<HTMLInputElement>(null);
 
   // Focus input when editing starts
   const prevEditingFolderId = useRef<string | null>(null);
@@ -283,6 +287,32 @@ export function ProjectBrowser({
     onViewChange?.('workspace');
     setShowWorkspaceFlyout(false);
   };
+
+  // Workspace editing handlers
+  const handleStartEditWorkspace = (workspaceId: string, currentName: string) => {
+    setEditingWorkspace({ id: workspaceId, name: currentName });
+  };
+
+  const handleSaveEditWorkspace = () => {
+    if (editingWorkspace && editingWorkspace.name.trim() && currentSpaceId) {
+      onUpdateFolder(currentSpaceId, editingWorkspace.id, editingWorkspace.name.trim());
+      setEditingWorkspace(null);
+    } else if (editingWorkspace && !editingWorkspace.name.trim()) {
+      toast.error('Workspace name cannot be empty');
+    }
+  };
+
+  const handleCancelEditWorkspace = () => {
+    setEditingWorkspace(null);
+  };
+
+  // Focus workspace edit input when editing starts
+  useEffect(() => {
+    if (editingWorkspace && workspaceEditInputRef.current) {
+      workspaceEditInputRef.current.focus();
+      workspaceEditInputRef.current.select();
+    }
+  }, [editingWorkspace]);
 
   const handleProjectsClick = () => {
     // Clicking projects icon in collapsed mode expands the sidebar
@@ -553,13 +583,44 @@ export function ProjectBrowser({
                       : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
                   }`}
                 >
-                  <button
-                    onClick={() => handleSelectWorkspace(workspace.id)}
-                    className="flex-1 flex items-center gap-2 h-full"
-                  >
-                    <LayoutGrid className="w-4 h-4 flex-shrink-0" />
-                    <span className="text-sm truncate">{workspace.name}</span>
-                  </button>
+                  {editingWorkspace?.id === workspace.id ? (
+                    // Inline edit mode
+                    <div className="flex-1 flex items-center gap-2">
+                      <LayoutGrid className="w-4 h-4 flex-shrink-0" />
+                      <input
+                        ref={workspaceEditInputRef}
+                        type="text"
+                        value={editingWorkspace.name}
+                        onChange={(e) => setEditingWorkspace({ ...editingWorkspace, name: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSaveEditWorkspace();
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            handleCancelEditWorkspace();
+                          }
+                        }}
+                        onBlur={handleSaveEditWorkspace}
+                        className="flex-1 bg-[#0D1117] text-white text-sm rounded border border-[#FF6B35] px-2 py-0.5 outline-none"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  ) : (
+                    // Normal display mode with double-click to edit
+                    <button
+                      onClick={() => handleSelectWorkspace(workspace.id)}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleStartEditWorkspace(workspace.id, workspace.name);
+                      }}
+                      className="flex-1 flex items-center gap-2 h-full"
+                      title="Double-click to rename"
+                    >
+                      <LayoutGrid className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm truncate">{workspace.name}</span>
+                    </button>
+                  )}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
