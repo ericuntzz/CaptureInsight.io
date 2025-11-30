@@ -14,6 +14,15 @@ import pLimit from "p-limit";
 import pRetry, { AbortError } from "p-retry";
 import { storage } from "../storage";
 import { embedAndStoreSheet } from "./embeddings";
+import { 
+  validateScreenshot, 
+  validateTabularData, 
+  validateDocumentData,
+  calculateQualityScore,
+  getValidationErrorMessage,
+  type ValidationResult,
+  type QualityScore 
+} from "./dataValidation";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
@@ -89,6 +98,12 @@ export interface CleanedDataResult {
     };
   };
   error?: string;
+  // Quality scoring
+  qualityScore?: QualityScore;
+  // Validation results
+  validationResult?: ValidationResult;
+  // Specific failure type for user-friendly messaging
+  failureType?: 'empty_image' | 'low_quality' | 'unsupported_format' | 'no_data_found' | 'ai_error' | 'parse_error';
 }
 
 const DATA_CLEANING_SYSTEM_PROMPT = `You are a data extraction and cleaning expert. Your job is to transform raw data into clean, structured JSON format that can be easily queried and analyzed.
@@ -431,17 +446,19 @@ function isDateString(value: string): boolean {
 
 /**
  * Main entry point: Clean data for a sheet based on its source type
+ * Includes pre-validation to detect empty/invalid content before expensive AI processing
  */
 export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult> {
   try {
     const sheet = await storage.getSheet(sheetId);
     if (!sheet) {
-      return { success: false, error: "Sheet not found" };
+      return { success: false, error: "Sheet not found", failureType: 'no_data_found' };
     }
 
     await storage.updateSheet(sheetId, { cleaningStatus: "processing" });
 
     let result: CleanedDataResult;
+    let validationResult: ValidationResult | undefined;
     const sourceType = sheet.dataSourceType;
     const meta = sheet.dataSourceMeta as Record<string, any> | null;
 
@@ -452,45 +469,151 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
                        meta?.screenshotUrl ||
                        meta?.screenshot;
       
-      if (imageData) {
-        // cleanScreenshotData now handles all formats: URLs, data URLs, and raw base64
-        result = await cleanScreenshotData(imageData, sheet.name);
+      if (!imageData) {
+        result = { 
+          success: false, 
+          error: "No screenshot data found",
+          failureType: 'no_data_found',
+        };
       } else {
-        result = { success: false, error: "No screenshot data found" };
+        // PRE-VALIDATION: Check image quality before expensive AI processing
+        console.log(`[DataCleaning] Running pre-validation for screenshot ${sheetId}`);
+        validationResult = await validateScreenshot(imageData);
+        
+        if (!validationResult.isValid) {
+          // Block processing for invalid/empty screenshots
+          const errorMessage = getValidationErrorMessage(validationResult, sheet.name);
+          console.log(`[DataCleaning] Validation failed for ${sheetId}: ${errorMessage}`);
+          
+          result = {
+            success: false,
+            error: errorMessage,
+            failureType: validationResult.failureType as any,
+            validationResult,
+          };
+          
+          // Store validation result and mark as validation_failed
+          await storage.updateSheet(sheetId, {
+            cleaningStatus: "failed",
+            validationResult: validationResult,
+          } as any);
+          
+          return result;
+        }
+        
+        // Validation passed - proceed with AI processing
+        console.log(`[DataCleaning] Validation passed for ${sheetId}, proceeding with AI cleaning`);
+        result = await cleanScreenshotData(imageData, sheet.name);
+        result.validationResult = validationResult;
       }
     } else if (sourceType === "link") {
       const sheetData = sheet.data as any;
+      
+      // PRE-VALIDATION: Check tabular data
+      validationResult = validateTabularData(sheetData);
+      
+      if (!validationResult.isValid) {
+        result = {
+          success: false,
+          error: validationResult.message || "No valid data found",
+          failureType: validationResult.failureType as any,
+          validationResult,
+        };
+        
+        await storage.updateSheet(sheetId, {
+          cleaningStatus: "failed",
+          validationResult: validationResult,
+        } as any);
+        
+        return result;
+      }
+      
       if (Array.isArray(sheetData)) {
         result = await cleanTabularData(sheetData, undefined, sheet.name);
       } else if (sheetData && typeof sheetData === "object") {
         result = await cleanTabularData([sheetData], Object.keys(sheetData), sheet.name);
       } else {
-        result = { success: false, error: "No link data found to clean" };
+        result = { success: false, error: "No link data found to clean", failureType: 'no_data_found' };
       }
+      result.validationResult = validationResult;
     } else if (sourceType === "file") {
       const content = typeof sheet.data === "string" 
         ? sheet.data 
         : JSON.stringify(sheet.data);
+      
+      // PRE-VALIDATION: Check document content
+      validationResult = validateDocumentData(content, meta?.mimeType);
+      
+      if (!validationResult.isValid) {
+        result = {
+          success: false,
+          error: validationResult.message || "No valid content found",
+          failureType: validationResult.failureType as any,
+          validationResult,
+        };
+        
+        await storage.updateSheet(sheetId, {
+          cleaningStatus: "failed",
+          validationResult: validationResult,
+        } as any);
+        
+        return result;
+      }
+      
       result = await cleanDocumentData(content, meta?.mimeType, sheet.name);
+      result.validationResult = validationResult;
     } else {
       const content = typeof sheet.data === "string"
         ? sheet.data
         : JSON.stringify(sheet.data);
+      
+      validationResult = validateDocumentData(content);
+      if (!validationResult.isValid) {
+        result = {
+          success: false,
+          error: validationResult.message || "No valid content found",
+          failureType: validationResult.failureType as any,
+          validationResult,
+        };
+        
+        await storage.updateSheet(sheetId, {
+          cleaningStatus: "failed",
+          validationResult: validationResult,
+        } as any);
+        
+        return result;
+      }
+      
       result = await cleanDocumentData(content, undefined, sheet.name);
+      result.validationResult = validationResult;
     }
 
     if (result.success && result.cleanedData) {
+      // Calculate quality score
+      const qualityScore = calculateQualityScore(result.cleanedData, validationResult?.details);
+      result.qualityScore = qualityScore;
+      
+      console.log(`[DataCleaning] Quality score for ${sheetId}: ${qualityScore.overall} (confidence: ${qualityScore.confidence}, completeness: ${qualityScore.completeness}, richness: ${qualityScore.dataRichness})`);
+      
+      // Store cleaned data with quality metrics
       await storage.updateSheet(sheetId, {
         cleanedData: result.cleanedData,
         cleanedAt: new Date(),
         cleaningStatus: "completed",
-      });
+        qualityScore: qualityScore.overall,
+        qualityDetails: {
+          confidence: qualityScore.confidence,
+          completeness: qualityScore.completeness,
+          dataRichness: qualityScore.dataRichness,
+          issues: qualityScore.issues,
+        },
+        validationResult: validationResult || null,
+      } as any);
       
       // Regenerate embeddings with cleaned data for better RAG results
       try {
         const updatedSheet = await storage.getSheet(sheetId);
         if (updatedSheet && updatedSheet.spaceId) {
-          // Ensure we have all required fields for embedding
           const sheetForEmbedding = {
             ...sheet,
             ...updatedSheet,
@@ -505,16 +628,38 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
         console.warn(`[DataCleaning] Failed to regenerate embeddings for sheet ${sheetId}:`, embeddingError);
       }
     } else {
+      // Store failure details
       await storage.updateSheet(sheetId, {
         cleaningStatus: "failed",
-      });
+        validationResult: validationResult || {
+          isValid: false,
+          failureType: result.failureType || 'ai_error',
+          message: result.error,
+        },
+      } as any);
     }
 
     return result;
   } catch (error) {
     console.error(`Error cleaning sheet ${sheetId}:`, error);
-    await storage.updateSheet(sheetId, { cleaningStatus: "failed" });
-    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    
+    // Determine failure type from error
+    let failureType: CleanedDataResult['failureType'] = 'ai_error';
+    if (errorMessage.includes('parse') || errorMessage.includes('JSON')) {
+      failureType = 'parse_error';
+    }
+    
+    await storage.updateSheet(sheetId, { 
+      cleaningStatus: "failed",
+      validationResult: {
+        isValid: false,
+        failureType,
+        message: errorMessage,
+      },
+    } as any);
+    
+    return { success: false, error: errorMessage, failureType };
   }
 }
 
