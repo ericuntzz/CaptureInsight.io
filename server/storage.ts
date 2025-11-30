@@ -263,25 +263,25 @@ export class DatabaseStorage implements IStorage {
     // 7. Delete insights
     await db.delete(insights).where(eq(insights.spaceId, id));
     
-    // 8. Get all sheets in this space
-    const spaceSheets = await db.select({ id: sheets.id })
-      .from(sheets)
-      .where(eq(sheets.spaceId, id));
-    const sheetIds = spaceSheets.map(s => s.id);
+    // 8. Delete document embeddings for this space (directly by spaceId)
+    await db.delete(documentEmbeddings).where(eq(documentEmbeddings.spaceId, id));
     
-    // 9. Delete document embeddings for sheets
-    if (sheetIds.length > 0) {
-      await db.delete(documentEmbeddings).where(inArray(documentEmbeddings.sheetId, sheetIds));
-    }
-    
-    // 10. Delete sheets
+    // 9. Delete sheets
     await db.delete(sheets).where(eq(sheets.spaceId, id));
     
-    // 11. Delete change logs
+    // 10. Delete change logs
     await db.delete(changeLogs).where(eq(changeLogs.spaceId, id));
     
-    // 12. Delete tag associations for this space
-    await db.delete(tagAssociations).where(eq(tagAssociations.spaceId, id));
+    // 11. Get all tags in this space first
+    const spaceTags = await db.select({ id: tags.id })
+      .from(tags)
+      .where(eq(tags.spaceId, id));
+    const tagIds = spaceTags.map(t => t.id);
+    
+    // 12. Delete tag associations for those tags
+    if (tagIds.length > 0) {
+      await db.delete(tagAssociations).where(inArray(tagAssociations.tagId, tagIds));
+    }
     
     // 13. Delete tags in this space
     await db.delete(tags).where(eq(tags.spaceId, id));
