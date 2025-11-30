@@ -159,11 +159,63 @@ Tasks:
 Return comprehensive structured JSON with all extracted data.`;
 
 /**
- * Clean screenshot data using Gemini Vision
+ * Fetch image from URL and convert to base64
  */
-export async function cleanScreenshotData(base64Image: string, sourceName?: string): Promise<CleanedDataResult> {
+async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeType: string } | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`Failed to fetch image from URL: ${response.status} ${response.statusText}`);
+      return null;
+    }
+    
+    const contentType = response.headers.get('content-type') || 'image/png';
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    
+    return { base64, mimeType: contentType };
+  } catch (error) {
+    console.error('Error fetching image:', error);
+    return null;
+  }
+}
+
+/**
+ * Clean screenshot data using Gemini Vision
+ * Accepts: base64 string, data URL (data:image/...), or https URL
+ */
+export async function cleanScreenshotData(imageInput: string, sourceName?: string): Promise<CleanedDataResult> {
   return rateLimiter(async () => {
     try {
+      let base64Data: string;
+      let mimeType = "image/png";
+      
+      // Handle different input formats
+      if (imageInput.startsWith("http://") || imageInput.startsWith("https://")) {
+        // Fetch image from URL
+        const fetched = await fetchImageAsBase64(imageInput);
+        if (!fetched) {
+          return { success: false, error: "Failed to fetch image from URL" };
+        }
+        base64Data = fetched.base64;
+        mimeType = fetched.mimeType;
+      } else if (imageInput.startsWith("data:image")) {
+        // Extract base64 from data URL
+        const parts = imageInput.split(",");
+        base64Data = parts[1] || "";
+        const mimeMatch = parts[0]?.match(/data:(image\/[^;]+)/);
+        if (mimeMatch) {
+          mimeType = mimeMatch[1];
+        }
+      } else {
+        // Assume it's already base64
+        base64Data = imageInput;
+      }
+      
+      if (!base64Data) {
+        return { success: false, error: "No valid image data found" };
+      }
+      
       const contents = [
         {
           role: "user",
@@ -171,8 +223,8 @@ export async function cleanScreenshotData(base64Image: string, sourceName?: stri
             { text: SCREENSHOT_CLEANING_PROMPT },
             {
               inlineData: {
-                mimeType: "image/png",
-                data: base64Image,
+                mimeType,
+                data: base64Data,
               },
             },
           ],
@@ -394,14 +446,14 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
     const meta = sheet.dataSourceMeta as Record<string, any> | null;
 
     if (sourceType === "screenshot" || sourceType === "capture") {
+      // Support multiple possible locations for screenshot data
       const imageData = (sheet.data as any)?.screenshot || 
                        (sheet.data as any)?.screenshotUrl ||
-                       meta?.screenshotUrl;
+                       meta?.screenshotUrl ||
+                       meta?.screenshot;
       
-      if (imageData && imageData.startsWith("data:image")) {
-        const base64 = imageData.split(",")[1];
-        result = await cleanScreenshotData(base64, sheet.name);
-      } else if (imageData) {
+      if (imageData) {
+        // cleanScreenshotData now handles all formats: URLs, data URLs, and raw base64
         result = await cleanScreenshotData(imageData, sheet.name);
       } else {
         result = { success: false, error: "No screenshot data found" };
