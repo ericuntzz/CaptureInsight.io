@@ -259,17 +259,19 @@ export function FloatingCaptureToolbar({
   ];
 
   const handleFinalCapture = () => {
-    // Check if user has any workspaces
+    // Check if user has any spaces and workspaces
     const currentSpace = spaces.find(s => s.id === defaultDestination?.spaceId) || spaces[0];
+    const hasNoSpaces = spaces.length === 0;
     const hasNoWorkspaces = !currentSpace?.folders || currentSpace.folders.length === 0;
     
-    // For new users without workspaces, allow proceeding - workspace will be auto-created
-    if (!defaultDestination && !hasNoWorkspaces) {
+    // For new users without spaces or workspaces, allow proceeding - both will be auto-created
+    // Only show error if user HAS workspaces but hasn't selected a destination
+    if (!defaultDestination && !hasNoWorkspaces && !hasNoSpaces) {
       toast.error('Please select a destination first');
       return;
     }
     
-    // Build destination - use spaceId even if folderId is missing (will be auto-created)
+    // Build destination - spaceId and folderId may be empty for new users (will be auto-created in App.tsx)
     const destination = defaultDestination || {
       spaceId: currentSpace?.id || '',
       folderId: '' // Empty - will trigger auto-create in App.tsx

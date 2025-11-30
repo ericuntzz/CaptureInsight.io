@@ -472,17 +472,12 @@ export default function App() {
       return;
     }
     
-    // For new users, destination may be minimal (just spaceId, no folderId)
-    // This is allowed - workspace will be auto-created in handleStartAnalysis
+    // For new users, destination may be minimal or empty
+    // Allow proceeding - space and workspace will be auto-created in handleStartAnalysis
     const resolvedSpaceId = settings?.destination?.spaceId || settings?.destination?.projectId || spaces[0]?.id || '';
-    
-    if (!resolvedSpaceId) {
-      toast.error('Please select a destination for your data');
-      return;
-    }
-    
-    // Build destinations array - folderId may be empty for new users (will be auto-created)
     const folderId = settings?.destination?.folderId || '';
+    
+    // Build destinations array - spaceId and folderId may be empty for new users (will be auto-created)
     const destinations = captureItems.map(() => ({ spaceId: resolvedSpaceId, folderId }));
     
     // Build analysis settings array (all items get same settings for now)
@@ -493,7 +488,7 @@ export default function App() {
       schedule: settings?.schedule
     }));
     
-    // Use the same logic as the modal
+    // Use the same logic as the modal - space/workspace will be auto-created if needed
     handleStartAnalysis({ destinations, analysisSettings });
   };
 
@@ -510,18 +505,49 @@ export default function App() {
     const { analysisSettings } = data;
     
     try {
+      // Check if we need to create a space and/or workspace
+      let targetSpaceId = destinations[0]?.spaceId;
+      
+      // If no space exists, create one first
+      if (!targetSpaceId || targetSpaceId === '') {
+        if (spaces.length === 0) {
+          // Create a default space for the user
+          const newSpace = await createSpaceMutation.mutateAsync({
+            name: 'My Captures',
+            description: 'Default space for your captured data'
+          });
+          
+          if (newSpace?.id) {
+            targetSpaceId = newSpace.id;
+            setCurrentSpaceId(newSpace.id);
+            
+            // Update all destinations with the new space
+            destinations = destinations.map(dest => ({
+              ...dest,
+              spaceId: newSpace.id
+            }));
+          }
+        } else {
+          // Use first existing space
+          targetSpaceId = spaces[0].id;
+          destinations = destinations.map(dest => ({
+            ...dest,
+            spaceId: targetSpaceId
+          }));
+        }
+      }
+      
       // Check if any destination has an invalid folderId (workspace) - auto-create one if needed
       const needsAutoWorkspace = destinations.some(dest => !dest.folderId || dest.folderId === '');
       
-      if (needsAutoWorkspace && destinations[0]?.spaceId) {
-        const spaceId = destinations[0].spaceId;
-        const space = spaces.find(p => p.id === spaceId);
+      if (needsAutoWorkspace && targetSpaceId) {
+        const space = spaces.find(p => p.id === targetSpaceId);
         const workspaces = space?.workspaces || space?.folders || [];
         
         // If no workspaces exist, create one automatically
         if (workspaces.length === 0) {
           const newWorkspace = await createWorkspaceMutation.mutateAsync({ 
-            spaceId, 
+            spaceId: targetSpaceId, 
             name: 'My Workspace' 
           });
           
@@ -529,6 +555,7 @@ export default function App() {
             // Update all destinations to use the new workspace
             destinations = destinations.map(dest => ({
               ...dest,
+              spaceId: targetSpaceId,
               folderId: newWorkspace.id
             }));
             
