@@ -30,6 +30,9 @@ export interface ChatMessage {
 }
 
 export function useChatConversations(spaceId: string | null, workspaceId: string | null) {
+  // Don't fetch if workspaceId is a temp ID (workspace not yet created in DB)
+  const isValidWorkspace = !workspaceId || !workspaceId.startsWith('temp-');
+  
   return useQuery<ChatConversation[]>({
     queryKey: ["/api/spaces/" + spaceId + "/chats", { workspaceId }],
     queryFn: async () => {
@@ -40,7 +43,7 @@ export function useChatConversations(spaceId: string | null, workspaceId: string
       if (!res.ok) throw new Error('Failed to fetch chats');
       return res.json();
     },
-    enabled: !!spaceId,
+    enabled: !!spaceId && isValidWorkspace,
     staleTime: 0, // Always refetch to ensure deleted items don't reappear
     refetchOnMount: true,
   });
@@ -67,6 +70,11 @@ export function useCreateChatConversation() {
       insightId?: string;
       workspaceId?: string;
     }) => {
+      // Don't create chat if workspaceId is a temp ID (workspace not yet created in DB)
+      if (workspaceId?.startsWith('temp-')) {
+        throw new Error('Cannot create chat with temporary workspace ID. Please wait for workspace to be created.');
+      }
+      
       const res = await apiRequest("POST", `/api/spaces/${spaceId}/chats`, {
         title: title || 'New Chat',
         insightId: insightId || null,

@@ -25,6 +25,7 @@ import {
 import { SecuritySettings } from './pages/SecuritySettings';
 import { InsightWorkspace } from './pages/InsightWorkspace';
 import { ProjectBrowser, Project } from './components/ProjectBrowser';
+import { EmptyWorkspaceState } from './components/EmptyWorkspaceState';
 import { 
   useSpaces, 
   useCreateSpace, 
@@ -1358,12 +1359,31 @@ export default function App() {
         
         {/* Main Workspace Content */}
         <div className="flex-1 overflow-hidden">
-          <InsightWorkspace
-            onBack={() => handleViewChange('capture')}
-            spaceId={currentSpaceId}
-            insightId={null}
-            workspaceId={activeWorkspaceId}
-          />
+          {(() => {
+            const workspaces = currentSpace?.workspaces || currentSpace?.folders || [];
+            const hasWorkspaces = workspaces.length > 0;
+            
+            if (!hasWorkspaces) {
+              return (
+                <EmptyWorkspaceState 
+                  onCreateWorkspace={() => {
+                    if (currentSpaceId) {
+                      handleCreateWorkspace(currentSpaceId, 'Untitled Workspace');
+                    }
+                  }}
+                />
+              );
+            }
+            
+            return (
+              <InsightWorkspace
+                onBack={() => handleViewChange('capture')}
+                spaceId={currentSpaceId}
+                insightId={null}
+                workspaceId={activeWorkspaceId}
+              />
+            );
+          })()}
         </div>
       </div>
     );
