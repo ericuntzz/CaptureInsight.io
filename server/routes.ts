@@ -1035,8 +1035,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const securityMode = await serverEncryption.getSecurityMode(userId);
+      const spaceId = req.params.spaceId;
       
-      let sheetData = { ...req.body, spaceId: req.params.spaceId, createdBy: userId };
+      let sheetData = { ...req.body, spaceId, createdBy: userId };
       
       // Validate workspaceId exists if provided
       if (sheetData.workspaceId) {
@@ -1045,6 +1046,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.warn(`[Routes] Invalid workspaceId provided: ${sheetData.workspaceId}, setting to null`);
           sheetData.workspaceId = null;
         }
+      }
+      
+      // For link type sheets, the URL might be in the name field
+      // Store it in dataSourceMeta.url for ingestion to find
+      if (sheetData.dataSourceType === 'link' && sheetData.name && isGoogleSheetsUrl(sheetData.name)) {
+        const sourceUrl = sheetData.name;
+        sheetData.dataSourceMeta = {
+          ...sheetData.dataSourceMeta,
+          url: sourceUrl,
+        };
+        console.log(`[Routes] Google Sheets link detected in name: ${sourceUrl}`);
       }
       
       if (securityMode === 0 && sheetData.data !== undefined && sheetData.data !== null) {
@@ -1062,6 +1074,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const sheet = await storage.createSheet(sheetData);
+      
+      // Trigger data ingestion for Google Sheets links (async, non-blocking)
+      const sourceUrl = (sheet.dataSourceMeta as any)?.url;
+      if (sheet.dataSourceType === 'link' && sourceUrl && isGoogleSheetsUrl(sourceUrl)) {
+        console.log(`[Routes] Triggering data ingestion for Google Sheet: ${sheet.id}`);
+        ingestOnCreate(sheet.id, spaceId, sourceUrl)
+          .then(result => {
+            if (result.success) {
+              console.log(`[Routes] Data ingestion completed for sheet ${sheet.id}: ${result.rowCount} rows`);
+            } else {
+              console.warn(`[Routes] Data ingestion failed for sheet ${sheet.id}: ${result.error}`);
+            }
+          })
+          .catch(err => {
+            console.error(`[Routes] Data ingestion error for sheet ${sheet.id}:`, err);
+          });
+      }
+      
       res.status(201).json(sheet);
     } catch (error) {
       console.error("Error creating sheet:", error);
