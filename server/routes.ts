@@ -19,6 +19,7 @@ import {
   embedAndStoreContent,
   reindexSpace,
 } from "./ai/embeddings";
+import { ingestOnCreate, isGoogleSheetsUrl } from "./ai/dataIngestion";
 import { serverEncryption } from "./encryption";
 import { db } from "./db";
 import { userEncryptionKeys, serverEncryptionKeys } from "../shared/schema";
@@ -2010,6 +2011,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dataSourceMeta: {
           captureMode: isLinkOnly ? 'link' : (metadata?.mode || 'tab'),
           sourceUrl: captureSource,
+          url: captureSource,
           timestamp: metadata?.timestamp || Date.now(),
           dimensions: isLinkOnly ? { width: 0, height: 0 } : (metadata?.dimensions || { width: 0, height: 0 })
         },
@@ -2024,6 +2026,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         createdBy: userId
       });
+
+      // Trigger data ingestion for Google Sheets links (async, non-blocking)
+      if (isLinkOnly && sourceUrl && isGoogleSheetsUrl(sourceUrl)) {
+        console.log(`[Routes] Triggering data ingestion for Google Sheet: ${sheet.id}`);
+        ingestOnCreate(sheet.id, targetSpaceId, sourceUrl)
+          .then(result => {
+            if (result.success) {
+              console.log(`[Routes] Data ingestion completed for sheet ${sheet.id}: ${result.rowCount} rows`);
+            } else {
+              console.warn(`[Routes] Data ingestion failed for sheet ${sheet.id}: ${result.error}`);
+            }
+          })
+          .catch(err => {
+            console.error(`[Routes] Data ingestion error for sheet ${sheet.id}:`, err);
+          });
+      }
 
       // Create an insight linked to this capture
       const insight = await storage.createInsight({
