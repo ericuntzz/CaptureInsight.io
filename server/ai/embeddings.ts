@@ -79,7 +79,15 @@ export async function embedAndStoreSheet(
 ): Promise<EmbeddingResult> {
   let content = sheet.name;
   
-  if (sheet.data) {
+  // Prefer cleanedData for RAG - it's structured JSON optimized for AI consumption
+  const sheetWithCleaned = sheet as Sheet & { cleanedData?: { title?: string; description?: string; data: any[] } };
+  if (sheetWithCleaned.cleanedData && sheetWithCleaned.cleanedData.data) {
+    const cleanedStr = JSON.stringify(sheetWithCleaned.cleanedData.data);
+    const title = sheetWithCleaned.cleanedData.title || sheet.name;
+    const description = sheetWithCleaned.cleanedData.description || "";
+    content = `${title}\n${description}\n${cleanedStr.slice(0, 8000)}`;
+  } else if (sheet.data) {
+    // Fallback to raw data if cleanedData not available
     const dataStr = typeof sheet.data === "string" 
       ? sheet.data 
       : JSON.stringify(sheet.data);

@@ -14,6 +14,21 @@ export interface Sheet {
     [key: string]: any;
   } | null;
   data: any;
+  cleanedData: {
+    type: 'tabular' | 'document' | 'metrics' | 'mixed';
+    title?: string;
+    description?: string;
+    data: any[];
+    metadata?: {
+      sourceType: string;
+      columnCount?: number;
+      rowCount?: number;
+      extractedAt: string;
+      aiModel: string;
+    };
+  } | null;
+  cleanedAt: string | null;
+  cleaningStatus: 'pending' | 'processing' | 'completed' | 'failed' | null;
   encryptedData: string | null;
   encryptionIv: string | null;
   encryptionVersion: number | null;

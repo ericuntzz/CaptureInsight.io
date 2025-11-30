@@ -20,6 +20,7 @@ import {
   reindexSpace,
 } from "./ai/embeddings";
 import { ingestOnCreate, isGoogleSheetsUrl } from "./ai/dataIngestion";
+import { triggerDataCleaning } from "./ai/dataCleaning";
 import { serverEncryption } from "./encryption";
 import { db } from "./db";
 import { userEncryptionKeys, serverEncryptionKeys } from "../shared/schema";
@@ -1083,6 +1084,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .then(result => {
             if (result.success) {
               console.log(`[Routes] Data ingestion completed for sheet ${sheet.id}: ${result.rowCount} rows`);
+              // After ingestion, trigger AI data cleaning
+              triggerDataCleaning(sheet.id);
             } else {
               console.warn(`[Routes] Data ingestion failed for sheet ${sheet.id}: ${result.error}`);
             }
@@ -1090,6 +1093,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .catch(err => {
             console.error(`[Routes] Data ingestion error for sheet ${sheet.id}:`, err);
           });
+      } else {
+        // For non-Google Sheets sources, trigger data cleaning directly
+        triggerDataCleaning(sheet.id);
       }
       
       res.status(201).json(sheet);

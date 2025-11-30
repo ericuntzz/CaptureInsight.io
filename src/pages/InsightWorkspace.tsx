@@ -1568,8 +1568,9 @@ function transformSheetToDisplayable(sheet: Sheet): DisplayableSheet {
 
 function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
   void _sources; void _sheetsData; void _onEditData; void _onRemoveSource;
-  const [activeTab, setActiveTab] = useState<'all' | 'screenshots' | 'files' | 'links'>('all');
+  const [viewMode, setViewMode] = useState<'files' | 'data'>('files');
   const [selectedSheetId, setSelectedSheetId] = useState<string | null>(null);
+  const [showRawJson, setShowRawJson] = useState(false);
   
   const displayableSheets = sheets.map(transformSheetToDisplayable);
   
@@ -1581,20 +1582,14 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     }
   }, [displayableSheets.length, selectedSheetId]);
   
-  const filteredSheets = displayableSheets.filter(sheet => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'screenshots') return sheet.type === 'screenshot' || sheet.type === 'capture';
-    if (activeTab === 'files') return sheet.type === 'file';
-    if (activeTab === 'links') return sheet.type === 'link';
-    return true;
-  });
-  
   const selectedSheet = displayableSheets.find(s => s.id === selectedSheetId) || null;
   const originalSheet = sheets.find(s => s.id === selectedSheetId);
+  const cleanedData = originalSheet?.cleanedData as any;
+  const cleaningStatus = (originalSheet as any)?.cleaningStatus || 'pending';
   
   return (
     <div className="flex flex-col h-full bg-[#1E1E1E]">
-      {/* Header with tabs */}
+      {/* Header with Files/Data toggle */}
       <div className="flex-shrink-0 border-b border-[#2A2A2A]">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
@@ -1604,30 +1599,38 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
               {displayableSheets.length}
             </span>
           </div>
-          <button
-            onClick={onToggle}
-            className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
-            title="Collapse Data Sources"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-        
-        {/* Tabs */}
-        <div className="flex border-t border-[#2A2A2A]">
-          {(['all', 'screenshots', 'files', 'links'] as const).map((tab) => (
+          <div className="flex items-center gap-2">
+            {/* Files/Data Toggle */}
+            <div className="flex bg-[#2A2A2A] rounded-lg p-0.5">
+              <button
+                onClick={() => setViewMode('files')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'files'
+                    ? 'bg-[#FF6B35] text-white'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Files
+              </button>
+              <button
+                onClick={() => setViewMode('data')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'data'
+                    ? 'bg-[#FF6B35] text-white'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Data
+              </button>
+            </div>
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                activeTab === tab
-                  ? 'text-[#FF6B35] border-b-2 border-[#FF6B35] bg-[#FF6B35]/5'
-                  : 'text-gray-400 hover:text-white hover:bg-[#252525]'
-              }`}
+              onClick={onToggle}
+              className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+              title="Collapse Data Sources"
             >
-              {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              <ChevronRight className="w-4 h-4" />
             </button>
-          ))}
+          </div>
         </div>
       </div>
       
@@ -1635,13 +1638,15 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       <div className="flex-1 flex overflow-hidden">
         {/* Sources list */}
         <div className="w-1/3 border-r border-[#2A2A2A] overflow-y-auto">
-          {filteredSheets.length === 0 ? (
+          {displayableSheets.length === 0 ? (
             <div className="p-4 text-center">
               <p className="text-gray-500 text-sm">No captures in this workspace</p>
             </div>
           ) : (
-            filteredSheets.map((sheet) => {
+            displayableSheets.map((sheet) => {
               const isSelected = selectedSheetId === sheet.id;
+              const sheetOriginal = sheets.find(s => s.id === sheet.id);
+              const sheetCleaningStatus = (sheetOriginal as any)?.cleaningStatus || 'pending';
               
               return (
                 <div
@@ -1651,11 +1656,25 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                     isSelected ? 'bg-[#FF6B35]/10 border-l-2 border-l-[#FF6B35]' : 'hover:bg-[#252525]'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    {(sheet.type === 'screenshot' || sheet.type === 'capture') && <Image className="w-3.5 h-3.5 text-blue-400" />}
-                    {sheet.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
-                    {sheet.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
-                    <span className="text-xs text-gray-400">{sheet.type}</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      {(sheet.type === 'screenshot' || sheet.type === 'capture') && <Image className="w-3.5 h-3.5 text-blue-400" />}
+                      {sheet.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
+                      {sheet.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
+                      <span className="text-xs text-gray-400">{sheet.type}</span>
+                    </div>
+                    {viewMode === 'data' && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        sheetCleaningStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                        sheetCleaningStatus === 'processing' ? 'bg-amber-500/20 text-amber-400' :
+                        sheetCleaningStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
+                        'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {sheetCleaningStatus === 'completed' ? 'Ready' :
+                         sheetCleaningStatus === 'processing' ? 'Processing' :
+                         sheetCleaningStatus === 'failed' ? 'Failed' : 'Pending'}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-white truncate">{sheet.name}</p>
                   <p className="text-xs text-gray-500 mt-1">{sheet.date}</p>
@@ -1668,75 +1687,224 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         {/* Selected source detail */}
         <div className="flex-1 overflow-y-auto p-4">
           {selectedSheet ? (
-            <div className="space-y-4">
-              {/* Preview image */}
-              {selectedSheet.preview && (
-                <div className="rounded-lg overflow-hidden border border-[#2A2A2A]">
-                  <img 
-                    src={selectedSheet.preview} 
-                    alt={selectedSheet.name}
-                    className="w-full h-48 object-cover"
-                  />
-                </div>
-              )}
-              
-              {/* Source info */}
-              <div>
-                <h3 className="text-lg font-medium text-white mb-2">{selectedSheet.name}</h3>
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  {(selectedSheet.type === 'screenshot' || selectedSheet.type === 'capture') && <Image className="w-3.5 h-3.5 text-blue-400" />}
-                  {selectedSheet.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
-                  {selectedSheet.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
-                  <span className="capitalize">{selectedSheet.type}</span>
-                  <span>•</span>
-                  <span>{selectedSheet.date}</span>
-                  {selectedSheet.rowCount !== null && selectedSheet.rowCount > 0 && (
-                    <>
-                      <span>•</span>
-                      <span>{selectedSheet.rowCount} rows</span>
-                    </>
-                  )}
-                </div>
-              </div>
-              
-              {/* Data preview */}
-              {originalSheet?.data && typeof originalSheet.data === 'object' && (
-                <div className="bg-[#212121] rounded-lg p-4 border border-[#2A2A2A]">
-                  <h4 className="text-sm font-medium text-[#FF6B35] mb-3">Data Preview</h4>
-                  <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto">
-                    {Object.entries(originalSheet.data as Record<string, any>)
-                      .filter(([key]) => !['screenshot', 'screenshotUrl', 'preview'].includes(key))
-                      .slice(0, 10)
-                      .map(([key, value]) => (
-                        <div key={key} className="bg-[#1A1A1A] rounded-lg p-3">
-                          <p className="text-xs text-gray-400 mb-1 truncate">{key}</p>
-                          <p className="text-sm font-medium text-white truncate">
-                            {typeof value === 'object' ? JSON.stringify(value).slice(0, 50) : String(value).slice(0, 50)}
-                          </p>
-                        </div>
-                      ))}
+            viewMode === 'files' ? (
+              /* FILES VIEW - Original raw data display */
+              <div className="space-y-4">
+                {/* Preview image */}
+                {selectedSheet.preview && (
+                  <div className="rounded-lg overflow-hidden border border-[#2A2A2A]">
+                    <img 
+                      src={selectedSheet.preview} 
+                      alt={selectedSheet.name}
+                      className="w-full h-48 object-cover"
+                    />
+                  </div>
+                )}
+                
+                {/* Source info */}
+                <div>
+                  <h3 className="text-lg font-medium text-white mb-2">{selectedSheet.name}</h3>
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    {(selectedSheet.type === 'screenshot' || selectedSheet.type === 'capture') && <Image className="w-3.5 h-3.5 text-blue-400" />}
+                    {selectedSheet.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
+                    {selectedSheet.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
+                    <span className="capitalize">{selectedSheet.type}</span>
+                    <span>•</span>
+                    <span>{selectedSheet.date}</span>
+                    {selectedSheet.rowCount !== null && selectedSheet.rowCount > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>{selectedSheet.rowCount} rows</span>
+                      </>
+                    )}
                   </div>
                 </div>
-              )}
-              
-              {/* Actions */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => toast.info('Edit functionality coming soon!')}
-                  className="flex-1 py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-sm rounded-lg transition-colors"
-                >
-                  Edit Data
-                </button>
-                <button
-                  onClick={() => {
-                    toast.info('Remove functionality coming soon!');
-                  }}
-                  className="py-2 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                
+                {/* Raw data preview */}
+                {originalSheet?.data && typeof originalSheet.data === 'object' && (
+                  <div className="bg-[#212121] rounded-lg p-4 border border-[#2A2A2A]">
+                    <h4 className="text-sm font-medium text-[#FF6B35] mb-3">Raw Data Preview</h4>
+                    <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto">
+                      {Object.entries(originalSheet.data as Record<string, any>)
+                        .filter(([key]) => !['screenshot', 'screenshotUrl', 'preview'].includes(key))
+                        .slice(0, 10)
+                        .map(([key, value]) => (
+                          <div key={key} className="bg-[#1A1A1A] rounded-lg p-3">
+                            <p className="text-xs text-gray-400 mb-1 truncate">{key}</p>
+                            <p className="text-sm font-medium text-white truncate">
+                              {typeof value === 'object' ? JSON.stringify(value).slice(0, 50) : String(value).slice(0, 50)}
+                            </p>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => toast.info('Edit functionality coming soon!')}
+                    className="flex-1 py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-sm rounded-lg transition-colors"
+                  >
+                    Edit Data
+                  </button>
+                  <button
+                    onClick={() => {
+                      toast.info('Remove functionality coming soon!');
+                    }}
+                    className="py-2 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* DATA VIEW - Cleaned JSON data display */
+              <div className="space-y-4">
+                {/* Data header */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-medium text-white">
+                      {cleanedData?.title || selectedSheet.name}
+                    </h3>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      cleaningStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                      cleaningStatus === 'processing' ? 'bg-amber-500/20 text-amber-400' :
+                      cleaningStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
+                      'bg-gray-500/20 text-gray-400'
+                    }`}>
+                      {cleaningStatus === 'completed' ? 'AI Processed' :
+                       cleaningStatus === 'processing' ? 'Processing...' :
+                       cleaningStatus === 'failed' ? 'Processing Failed' : 'Awaiting Processing'}
+                    </span>
+                  </div>
+                  {cleanedData?.description && (
+                    <p className="text-sm text-gray-400">{cleanedData.description}</p>
+                  )}
+                  {cleanedData?.metadata && (
+                    <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                      {cleanedData.metadata.rowCount && <span>{cleanedData.metadata.rowCount} records</span>}
+                      {cleanedData.metadata.columnCount && <span>•</span>}
+                      {cleanedData.metadata.columnCount && <span>{cleanedData.metadata.columnCount} fields</span>}
+                      {cleanedData.metadata.extractedAt && <span>•</span>}
+                      {cleanedData.metadata.extractedAt && (
+                        <span>Processed {new Date(cleanedData.metadata.extractedAt).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {cleaningStatus === 'completed' && cleanedData?.data ? (
+                  <>
+                    {/* View toggle: Table vs Raw JSON */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowRawJson(false)}
+                        className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                          !showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        Table View
+                      </button>
+                      <button
+                        onClick={() => setShowRawJson(true)}
+                        className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                          showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        Raw JSON
+                      </button>
+                      <button
+                        onClick={() => {
+                          const jsonStr = JSON.stringify(cleanedData.data, null, 2);
+                          copyToClipboard(jsonStr);
+                          toast.success('JSON copied to clipboard');
+                        }}
+                        className="ml-auto p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+                        title="Copy JSON"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {showRawJson ? (
+                      /* Raw JSON View */
+                      <div className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden">
+                        <pre className="p-4 text-xs text-gray-300 overflow-auto max-h-[400px] font-mono">
+                          {JSON.stringify(cleanedData.data, null, 2)}
+                        </pre>
+                      </div>
+                    ) : (
+                      /* Table View */
+                      <div className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden">
+                        <div className="overflow-auto max-h-[400px]">
+                          {Array.isArray(cleanedData.data) && cleanedData.data.length > 0 ? (
+                            <table className="w-full text-sm">
+                              <thead className="bg-[#2A2A2A] sticky top-0">
+                                <tr>
+                                  {Object.keys(cleanedData.data[0] || {}).map((key) => (
+                                    <th key={key} className="px-3 py-2 text-left text-xs font-medium text-gray-400 whitespace-nowrap">
+                                      {key}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#2A2A2A]">
+                                {cleanedData.data.slice(0, 50).map((row: any, i: number) => (
+                                  <tr key={i} className="hover:bg-[#2A2A2A]/50">
+                                    {Object.values(row).map((value: any, j: number) => (
+                                      <td key={j} className="px-3 py-2 text-gray-300 whitespace-nowrap max-w-[200px] truncate">
+                                        {value === null ? <span className="text-gray-500 italic">null</span> :
+                                         typeof value === 'object' ? JSON.stringify(value) :
+                                         String(value)}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          ) : (
+                            <div className="p-4 text-center text-gray-500 text-sm">
+                              No tabular data available
+                            </div>
+                          )}
+                        </div>
+                        {Array.isArray(cleanedData.data) && cleanedData.data.length > 50 && (
+                          <div className="px-3 py-2 bg-[#2A2A2A] text-xs text-gray-400 text-center">
+                            Showing 50 of {cleanedData.data.length} records
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : cleaningStatus === 'processing' ? (
+                  <div className="bg-[#212121] rounded-lg p-8 border border-[#2A2A2A] text-center">
+                    <div className="animate-spin w-8 h-8 border-2 border-[#FF6B35] border-t-transparent rounded-full mx-auto mb-3" />
+                    <p className="text-gray-400 text-sm">AI is cleaning and structuring your data...</p>
+                    <p className="text-gray-500 text-xs mt-1">This may take a few moments</p>
+                  </div>
+                ) : cleaningStatus === 'failed' ? (
+                  <div className="bg-[#212121] rounded-lg p-8 border border-red-500/30 text-center">
+                    <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-3">
+                      <X className="w-6 h-6 text-red-400" />
+                    </div>
+                    <p className="text-gray-400 text-sm">Failed to process this data source</p>
+                    <button
+                      onClick={() => toast.info('Retry functionality coming soon!')}
+                      className="mt-3 px-4 py-1.5 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-xs rounded-lg transition-colors"
+                    >
+                      Retry Processing
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-[#212121] rounded-lg p-8 border border-[#2A2A2A] text-center">
+                    <Database className="w-12 h-12 text-[#3A3A3A] mx-auto mb-3" />
+                    <p className="text-gray-400 text-sm">Data processing pending</p>
+                    <p className="text-gray-500 text-xs mt-1">This data will be automatically processed</p>
+                  </div>
+                )}
+              </div>
+            )
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <Database className="w-12 h-12 text-[#3A3A3A] mb-3" />
