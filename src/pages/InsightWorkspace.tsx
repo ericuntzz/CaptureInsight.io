@@ -18,7 +18,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
-import { useInsights, useInsight, useCreateInsight, useUpdateInsight } from '../hooks/useInsights';
+import { useInsights, useInsight, useCreateInsight, useUpdateInsight, useDeleteInsight } from '../hooks/useInsights';
 import { 
   useChatConversations, 
   useCreateChatConversation, 
@@ -467,6 +467,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
   // Mutation hooks for database persistence
   const createInsightMutation = useCreateInsight();
   const updateInsightMutation = useUpdateInsight();
+  const deleteInsightMutation = useDeleteInsight();
   
   // Track the current tab's saved state using a ref (to avoid re-renders)
   const currentTabRef = useRef<{ isSaved: boolean; dbId?: string }>({ isSaved: false });
@@ -834,6 +835,24 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
   
   const handleCloseTab = (tabId: string) => {
     if (openTabs.length <= 1) return;
+    
+    // Find the tab being closed to check if it's saved in DB
+    const tabToClose = openTabs.find(t => t.id === tabId);
+    
+    // If this tab is saved in the database, delete it from the database
+    if (tabToClose?.isSaved && tabToClose?.dbId && spaceId) {
+      deleteInsightMutation.mutate(
+        { id: tabToClose.dbId, spaceId },
+        {
+          onSuccess: () => {
+            toast.success('Insight deleted');
+          },
+          onError: () => {
+            toast.error('Failed to delete insight');
+          }
+        }
+      );
+    }
     
     // Save current content before closing
     const updatedTabs = openTabs.map(t => 
