@@ -255,8 +255,16 @@ export default function App() {
     }
   }, [activeWorkspaceId]);
   
+  // Track temp workspace ID to update when real ID comes back
+  const pendingWorkspaceRef = useRef<string | null>(null);
+  
   // Set activeWorkspaceId to first workspace when spaces/current space changes (if not already set)
   useEffect(() => {
+    // Skip if we have a pending optimistic workspace (don't override temp ID)
+    if (pendingWorkspaceRef.current) return;
+    // Skip if active workspace is a temp ID (waiting for server response)
+    if (activeWorkspaceId?.startsWith('temp-')) return;
+    
     if (!spacesLoading && currentSpace) {
       const workspaces = currentSpace.workspaces || currentSpace.folders || [];
       if (workspaces.length > 0 && (!activeWorkspaceId || !workspaces.find(w => w.id === activeWorkspaceId))) {
@@ -264,9 +272,6 @@ export default function App() {
       }
     }
   }, [currentSpace, spacesLoading, activeWorkspaceId]);
-  
-  // Track temp workspace ID to update when real ID comes back
-  const pendingWorkspaceRef = useRef<string | null>(null);
   
   // Handle workspace creation - switches to new workspace immediately
   const handleCreateWorkspace = async (spaceId: string, name: string) => {

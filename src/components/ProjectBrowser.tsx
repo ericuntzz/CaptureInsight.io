@@ -142,8 +142,9 @@ export function ProjectBrowser({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<{ id: string; name: string } | null>(null);
   
-  // Workspace editing state
-  const [editingWorkspace, setEditingWorkspace] = useState<{ id: string; name: string } | null>(null);
+  // Workspace editing state - separate ID and name to prevent re-render on every keystroke
+  const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [editingWorkspaceName, setEditingWorkspaceName] = useState('');
   const workspaceEditInputRef = useRef<HTMLInputElement>(null);
 
   // Focus input when editing starts
@@ -290,29 +291,32 @@ export function ProjectBrowser({
 
   // Workspace editing handlers
   const handleStartEditWorkspace = (workspaceId: string, currentName: string) => {
-    setEditingWorkspace({ id: workspaceId, name: currentName });
+    setEditingWorkspaceId(workspaceId);
+    setEditingWorkspaceName(currentName);
   };
 
   const handleSaveEditWorkspace = () => {
-    if (editingWorkspace && editingWorkspace.name.trim() && currentSpaceId) {
-      onUpdateFolder(currentSpaceId, editingWorkspace.id, editingWorkspace.name.trim());
-      setEditingWorkspace(null);
-    } else if (editingWorkspace && !editingWorkspace.name.trim()) {
+    if (editingWorkspaceId && editingWorkspaceName.trim() && currentSpaceId) {
+      onUpdateFolder(currentSpaceId, editingWorkspaceId, editingWorkspaceName.trim());
+      setEditingWorkspaceId(null);
+      setEditingWorkspaceName('');
+    } else if (editingWorkspaceId && !editingWorkspaceName.trim()) {
       toast.error('Workspace name cannot be empty');
     }
   };
 
   const handleCancelEditWorkspace = () => {
-    setEditingWorkspace(null);
+    setEditingWorkspaceId(null);
+    setEditingWorkspaceName('');
   };
 
   // Focus workspace edit input when editing starts
   useEffect(() => {
-    if (editingWorkspace && workspaceEditInputRef.current) {
+    if (editingWorkspaceId && workspaceEditInputRef.current) {
       workspaceEditInputRef.current.focus();
       workspaceEditInputRef.current.select();
     }
-  }, [editingWorkspace]);
+  }, [editingWorkspaceId]);
 
   const handleProjectsClick = () => {
     // Clicking projects icon in collapsed mode expands the sidebar
@@ -583,15 +587,15 @@ export function ProjectBrowser({
                       : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
                   }`}
                 >
-                  {editingWorkspace?.id === workspace.id ? (
+                  {editingWorkspaceId === workspace.id ? (
                     // Inline edit mode
                     <div className="flex-1 flex items-center gap-2">
                       <LayoutGrid className="w-4 h-4 flex-shrink-0" />
                       <input
                         ref={workspaceEditInputRef}
                         type="text"
-                        value={editingWorkspace.name}
-                        onChange={(e) => setEditingWorkspace({ ...editingWorkspace, name: e.target.value })}
+                        value={editingWorkspaceName}
+                        onChange={(e) => setEditingWorkspaceName(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
