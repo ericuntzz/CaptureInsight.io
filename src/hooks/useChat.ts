@@ -33,7 +33,8 @@ export interface UseChatReturn {
   clearMessages: () => void;
 }
 
-export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChatReturn {
+export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptions): UseChatReturn {
+  // Note: _insightId is intentionally unused - chat and insight panels are independent
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -111,14 +112,15 @@ export function useChat({ spaceId, insightId, chatId }: UseChatOptions): UseChat
     loadChatHistory(chatId);
   }, [chatId, loadChatHistory]);
 
-  // Reset when spaceId or insightId changes
+  // Reset when spaceId changes (different spaces have different chats)
+  // Note: We don't reset on insightId changes - chat and insights are independent
   useEffect(() => {
     loadedChatIdRef.current = null;
     currentChatIdRef.current = null;
     setMessages([]);
     setError(null);
     setHistoryLoadError(null);
-  }, [insightId, spaceId]);
+  }, [spaceId]);
 
   const persistMessage = useCallback(async (role: 'user' | 'assistant', content: string, citations?: any[]): Promise<boolean> => {
     if (!chatId) return false;
