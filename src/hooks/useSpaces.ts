@@ -153,7 +153,7 @@ export function useFolders(spaceId: string | null) {
 export function useCreateWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ spaceId, name }: { spaceId: string; name: string }) => {
+    mutationFn: async ({ spaceId, name }: { spaceId: string; name: string; onOptimisticId?: (tempId: string) => void }) => {
       const res = await apiRequest("POST", `/api/spaces/${spaceId}/workspaces`, { name });
       return res.json();
     },
@@ -178,6 +178,9 @@ export function useCreateWorkspace() {
         ["/api/spaces/" + variables.spaceId + "/workspaces"],
         (old) => old ? [...old, optimisticWorkspace] : [optimisticWorkspace]
       );
+      
+      // Call callback with temp ID so caller can switch to it immediately
+      variables.onOptimisticId?.(tempId);
       
       return { previousWorkspaces, tempId };
     },

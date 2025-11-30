@@ -265,17 +265,33 @@ export default function App() {
     }
   }, [currentSpace, spacesLoading, activeWorkspaceId]);
   
-  // Handle workspace creation
+  // Track temp workspace ID to update when real ID comes back
+  const pendingWorkspaceRef = useRef<string | null>(null);
+  
+  // Handle workspace creation - switches to new workspace immediately
   const handleCreateWorkspace = async (spaceId: string, name: string) => {
     try {
-      const newWorkspace = await createWorkspaceMutation.mutateAsync({ spaceId, name });
-      // Optionally select the newly created workspace
+      const newWorkspace = await createWorkspaceMutation.mutateAsync({ 
+        spaceId, 
+        name,
+        // Switch to temp ID immediately for instant feedback
+        onOptimisticId: (tempId) => {
+          pendingWorkspaceRef.current = tempId;
+          setActiveWorkspaceId(tempId);
+        }
+      });
+      // Update to real ID when server responds
       if (newWorkspace?.id) {
-        setActiveWorkspaceId(newWorkspace.id);
+        // Only update if we're still on the temp ID (user hasn't switched away)
+        if (pendingWorkspaceRef.current && activeWorkspaceId?.startsWith('temp-')) {
+          setActiveWorkspaceId(newWorkspace.id);
+        }
+        pendingWorkspaceRef.current = null;
       }
     } catch (error) {
       console.error('Error creating workspace:', error);
       toast.error('Failed to create workspace');
+      pendingWorkspaceRef.current = null;
     }
   };
   
