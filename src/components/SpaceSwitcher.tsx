@@ -150,15 +150,13 @@ export function SpaceSwitcher({
             </div>
 
             {/* Add New Space */}
-            <div className="px-3 py-2 border-t border-[rgba(255,107,53,0.1)]">
-              <button
-                onClick={handleCreateSpaceClick}
-                className="w-full text-left text-sm text-[#FF6B35] hover:text-[#FFA07A] transition-colors flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Add a New Space
-              </button>
-            </div>
+            <button
+              onClick={handleCreateSpaceClick}
+              className="w-full px-3 py-2 text-left text-sm text-[#FF6B35] hover:text-[#FFA07A] transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add a New Space
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
