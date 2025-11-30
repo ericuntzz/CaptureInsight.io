@@ -1345,7 +1345,11 @@ export default function App() {
           activeView="workspace"
           onViewChange={handleWorkspaceViewChange}
           onBackToCapture={() => handleViewChange('capture')}
-          externalCollapseControl={true}
+          externalCollapseControl={(() => {
+            const workspaces = currentSpace?.workspaces || currentSpace?.folders || [];
+            // Keep menu expanded when no workspaces, collapse when workspaces exist
+            return workspaces.length > 0;
+          })()}
           user={user}
           onNavigateToSettings={handleNavigateToSettings}
           onLogout={handleLogout}
