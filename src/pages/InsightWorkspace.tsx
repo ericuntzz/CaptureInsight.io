@@ -2227,18 +2227,19 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     }
   };
 
-  // Auto-save effect: triggers 1 second after the last change
+  // Auto-save effect: triggers when user leaves a cell (editingCell becomes null) and there are changes
   useEffect(() => {
-    if (hasTableChanges && editableTableData && selectedSheetId && cleanedData) {
+    // Only trigger save when user has left the cell (editingCell is null) and there are pending changes
+    if (hasTableChanges && editableTableData && selectedSheetId && cleanedData && editingCell === null) {
       // Clear any existing timeout
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
       }
       
-      // Set a new timeout for auto-save (1 second debounce)
+      // Set a short timeout for auto-save (300ms after leaving cell)
       autoSaveTimeoutRef.current = setTimeout(() => {
         performAutoSave();
-      }, 1000);
+      }, 300);
     }
     
     return () => {
@@ -2246,7 +2247,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, [hasTableChanges, editableTableData, selectedSheetId]);
+  }, [hasTableChanges, editableTableData, selectedSheetId, editingCell]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
