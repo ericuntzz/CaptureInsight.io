@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Image,
   FileText,
   Link2,
