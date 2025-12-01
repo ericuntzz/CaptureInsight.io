@@ -34,8 +34,15 @@ Supports Google Sheets import, parsing CSV data, generating text embeddings for 
 **Data Quality Scoring & Validation:**
 Includes a pre-validation layer with a quality score (Confidence, Completeness, Data Richness), failure type classification, user data correction via JSON and inline table editing, and a retry mechanism.
 
-**Data Editing Capabilities:**
--   **Inline Table Editing**: Double-click cells to edit, with keyboard navigation (Enter to save and move down, Tab to move right, Escape to cancel).
+**Data Editing Capabilities (Excel/Google Sheets-like):**
+-   **Single-Click Selection**: Click any cell to select it (highlighted with orange ring).
+-   **Type-to-Edit**: Start typing immediately to replace cell content (no double-click needed).
+-   **Arrow Key Navigation**: Use arrow keys to move between cells when a cell is selected.
+-   **Edit Mode (F2/Enter)**: Press F2 or Enter to edit existing content without replacing it.
+-   **Tab Navigation**: Tab moves right, Shift+Tab moves left, wrapping to next/previous row.
+-   **Enter Navigation**: Enter moves down, Shift+Enter moves up after editing.
+-   **Delete/Backspace**: Clears the selected cell content.
+-   **Escape**: Cancel editing or deselect cell.
 -   **JSON Editing**: Full JSON editor for advanced data modifications.
 -   **Visual Indicators**: Modified cells highlighted with amber indicator, row numbers, zebra striping.
 -   **Unsaved Changes Protection**: Confirmation dialog when switching data sources with pending edits.
