@@ -32,7 +32,15 @@ A hybrid AI architecture leverages Gemini 2.5 Pro/Flash (via Replit AI Integrati
 Supports Google Sheets import, parsing CSV data, generating text embeddings for RAG, and background processing for asynchronous ingestion.
 
 **Data Quality Scoring & Validation:**
-Includes a pre-validation layer with a quality score (Confidence, Completeness, Data Richness), failure type classification, user data correction via JSON editing, and a retry mechanism.
+Includes a pre-validation layer with a quality score (Confidence, Completeness, Data Richness), failure type classification, user data correction via JSON and inline table editing, and a retry mechanism.
+
+**Data Editing Capabilities:**
+-   **Inline Table Editing**: Double-click cells to edit, with keyboard navigation (Enter to save and move down, Tab to move right, Escape to cancel).
+-   **JSON Editing**: Full JSON editor for advanced data modifications.
+-   **Visual Indicators**: Modified cells highlighted with amber indicator, row numbers, zebra striping.
+-   **Unsaved Changes Protection**: Confirmation dialog when switching data sources with pending edits.
+-   **Add/Delete Rows**: Row management with hover-revealed delete buttons and "Add Row" functionality.
+-   **Optimistic Updates**: Changes are immediately visible with automatic rollback on errors.
 
 **Chrome Extension:**
 Manifest V3 React-based extension for capturing content, integrating with the backend for saving captures, and AI analysis.
