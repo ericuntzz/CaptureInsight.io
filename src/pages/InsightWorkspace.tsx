@@ -2624,7 +2624,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
               </div>
             ) : (
               /* DATA VIEW - Cleaned JSON data display */
-              <div className="space-y-4">
+              <div className="h-full flex flex-col gap-4">
                 {/* Data header with quality score */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -2868,14 +2868,14 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                       </div>
                     ) : (
                       /* Table View - Excel/Google Sheets style editing */
-                      <div className="space-y-3">
+                      <div className="flex-1 flex flex-col gap-3 min-h-0">
                         <div 
                           ref={tableContainerRef}
                           tabIndex={0}
                           onKeyDown={handleTableKeyDown}
-                          className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden focus:outline-none"
+                          className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden focus:outline-none flex-1 flex flex-col min-h-0"
                         >
-                          <div className="overflow-auto max-h-[400px] relative">
+                          <div className="overflow-auto flex-1 relative">
                             {editableTableData && editableTableData.length > 0 ? (() => {
                               const columnKeys = Object.keys(editableTableData[0] || {});
                               return (
@@ -2989,7 +2989,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         {editableTableData && editableTableData.length > 0 && (
                           <button
                             onClick={handleAddRow}
-                            className="w-full py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-gray-400 hover:text-white text-xs rounded-lg transition-colors flex items-center justify-center gap-2 border border-dashed border-[#3A3A3A] hover:border-[#FF6B35]/50"
+                            className="shrink-0 w-full py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-gray-400 hover:text-white text-xs rounded-lg transition-colors flex items-center justify-center gap-2 border border-dashed border-[#3A3A3A] hover:border-[#FF6B35]/50"
                           >
                             <Plus className="w-3.5 h-3.5" />
                             Add Row
@@ -2997,8 +2997,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         )}
                         
                         {/* Hint text */}
-                        <p className="text-xs text-gray-500 text-center">
-                          Click to select • Type to edit • Arrow keys to navigate • Ctrl+Z undo • Changes auto-save
+                        <p className="shrink-0 text-xs text-gray-500 text-center">
+                          Click to select • Type to edit • Arrow keys to navigate • Ctrl+Z undo • Drag column edges to resize
                         </p>
                       </div>
                     )}
