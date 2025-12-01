@@ -2649,12 +2649,12 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         {isSourcesListCollapsed && (
           <div 
             onClick={() => setIsSourcesListCollapsed(false)}
-            className="relative flex h-full cursor-pointer group shrink-0 hover:bg-[#4b2e24] transition-colors"
+            className="relative flex h-full cursor-pointer group shrink-0"
             title="Expand sources list"
           >
             {/* Orange indicator lines for each data source - positioned flush left */}
             {displayableSheets.length > 0 && (
-              <div className="w-[6px] h-full flex flex-col justify-center items-center gap-2 py-4 bg-transparent shrink-0 pointer-events-none">
+              <div className="w-[6px] h-full flex flex-col justify-center items-center gap-2 py-4 bg-[#1A1A1A] shrink-0">
                 {displayableSheets.map((sheet) => (
                   <div
                     key={sheet.id}
@@ -2667,9 +2667,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                 ))}
               </div>
             )}
-            {/* Collapse bar */}
-            <div className="w-[14px] min-w-[14px] h-full bg-transparent border-r border-[#2A2A2A] group-hover:border-[#4b2e24] flex items-center justify-center shrink-0 transition-colors">
-              <ChevronRight className="w-3 h-3 text-white transition-colors" />
+            {/* Collapse bar - entire bar turns orange on hover */}
+            <div className="w-[14px] min-w-[14px] h-full bg-[#2A2A2A] border-r border-[#2A2A2A] flex items-center justify-center shrink-0 hover:bg-[#FF6B35] hover:border-[#FF6B35] transition-colors">
+              <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
             </div>
           </div>
         )}
