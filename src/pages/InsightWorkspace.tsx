@@ -2832,6 +2832,11 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                       )}
                     </div>
                   )}
+                  
+                  {/* AI-generated summary description */}
+                  {cleanedData?.description && (
+                    <p className="text-sm text-gray-400 mt-2">{cleanedData.description}</p>
+                  )}
                 </div>
 
                 {cleaningStatus === 'completed' && cleanedData?.data ? (
