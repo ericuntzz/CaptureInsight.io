@@ -14,6 +14,8 @@ import {
   X,
   Presentation,
   GripVertical,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -1574,6 +1576,13 @@ interface CellPosition {
 
 type EditMode = 'replace' | 'edit';
 
+interface CellEdit {
+  rowIndex: number;
+  columnKey: string;
+  previousValue: any;
+  newValue: any;
+}
+
 function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
   void _sources; void _sheetsData; void _onEditData; void _onRemoveSource;
   const [viewMode, setViewMode] = useState<'files' | 'data'>('files');
@@ -1596,6 +1605,16 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const [lastInitializedSheetId, setLastInitializedSheetId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingSheetSwitch, setPendingSheetSwitch] = useState<string | null>(null);
+  
+  // Undo/Redo history
+  const [undoStack, setUndoStack] = useState<CellEdit[]>([]);
+  const [redoStack, setRedoStack] = useState<CellEdit[]>([]);
+  
+  // Column widths for resizing
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null);
+  const resizeStartX = useRef<number>(0);
+  const resizeStartWidth = useRef<number>(0);
   
   const updateCleanedDataMutation = useUpdateSheetCleanedData();
   const retryProcessingMutation = useRetrySheetProcessing();
@@ -1733,6 +1752,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     setModifiedCells(new Set());
     setEditingCell(null);
     setSelectedCell(null);
+    setUndoStack([]);
+    setRedoStack([]);
+    setColumnWidths({});
   }, []);
 
   // Initialize table data when:
@@ -1810,29 +1832,36 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     setEditCellValue(value);
   };
 
-  const commitCellEdit = (rowIndex: number, columnKey: string, newValue: string) => {
+  const parseValue = (value: string): any => {
+    if (value === '') return null;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    if (!isNaN(Number(value)) && value.trim() !== '') return Number(value);
+    return value;
+  };
+
+  const applyEdit = (rowIndex: number, columnKey: string, newValue: any, addToUndo: boolean = true) => {
     if (!editableTableData) return;
     
-    const newData = [...editableTableData];
-    const originalValue = cleanedData?.data?.[rowIndex]?.[columnKey];
-    let parsedValue: any = newValue;
-    
-    if (newValue === '') {
-      parsedValue = null;
-    } else if (newValue === 'true') {
-      parsedValue = true;
-    } else if (newValue === 'false') {
-      parsedValue = false;
-    } else if (!isNaN(Number(newValue)) && newValue.trim() !== '') {
-      parsedValue = Number(newValue);
+    const previousValue = editableTableData[rowIndex]?.[columnKey];
+    if (previousValue === newValue) {
+      setEditingCell(null);
+      return;
     }
     
-    newData[rowIndex] = { ...newData[rowIndex], [columnKey]: parsedValue };
+    const newData = [...editableTableData];
+    newData[rowIndex] = { ...newData[rowIndex], [columnKey]: newValue };
     setEditableTableData(newData);
     
+    if (addToUndo) {
+      setUndoStack(prev => [...prev, { rowIndex, columnKey, previousValue, newValue }]);
+      setRedoStack([]);
+    }
+    
+    const originalValue = cleanedData?.data?.[rowIndex]?.[columnKey];
     const cellKey = `${rowIndex}-${columnKey}`;
     const newModified = new Set(modifiedCells);
-    if (parsedValue !== originalValue) {
+    if (newValue !== originalValue) {
       newModified.add(cellKey);
       setHasTableChanges(true);
     } else {
@@ -1842,26 +1871,100 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       }
     }
     setModifiedCells(newModified);
+  };
+
+  const commitCellEdit = (rowIndex: number, columnKey: string, newValue: string) => {
+    const parsedValue = parseValue(newValue);
+    applyEdit(rowIndex, columnKey, parsedValue);
     setEditingCell(null);
   };
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0 || !editableTableData) return;
+    
+    const lastEdit = undoStack[undoStack.length - 1];
+    const { rowIndex, columnKey, previousValue } = lastEdit;
+    
+    const newData = [...editableTableData];
+    newData[rowIndex] = { ...newData[rowIndex], [columnKey]: previousValue };
+    setEditableTableData(newData);
+    
+    setUndoStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [...prev, lastEdit]);
+    
+    const originalValue = cleanedData?.data?.[rowIndex]?.[columnKey];
+    const cellKey = `${rowIndex}-${columnKey}`;
+    const newModified = new Set(modifiedCells);
+    if (previousValue !== originalValue) {
+      newModified.add(cellKey);
+    } else {
+      newModified.delete(cellKey);
+    }
+    setModifiedCells(newModified);
+    setHasTableChanges(newModified.size > 0);
+  }, [undoStack, editableTableData, cleanedData, modifiedCells]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0 || !editableTableData) return;
+    
+    const nextEdit = redoStack[redoStack.length - 1];
+    const { rowIndex, columnKey, newValue } = nextEdit;
+    
+    const newData = [...editableTableData];
+    newData[rowIndex] = { ...newData[rowIndex], [columnKey]: newValue };
+    setEditableTableData(newData);
+    
+    setRedoStack(prev => prev.slice(0, -1));
+    setUndoStack(prev => [...prev, nextEdit]);
+    
+    const originalValue = cleanedData?.data?.[rowIndex]?.[columnKey];
+    const cellKey = `${rowIndex}-${columnKey}`;
+    const newModified = new Set(modifiedCells);
+    if (newValue !== originalValue) {
+      newModified.add(cellKey);
+    } else {
+      newModified.delete(cellKey);
+    }
+    setModifiedCells(newModified);
+    setHasTableChanges(newModified.size > 0);
+  }, [redoStack, editableTableData, cleanedData, modifiedCells]);
 
   const clearSelectedCell = () => {
     if (!selectedCell || !editableTableData) return;
     const { rowIndex, columnKey } = selectedCell;
-    const newData = [...editableTableData];
-    const originalValue = cleanedData?.data?.[rowIndex]?.[columnKey];
-    
-    newData[rowIndex] = { ...newData[rowIndex], [columnKey]: null };
-    setEditableTableData(newData);
-    
-    const cellKey = `${rowIndex}-${columnKey}`;
-    const newModified = new Set(modifiedCells);
-    if (originalValue !== null) {
-      newModified.add(cellKey);
-      setHasTableChanges(true);
-    }
-    setModifiedCells(newModified);
+    applyEdit(rowIndex, columnKey, null);
   };
+
+  // Column resize handlers
+  const handleResizeStart = (e: React.MouseEvent, columnKey: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizingColumn(columnKey);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = columnWidths[columnKey] || 150;
+  };
+
+  useEffect(() => {
+    if (!resizingColumn) return;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      const diff = e.clientX - resizeStartX.current;
+      const newWidth = Math.max(60, Math.min(500, resizeStartWidth.current + diff));
+      setColumnWidths(prev => ({ ...prev, [resizingColumn]: newWidth }));
+    };
+    
+    const handleMouseUp = () => {
+      setResizingColumn(null);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingColumn]);
 
   const navigateCell = (direction: 'up' | 'down' | 'left' | 'right') => {
     if (!selectedCell || !editableTableData) return;
@@ -1891,6 +1994,22 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   };
 
   const handleTableKeyDown = (e: React.KeyboardEvent) => {
+    // Handle Ctrl+Z and Ctrl+Y globally (even without selection)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        handleRedo();
+      } else {
+        handleUndo();
+      }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+      e.preventDefault();
+      handleRedo();
+      return;
+    }
+    
     if (!selectedCell || !editableTableData) return;
     const columnKeys = getColumnKeys();
     const { rowIndex, columnKey } = selectedCell;
@@ -2390,6 +2509,37 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                       >
                         Edit Data
                       </button>
+                      
+                      {/* Undo/Redo buttons - only show when there are changes */}
+                      {(undoStack.length > 0 || redoStack.length > 0) && (
+                        <div className="flex items-center gap-1 ml-2 border-l border-[#2A2A2A] pl-2">
+                          <button
+                            onClick={handleUndo}
+                            disabled={undoStack.length === 0}
+                            className={`p-1.5 rounded transition-colors ${
+                              undoStack.length > 0 
+                                ? 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]' 
+                                : 'text-gray-600 cursor-not-allowed'
+                            }`}
+                            title={`Undo (Ctrl+Z)${undoStack.length > 0 ? ` - ${undoStack.length} change${undoStack.length > 1 ? 's' : ''}` : ''}`}
+                          >
+                            <Undo2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={handleRedo}
+                            disabled={redoStack.length === 0}
+                            className={`p-1.5 rounded transition-colors ${
+                              redoStack.length > 0 
+                                ? 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]' 
+                                : 'text-gray-600 cursor-not-allowed'
+                            }`}
+                            title={`Redo (Ctrl+Y)${redoStack.length > 0 ? ` - ${redoStack.length} change${redoStack.length > 1 ? 's' : ''}` : ''}`}
+                          >
+                            <Redo2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                      
                       <button
                         onClick={() => {
                           const jsonStr = JSON.stringify(cleanedData.data, null, 2);
@@ -2455,24 +2605,39 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                           ref={tableContainerRef}
                           tabIndex={0}
                           onKeyDown={handleTableKeyDown}
-                          className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                          className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden focus:outline-none"
                         >
-                          <div className="overflow-auto max-h-[400px]">
+                          <div className="overflow-auto max-h-[400px] relative">
                             {editableTableData && editableTableData.length > 0 ? (() => {
                               const columnKeys = Object.keys(editableTableData[0] || {});
                               return (
-                                <table className="w-full text-sm">
-                                  <thead className="bg-[#252525] sticky top-0 z-10">
-                                    <tr>
-                                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 whitespace-nowrap w-12 border-r border-[#2A2A2A]">
+                                <table className="w-full text-sm table-fixed">
+                                  <colgroup>
+                                    <col style={{ width: '48px' }} />
+                                    {columnKeys.map((key) => (
+                                      <col key={key} style={{ width: columnWidths[key] || 150 }} />
+                                    ))}
+                                    <col style={{ width: '40px' }} />
+                                  </colgroup>
+                                  <thead className="sticky top-0 z-20">
+                                    <tr className="bg-[#252525]">
+                                      <th className="px-3 h-9 text-center text-xs font-semibold text-gray-500 whitespace-nowrap border-r border-b border-[#2A2A2A] bg-[#252525]">
                                         #
                                       </th>
                                       {columnKeys.map((key) => (
-                                        <th key={key} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-300 whitespace-nowrap">
-                                          {key}
+                                        <th 
+                                          key={key} 
+                                          className="h-9 text-left text-xs font-semibold text-gray-300 whitespace-nowrap border-b border-[#2A2A2A] bg-[#252525] relative group"
+                                          style={{ width: columnWidths[key] || 150 }}
+                                        >
+                                          <div className="px-3 truncate">{key}</div>
+                                          <div 
+                                            className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#FF6B35] bg-transparent group-hover:bg-[#3A3A3A] transition-colors"
+                                            onMouseDown={(e) => handleResizeStart(e, key)}
+                                          />
                                         </th>
                                       ))}
-                                      <th className="px-2 py-2.5 text-center text-xs font-semibold text-gray-500 whitespace-nowrap w-10">
+                                      <th className="h-9 text-center text-xs font-semibold text-gray-500 whitespace-nowrap border-b border-[#2A2A2A] bg-[#252525]">
                                       </th>
                                     </tr>
                                   </thead>
@@ -2480,28 +2645,25 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                     {editableTableData.slice(0, 50).map((row: any, rowIndex: number) => (
                                       <tr 
                                         key={rowIndex} 
-                                        className={`group ${rowIndex % 2 === 1 ? 'bg-[#1A1A1A]' : ''} transition-colors`}
+                                        className={`group ${rowIndex % 2 === 1 ? 'bg-[#1A1A1A]' : 'bg-[#212121]'}`}
                                       >
-                                        <td className="px-3 py-2.5 text-center text-xs text-gray-500 font-mono border-r border-[#2A2A2A] bg-[#1E1E1E]">
+                                        <td className="px-3 h-9 text-center text-xs text-gray-500 font-mono border-r border-[#2A2A2A] bg-[#1E1E1E]">
                                           {rowIndex + 1}
                                         </td>
                                         {columnKeys.map((columnKey) => {
                                           const value = row[columnKey];
                                           const isSelectedCell = selectedCell?.rowIndex === rowIndex && selectedCell?.columnKey === columnKey;
                                           const isEditingThisCell = editingCell?.rowIndex === rowIndex && editingCell?.columnKey === columnKey;
-                                          const cellKey = `${rowIndex}-${columnKey}`;
-                                          const isModified = modifiedCells.has(cellKey);
                                           
                                           return (
                                             <td 
                                               key={columnKey} 
-                                              className={`px-3 py-2.5 text-gray-300 whitespace-nowrap max-w-[200px] cursor-cell transition-all relative select-none ${
-                                                isModified ? 'bg-amber-500/10' : ''
-                                              } ${isEditingThisCell ? 'p-0' : ''} ${
-                                                isSelectedCell && !isEditingThisCell 
-                                                  ? 'ring-2 ring-[#FF6B35] ring-inset bg-[#FF6B35]/10' 
-                                                  : 'hover:bg-[#2A2A2A]/50'
+                                              className={`h-9 text-gray-300 cursor-cell relative select-none overflow-hidden ${
+                                                isSelectedCell 
+                                                  ? 'outline outline-2 outline-[#FF6B35] outline-offset-[-2px]' 
+                                                  : 'hover:bg-[#2A2A2A]/30'
                                               }`}
+                                              style={{ width: columnWidths[columnKey] || 150 }}
                                               onClick={(e) => !isEditingThisCell && handleCellClick(e, rowIndex, columnKey)}
                                               onDoubleClick={() => !isEditingThisCell && handleCellDoubleClick(rowIndex, columnKey, value)}
                                             >
@@ -2513,23 +2675,22 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                                   onChange={(e) => handleCellChange(e.target.value)}
                                                   onBlur={() => commitCellEdit(rowIndex, columnKey, editCellValue)}
                                                   onKeyDown={(e) => handleCellInputKeyDown(e, rowIndex, columnKey)}
-                                                  className="w-full h-full px-3 py-2.5 bg-[#FF6B35]/20 text-white outline-none ring-2 ring-[#FF6B35] text-sm"
+                                                  className="absolute inset-0 w-full h-full px-3 bg-transparent text-white outline outline-2 outline-[#FF6B35] text-sm"
                                                   autoFocus
                                                 />
                                               ) : (
-                                                <span className="truncate block">
-                                                  {value === null ? <span className="text-gray-500 italic">null</span> :
-                                                   typeof value === 'object' ? JSON.stringify(value) :
-                                                   String(value)}
-                                                </span>
-                                              )}
-                                              {isModified && !isEditingThisCell && (
-                                                <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400" title="Modified" />
+                                                <div className="px-3 h-full flex items-center">
+                                                  <span className="truncate">
+                                                    {value === null ? <span className="text-gray-500 italic">null</span> :
+                                                     typeof value === 'object' ? JSON.stringify(value) :
+                                                     String(value)}
+                                                  </span>
+                                                </div>
                                               )}
                                             </td>
                                           );
                                         })}
-                                        <td className="px-2 py-2.5 text-center">
+                                        <td className="h-9 text-center">
                                           <button
                                             onClick={() => handleDeleteRow(rowIndex)}
                                             className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
@@ -2588,7 +2749,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         
                         {/* Hint text */}
                         <p className="text-xs text-gray-500 text-center">
-                          Click to select • Type to edit • Arrow keys to navigate • Enter/F2 to edit in-place • Del to clear • Esc to deselect
+                          Click to select • Type to edit • Arrow keys to navigate • Ctrl+Z undo • Drag column edges to resize
                         </p>
                       </div>
                     )}
