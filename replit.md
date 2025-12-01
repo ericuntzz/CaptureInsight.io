@@ -35,7 +35,7 @@ Supports Google Sheets import, parsing CSV data, generating text embeddings for 
 Includes a pre-validation layer with a quality score (Confidence, Completeness, Data Richness), failure type classification, user data correction via JSON and inline table editing, and a retry mechanism.
 
 **Data Editing Capabilities (Excel/Google Sheets-like):**
--   **Single-Click Selection**: Click any cell to select it (highlighted with orange ring).
+-   **Single-Click Selection**: Click any cell to select it (subtle border-only highlight, no background fill).
 -   **Type-to-Edit**: Start typing immediately to replace cell content (no double-click needed).
 -   **Arrow Key Navigation**: Use arrow keys to move between cells when a cell is selected.
 -   **Edit Mode (F2/Enter)**: Press F2 or Enter to edit existing content without replacing it.
@@ -43,8 +43,13 @@ Includes a pre-validation layer with a quality score (Confidence, Completeness, 
 -   **Enter Navigation**: Enter moves down, Shift+Enter moves up after editing.
 -   **Delete/Backspace**: Clears the selected cell content.
 -   **Escape**: Cancel editing or deselect cell.
+-   **Undo/Redo**: Ctrl+Z to undo, Ctrl+Y or Ctrl+Shift+Z to redo. Unlimited undo history per session.
+-   **Undo/Redo Buttons**: Visible arrow buttons appear next to "Edit Data" when changes are made.
+-   **Column Resizing**: Drag column header edges to resize columns (60px-500px range).
+-   **Stable Cell Size**: Cells maintain consistent height during editing (no size jumps).
+-   **Sticky Header**: Column headers stay visible with solid background when scrolling.
 -   **JSON Editing**: Full JSON editor for advanced data modifications.
--   **Visual Indicators**: Modified cells highlighted with amber indicator, row numbers, zebra striping.
+-   **Visual Indicators**: Row numbers and zebra striping for easy navigation.
 -   **Unsaved Changes Protection**: Confirmation dialog when switching data sources with pending edits.
 -   **Add/Delete Rows**: Row management with hover-revealed delete buttons and "Add Row" functionality.
 -   **Optimistic Updates**: Changes are immediately visible with automatic rollback on errors.
