@@ -2763,10 +2763,101 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
             ) : (
               /* DATA VIEW - Cleaned JSON data display */
               <div className="h-full flex flex-col gap-4">
-                {/* Data header with quality score */}
+                {/* Data header with all controls in one row */}
                 <div>
-                  <div className="flex items-center justify-end gap-2">
-                    {/* Quality Score Badge */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Left side: View toggle buttons */}
+                    {cleaningStatus === 'completed' && cleanedData?.data && (
+                      <>
+                        <button
+                          onClick={() => { setShowRawJson(false); setIsEditing(false); }}
+                          className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                            !showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Table View
+                        </button>
+                        <button
+                          onClick={() => { 
+                            setShowRawJson(true); 
+                            setIsEditing(true);
+                            setEditedJson(JSON.stringify(cleanedData?.data || [], null, 2));
+                            setJsonError(null);
+                          }}
+                          className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                            showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Raw JSON
+                        </button>
+                        
+                        {/* Auto-save status indicator */}
+                        {autoSaveStatus !== 'idle' && (
+                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                            {autoSaveStatus === 'saving' ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF6B35]" />
+                                <span>Saving...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                                <Check className="w-3 h-3 text-emerald-400 -ml-2.5 mt-0.5" />
+                                <span className="text-emerald-400">Saved</span>
+                              </>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Undo/Redo buttons */}
+                        {(undoStack.length > 0 || redoStack.length > 0) && (
+                          <div className="flex items-center gap-1 border-l border-[#2A2A2A] pl-2">
+                            <button
+                              onClick={handleUndo}
+                              disabled={undoStack.length === 0}
+                              className={`p-1 rounded transition-colors ${
+                                undoStack.length > 0 
+                                  ? 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]' 
+                                  : 'text-gray-600 cursor-not-allowed'
+                              }`}
+                              title={`Undo (Ctrl+Z)${undoStack.length > 0 ? ` - ${undoStack.length} change${undoStack.length > 1 ? 's' : ''}` : ''}`}
+                            >
+                              <Undo2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={handleRedo}
+                              disabled={redoStack.length === 0}
+                              className={`p-1 rounded transition-colors ${
+                                redoStack.length > 0 
+                                  ? 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]' 
+                                  : 'text-gray-600 cursor-not-allowed'
+                              }`}
+                              title={`Redo (Ctrl+Y)${redoStack.length > 0 ? ` - ${redoStack.length} change${redoStack.length > 1 ? 's' : ''}` : ''}`}
+                            >
+                              <Redo2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                        
+                        {/* Copy button */}
+                        <button
+                          onClick={() => {
+                            const jsonStr = JSON.stringify(cleanedData.data, null, 2);
+                            copyToClipboard(jsonStr);
+                            toast.success('JSON copied to clipboard');
+                          }}
+                          className="p-1 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+                          title="Copy JSON"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                    
+                    {/* Spacer to push right side items to the end */}
+                    <div className="flex-1" />
+                    
+                    {/* Right side: Quality Score and Processed status */}
                     {cleaningStatus === 'completed' && qualityScore !== null && (
                       <button
                         onClick={() => setShowQualityDetails(!showQualityDetails)}
@@ -2850,99 +2941,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                       )}
                     </div>
                   )}
-                  
-                  {/* AI-generated summary description */}
-                  {cleanedData?.description && (
-                    <p className="text-sm text-gray-400 mt-2">{cleanedData.description}</p>
-                  )}
                 </div>
 
                 {cleaningStatus === 'completed' && cleanedData?.data ? (
                   <>
-                    {/* View toggle: Table vs Raw JSON */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => { setShowRawJson(false); setIsEditing(false); }}
-                        className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                          !showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        Table View
-                      </button>
-                      <button
-                        onClick={() => { 
-                          setShowRawJson(true); 
-                          setIsEditing(true);
-                          setEditedJson(JSON.stringify(cleanedData?.data || [], null, 2));
-                          setJsonError(null);
-                        }}
-                        className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                          showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        Raw JSON
-                      </button>
-                      
-                      {/* Auto-save status indicator */}
-                      {autoSaveStatus !== 'idle' && (
-                        <div className="flex items-center gap-1.5 text-xs text-gray-400 ml-2">
-                          {autoSaveStatus === 'saving' ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF6B35]" />
-                              <span>Saving...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Cloud className="w-3.5 h-3.5 text-emerald-400" />
-                              <Check className="w-3 h-3 text-emerald-400 -ml-2.5 mt-0.5" />
-                              <span className="text-emerald-400">Saved</span>
-                            </>
-                          )}
-                        </div>
-                      )}
-                      
-                      {/* Undo/Redo buttons - only show when there are changes */}
-                      {(undoStack.length > 0 || redoStack.length > 0) && (
-                        <div className="flex items-center gap-1 ml-2 border-l border-[#2A2A2A] pl-2">
-                          <button
-                            onClick={handleUndo}
-                            disabled={undoStack.length === 0}
-                            className={`p-1.5 rounded transition-colors ${
-                              undoStack.length > 0 
-                                ? 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]' 
-                                : 'text-gray-600 cursor-not-allowed'
-                            }`}
-                            title={`Undo (Ctrl+Z)${undoStack.length > 0 ? ` - ${undoStack.length} change${undoStack.length > 1 ? 's' : ''}` : ''}`}
-                          >
-                            <Undo2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={handleRedo}
-                            disabled={redoStack.length === 0}
-                            className={`p-1.5 rounded transition-colors ${
-                              redoStack.length > 0 
-                                ? 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]' 
-                                : 'text-gray-600 cursor-not-allowed'
-                            }`}
-                            title={`Redo (Ctrl+Y)${redoStack.length > 0 ? ` - ${redoStack.length} change${redoStack.length > 1 ? 's' : ''}` : ''}`}
-                          >
-                            <Redo2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                      
-                      <button
-                        onClick={() => {
-                          const jsonStr = JSON.stringify(cleanedData.data, null, 2);
-                          copyToClipboard(jsonStr);
-                          toast.success('JSON copied to clipboard');
-                        }}
-                        className="ml-auto p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
-                        title="Copy JSON"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                    </div>
 
                     {isEditing ? (
                       /* Edit JSON View - Auto-saves like table view */
