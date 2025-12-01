@@ -32,7 +32,6 @@ import {
 } from '../hooks/useChatConversations';
 import { useWorkspaceSheets, useUpdateSheetCleanedData, useRetrySheetProcessing, type Sheet } from '../hooks/useSheets';
 import { useUpdateSheet, useDeleteSheet } from '../hooks/useSpaces';
-import { ChevronDown } from 'lucide-react';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
 import {
@@ -1594,6 +1593,7 @@ interface CellEdit {
 
 const DATA_SOURCES_VIEW_MODE_KEY = 'captureinsight_data_sources_view_mode';
 const SELECTED_SHEET_KEY = 'captureinsight_selected_sheet_id';
+const SOURCES_LIST_COLLAPSED_KEY = 'captureinsight_sources_list_collapsed';
 
 function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
   void _sources; void _sheetsData; void _onEditData; void _onRemoveSource;
@@ -1612,6 +1612,13 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     const saved = localStorage.getItem(SELECTED_SHEET_KEY);
     return saved || null;
   });
+  
+  // Sources list sidebar collapsed state - auto-collapse when a sheet is selected
+  const [isSourcesListCollapsed, setIsSourcesListCollapsed] = useState(() => {
+    const saved = localStorage.getItem(SOURCES_LIST_COLLAPSED_KEY);
+    return saved === 'true';
+  });
+  
   const [showRawJson, setShowRawJson] = useState(false);
   const [showQualityDetails, setShowQualityDetails] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -1671,6 +1678,11 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       localStorage.setItem(SELECTED_SHEET_KEY, selectedSheetId);
     }
   }, [selectedSheetId]);
+  
+  // Persist sources list collapsed state
+  useEffect(() => {
+    localStorage.setItem(SOURCES_LIST_COLLAPSED_KEY, String(isSourcesListCollapsed));
+  }, [isSourcesListCollapsed]);
   
   useEffect(() => {
     if (displayableSheets.length > 0) {
@@ -1733,14 +1745,18 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
 
   // Handle sheet selection with unsaved changes protection
   const handleSelectSheet = (sheetId: string) => {
-    if (sheetId === selectedSheetId) return;
+    if (sheetId === selectedSheetId) {
+      // If clicking same sheet, just toggle collapse
+      return;
+    }
     
     if (hasTableChanges) {
       // Store pending switch and show confirmation
       setPendingSheetSwitch(sheetId);
     } else {
-      // No unsaved changes, switch immediately
+      // No unsaved changes, switch immediately and auto-collapse sidebar
       setSelectedSheetId(sheetId);
+      setIsSourcesListCollapsed(true);
     }
   };
 
@@ -1751,6 +1767,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       setEditingCell(null);
       setSelectedCell(null);
       setSelectedSheetId(pendingSheetSwitch);
+      setIsSourcesListCollapsed(true);
       setPendingSheetSwitch(null);
     }
   };
@@ -2518,13 +2535,31 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       
       {/* Content area - split view */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sources list */}
-        <div className="w-1/3 border-r border-[#2A2A2A] overflow-y-auto">
-          {displayableSheets.length === 0 ? (
-            <div className="p-4 text-center">
-              <p className="text-gray-500 text-sm">No captures in this workspace</p>
-            </div>
-          ) : (
+        {/* Sources list - collapsible sidebar */}
+        <div 
+          className={`border-r border-[#2A2A2A] flex flex-col transition-all duration-200 ${
+            isSourcesListCollapsed ? 'w-0 min-w-0 opacity-0 overflow-hidden' : 'w-1/3 min-w-[180px]'
+          }`}
+        >
+          {/* Sources list header with collapse button */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-[#2A2A2A] bg-[#1A1A1A] shrink-0">
+            <span className="text-xs font-medium text-gray-400">Sources</span>
+            <button
+              onClick={() => setIsSourcesListCollapsed(true)}
+              className="p-1 text-gray-500 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+              title="Collapse sources list"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          
+          {/* Sources list content */}
+          <div className="flex-1 overflow-y-auto">
+            {displayableSheets.length === 0 ? (
+              <div className="p-4 text-center">
+                <p className="text-gray-500 text-sm">No captures in this workspace</p>
+              </div>
+            ) : (
             displayableSheets.map((sheet) => {
               const isSelected = selectedSheetId === sheet.id;
               const sheetOriginal = sheets.find(s => s.id === sheet.id);
@@ -2599,10 +2634,22 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
               );
             })
           )}
+          </div>
         </div>
         
         {/* Selected source detail */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 relative">
+          {/* Toggle button to show/hide sources list */}
+          {isSourcesListCollapsed && (
+            <button
+              onClick={() => setIsSourcesListCollapsed(false)}
+              className="absolute top-2 left-2 z-10 p-1.5 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-gray-400 hover:text-white rounded-md transition-all shadow-lg border border-[#3A3A3A]"
+              title="Show sources list"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+          
           {selectedSheet ? (
             viewMode === 'files' ? (
               /* FILES VIEW - Original raw data display */
