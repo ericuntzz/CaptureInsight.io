@@ -399,7 +399,8 @@ export default function App() {
         id: link.id,
         type: 'link',
         name: link.name,
-        timestamp: link.timestamp
+        timestamp: link.timestamp,
+        url: link.url
       });
     });
     
@@ -625,7 +626,7 @@ export default function App() {
         const dest = destinations[index];
         const settings = analysisSettings[index];
         
-        console.log('[Capture Flow] Creating sheet:', item.name, 'in workspace:', dest.folderId);
+        console.log('[Capture Flow] Creating sheet:', item.name, 'in workspace:', dest.folderId, item.type === 'link' ? `URL: ${item.url}` : '');
         
         await createSheetMutation.mutateAsync({
           spaceId: dest.spaceId,
@@ -636,6 +637,7 @@ export default function App() {
             analysisType: settings?.analysisType,
             llmProvider: settings?.llmProvider,
             schedule: settings?.schedule,
+            url: item.url,
           },
         });
       }

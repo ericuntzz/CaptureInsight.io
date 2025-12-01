@@ -32,6 +32,7 @@ interface CaptureItem {
   name: string;
   timestamp: Date;
   preview?: string;
+  url?: string;
 }
 
 interface AssignmentSettings {
