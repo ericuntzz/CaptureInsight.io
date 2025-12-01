@@ -2633,31 +2633,28 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
 
                 {cleaningStatus === 'completed' && cleanedData?.data ? (
                   <>
-                    {/* View toggle: Table vs Raw JSON + Edit */}
+                    {/* View toggle: Table vs Raw JSON */}
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => { setShowRawJson(false); setIsEditing(false); }}
                         className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                          !showRawJson && !isEditing ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
+                          !showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
                         }`}
                       >
                         Table View
                       </button>
                       <button
-                        onClick={() => { setShowRawJson(true); setIsEditing(false); }}
+                        onClick={() => { 
+                          setShowRawJson(true); 
+                          setIsEditing(true);
+                          setEditedJson(JSON.stringify(cleanedData?.data || [], null, 2));
+                          setJsonError(null);
+                        }}
                         className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                          showRawJson && !isEditing ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
+                          showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
                         }`}
                       >
                         Raw JSON
-                      </button>
-                      <button
-                        onClick={handleStartEdit}
-                        className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                          isEditing ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        Edit Data
                       </button>
                       
                       {/* Undo/Redo buttons - only show when there are changes */}
@@ -2740,13 +2737,6 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                             Cancel
                           </button>
                         </div>
-                      </div>
-                    ) : showRawJson ? (
-                      /* Raw JSON View */
-                      <div className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden">
-                        <pre className="p-4 text-xs text-gray-300 overflow-auto max-h-[400px] font-mono">
-                          {JSON.stringify(cleanedData.data, null, 2)}
-                        </pre>
                       </div>
                     ) : (
                       /* Table View - Excel/Google Sheets style editing */
