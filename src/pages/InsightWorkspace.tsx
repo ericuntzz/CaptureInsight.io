@@ -2507,14 +2507,21 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       {/* Header with Files/Data toggle */}
       <div className="flex-shrink-0 border-b border-[#2A2A2A]">
         <div className="flex items-center justify-between px-4 py-3">
-          <button
-            onClick={onAddData}
-            className="p-1.5 bg-[#FF6B35] hover:bg-[#E55A2B] text-white rounded-lg transition-colors"
-            title="Add data source"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <button
+              onClick={onAddData}
+              className="p-1.5 bg-[#FF6B35] hover:bg-[#E55A2B] text-white rounded-lg transition-colors shrink-0"
+              title="Add data source"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            {selectedSheet && (
+              <h3 className="text-sm font-medium text-white truncate">
+                {cleanedData?.title || selectedSheet.name}
+              </h3>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             {/* Files/Data Toggle */}
             <div className="flex bg-[#2A2A2A] rounded-lg p-0.5">
               <button
@@ -2740,60 +2747,37 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
               <div className="h-full flex flex-col gap-4">
                 {/* Data header with quality score */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    {/* Editable title on double-click */}
-                    {editingSheetTitleId === selectedSheetId ? (
-                      <input
-                        ref={sheetTitleInputRef}
-                        type="text"
-                        value={editingSheetTitleValue}
-                        onChange={(e) => setEditingSheetTitleValue(e.target.value)}
-                        onBlur={() => handleSheetTitleSave(selectedSheetId!)}
-                        onKeyDown={(e) => handleSheetTitleKeyDown(e, selectedSheetId!)}
-                        className="text-lg font-medium text-white bg-[#2A2A2A] border border-[#FF6B35] rounded px-2 py-1 outline-none flex-1 mr-2"
-                        autoFocus
-                      />
-                    ) : (
-                      <h3 
-                        className="text-lg font-medium text-white cursor-text hover:text-[#FF6B35] transition-colors"
-                        onDoubleClick={(e) => handleSheetTitleDoubleClick(e, selectedSheetId!)}
-                        title="Double-click to edit title"
+                  <div className="flex items-center justify-end gap-2">
+                    {/* Quality Score Badge */}
+                    {cleaningStatus === 'completed' && qualityScore !== null && (
+                      <button
+                        onClick={() => setShowQualityDetails(!showQualityDetails)}
+                        className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded cursor-pointer transition-colors ${getQualityBgColor(qualityScore)} ${getQualityColor(qualityScore)} hover:opacity-80`}
+                        title="Click to see quality details"
                       >
-                        {cleanedData?.title || selectedSheet.name}
-                      </h3>
+                        <span className="font-semibold">{qualityScore}%</span>
+                        <span>Quality</span>
+                        <ChevronDown className={`w-3 h-3 transition-transform ${showQualityDetails ? 'rotate-180' : ''}`} />
+                      </button>
                     )}
-                    <div className="flex items-center gap-2">
-                      {/* Quality Score Badge */}
-                      {cleaningStatus === 'completed' && qualityScore !== null && (
-                        <button
-                          onClick={() => setShowQualityDetails(!showQualityDetails)}
-                          className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded cursor-pointer transition-colors ${getQualityBgColor(qualityScore)} ${getQualityColor(qualityScore)} hover:opacity-80`}
-                          title="Click to see quality details"
-                        >
-                          <span className="font-semibold">{qualityScore}%</span>
-                          <span>Quality</span>
-                          <ChevronDown className={`w-3 h-3 transition-transform ${showQualityDetails ? 'rotate-180' : ''}`} />
-                        </button>
-                      )}
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        cleaningStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
-                        cleaningStatus === 'processing' ? 'bg-amber-500/20 text-amber-400' :
-                        cleaningStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
-                        'bg-gray-500/20 text-gray-400'
-                      }`}>
-                        {cleaningStatus === 'completed' 
-                          ? cleanedData?.metadata?.extractedAt 
-                            ? `Processed ${new Date(cleanedData.metadata.extractedAt).toLocaleDateString()}`
-                            : 'AI Processed'
-                          : cleaningStatus === 'processing' ? 'Processing...' :
-                            cleaningStatus === 'failed' ? 'Processing Failed' : 'Awaiting Processing'}
-                      </span>
-                    </div>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      cleaningStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                      cleaningStatus === 'processing' ? 'bg-amber-500/20 text-amber-400' :
+                      cleaningStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
+                      'bg-gray-500/20 text-gray-400'
+                    }`}>
+                      {cleaningStatus === 'completed' 
+                        ? cleanedData?.metadata?.extractedAt 
+                          ? `Processed ${new Date(cleanedData.metadata.extractedAt).toLocaleDateString()}`
+                          : 'AI Processed'
+                        : cleaningStatus === 'processing' ? 'Processing...' :
+                          cleaningStatus === 'failed' ? 'Processing Failed' : 'Awaiting Processing'}
+                    </span>
                   </div>
                   
                   {/* Expandable Quality Details Panel */}
                   {showQualityDetails && qualityDetails && (
-                    <div className="bg-[#212121] rounded-lg p-4 border border-[#2A2A2A] mb-3 animate-in slide-in-from-top-2">
+                    <div className="bg-[#212121] rounded-lg p-4 border border-[#2A2A2A] mt-3 animate-in slide-in-from-top-2">
                       <h4 className="text-sm font-medium text-white mb-3">Quality Breakdown</h4>
                       <div className="grid grid-cols-3 gap-4 mb-3">
                         <div className="text-center">
@@ -2847,10 +2831,6 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         </div>
                       )}
                     </div>
-                  )}
-                  
-                  {cleanedData?.description && (
-                    <p className="text-sm text-gray-400">{cleanedData.description}</p>
                   )}
                 </div>
 
