@@ -1713,12 +1713,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   useEffect(() => {
     if (editingCell && editInputRef.current) {
       editInputRef.current.focus();
-      if (editMode === 'edit') {
-        const len = editInputRef.current.value.length;
-        editInputRef.current.setSelectionRange(len, len);
-      } else {
-        editInputRef.current.select();
-      }
+      // Always position cursor at the end - don't select
+      // This ensures type-to-edit works correctly (first char isn't lost)
+      const len = editInputRef.current.value.length;
+      editInputRef.current.setSelectionRange(len, len);
     }
   }, [editingCell, editMode]);
   
