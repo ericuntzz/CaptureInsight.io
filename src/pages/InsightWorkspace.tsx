@@ -2096,6 +2096,13 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                     <p className="text-gray-400 text-sm max-w-md mx-auto">
                       {validationResult?.message || 'Failed to process this data source. Please try again or upload a different file.'}
                     </p>
+                    {validationResult?.failureType === 'no_data_found' && (
+                      <div className="mt-3 p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                        <p className="text-amber-400 text-xs">
+                          For Google Sheets: Make sure it's shared with "Anyone with the link can view"
+                        </p>
+                      </div>
+                    )}
                     {validationResult?.failureType === 'empty_image' && (
                       <p className="text-amber-400 text-xs mt-2">
                         Please upload a clearer screenshot with visible data.
@@ -2111,16 +2118,15 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                   </div>
                 ) : (
                   <div className="bg-[#212121] rounded-lg p-8 border border-[#2A2A2A] text-center">
-                    <Database className="w-12 h-12 text-[#3A3A3A] mx-auto mb-3" />
-                    <p className="text-gray-400 text-sm">Data processing pending</p>
-                    <p className="text-gray-500 text-xs mt-1">This data will be automatically processed</p>
-                    <button
-                      onClick={handleRetry}
-                      disabled={retryProcessingMutation.isPending}
-                      className="mt-4 px-4 py-2 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all"
-                    >
-                      {retryProcessingMutation.isPending ? 'Starting...' : 'Start Processing Now'}
-                    </button>
+                    <div className="animate-pulse">
+                      <Database className="w-12 h-12 text-[#FF6B35] mx-auto mb-3" />
+                    </div>
+                    <p className="text-gray-400 text-sm">Processing will start automatically</p>
+                    <p className="text-gray-500 text-xs mt-1">The system will process this data shortly...</p>
+                    <div className="mt-4 flex items-center justify-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-[#FF6B35] animate-pulse" />
+                      <span className="text-xs text-gray-500">Waiting for processing queue</span>
+                    </div>
                   </div>
                 )}
               </div>

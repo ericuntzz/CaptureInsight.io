@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { registerRoutes } from "./routes";
+import { startBackgroundProcessor } from "./ai/backgroundProcessor";
 
 const app = express();
 
@@ -25,5 +26,8 @@ app.use(express.urlencoded({ extended: true }));
   const port = 3001;
   server.listen(port, "0.0.0.0", () => {
     console.log(`Server running on port ${port}`);
+    
+    // Start background processor for automatic data processing
+    startBackgroundProcessor();
   });
 })();
