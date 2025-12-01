@@ -16,6 +16,9 @@ import {
   GripVertical,
   Undo2,
   Redo2,
+  Cloud,
+  Check,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -1617,6 +1620,11 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const [isSaving, setIsSaving] = useState(false);
   const [pendingSheetSwitch, setPendingSheetSwitch] = useState<string | null>(null);
   
+  // Auto-save status: 'idle' | 'saving' | 'saved'
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const savedStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Undo/Redo history
   const [undoStack, setUndoStack] = useState<CellEdit[]>([]);
   const [redoStack, setRedoStack] = useState<CellEdit[]>([]);
@@ -2127,10 +2135,11 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     }
   };
 
-  const handleSaveTableChanges = async () => {
+  // Auto-save function (silent, no toast)
+  const performAutoSave = async () => {
     if (!selectedSheetId || !editableTableData || !cleanedData) return;
     
-    setIsSaving(true);
+    setAutoSaveStatus('saving');
     
     try {
       const fullPayload = {
@@ -2143,18 +2152,53 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         cleanedData: fullPayload,
       });
       
-      toast.success('Table changes saved!');
-      // Clear the change tracking to reflect that there are no pending changes
-      // Keep the current editableTableData as is - it's the saved state now
+      // Clear change tracking after successful save
       setHasTableChanges(false);
       setModifiedCells(new Set());
+      setAutoSaveStatus('saved');
+      
+      // Clear "saved" status after 3 seconds
+      if (savedStatusTimeoutRef.current) {
+        clearTimeout(savedStatusTimeoutRef.current);
+      }
+      savedStatusTimeoutRef.current = setTimeout(() => {
+        setAutoSaveStatus('idle');
+      }, 3000);
     } catch (e) {
-      // On error, keep hasTableChanges true to allow retry
-      toast.error((e as Error).message || 'Failed to save changes');
-    } finally {
-      setIsSaving(false);
+      // On error, reset to idle (user can try again by making another change)
+      setAutoSaveStatus('idle');
+      toast.error((e as Error).message || 'Failed to auto-save');
     }
   };
+
+  // Auto-save effect: triggers 1 second after the last change
+  useEffect(() => {
+    if (hasTableChanges && editableTableData && selectedSheetId && cleanedData) {
+      // Clear any existing timeout
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+      
+      // Set a new timeout for auto-save (1 second debounce)
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        performAutoSave();
+      }, 1000);
+    }
+    
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [hasTableChanges, editableTableData, selectedSheetId]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+      if (savedStatusTimeoutRef.current) clearTimeout(savedStatusTimeoutRef.current);
+    };
+  }, []);
 
   const handleCancelTableChanges = () => {
     if (cleanedData?.data && Array.isArray(cleanedData.data)) {
@@ -2662,6 +2706,24 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         Raw JSON
                       </button>
                       
+                      {/* Auto-save status indicator */}
+                      {autoSaveStatus !== 'idle' && (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400 ml-2">
+                          {autoSaveStatus === 'saving' ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF6B35]" />
+                              <span>Saving...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                              <Check className="w-3 h-3 text-emerald-400 -ml-2.5 mt-0.5" />
+                              <span className="text-emerald-400">Saved</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      
                       {/* Undo/Redo buttons - only show when there are changes */}
                       {(undoStack.length > 0 || redoStack.length > 0) && (
                         <div className="flex items-center gap-1 ml-2 border-l border-[#2A2A2A] pl-2">
@@ -2873,28 +2935,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                           </button>
                         )}
                         
-                        {/* Save/Cancel buttons when there are changes */}
-                        {hasTableChanges && (
-                          <div className="flex gap-2 pt-2 border-t border-[#2A2A2A]">
-                            <button
-                              onClick={handleSaveTableChanges}
-                              disabled={updateCleanedDataMutation.isPending}
-                              className="flex-1 py-2 px-4 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all"
-                            >
-                              {updateCleanedDataMutation.isPending ? 'Saving...' : 'Save Changes'}
-                            </button>
-                            <button
-                              onClick={handleCancelTableChanges}
-                              className="py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-sm rounded-lg transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        )}
-                        
                         {/* Hint text */}
                         <p className="text-xs text-gray-500 text-center">
-                          Click to select • Type to edit • Arrow keys to navigate • Ctrl+Z undo • Drag column edges to resize
+                          Click to select • Type to edit • Arrow keys to navigate • Ctrl+Z undo • Changes auto-save
                         </p>
                       </div>
                     )}
