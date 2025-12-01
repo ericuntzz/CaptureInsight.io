@@ -1567,10 +1567,12 @@ function transformSheetToDisplayable(sheet: Sheet): DisplayableSheet {
   };
 }
 
-interface EditingCell {
+interface CellPosition {
   rowIndex: number;
   columnKey: string;
 }
+
+type EditMode = 'replace' | 'edit';
 
 function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
   void _sources; void _sheetsData; void _onEditData; void _onRemoveSource;
@@ -1583,11 +1585,14 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const [jsonError, setJsonError] = useState<string | null>(null);
   
   const [editableTableData, setEditableTableData] = useState<any[] | null>(null);
-  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const [selectedCell, setSelectedCell] = useState<CellPosition | null>(null);
+  const [editingCell, setEditingCell] = useState<CellPosition | null>(null);
+  const [editMode, setEditMode] = useState<EditMode>('replace');
   const [hasTableChanges, setHasTableChanges] = useState(false);
   const [modifiedCells, setModifiedCells] = useState<Set<string>>(new Set());
   const [editCellValue, setEditCellValue] = useState<string>('');
   const editInputRef = useRef<HTMLInputElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
   const [lastInitializedSheetId, setLastInitializedSheetId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingSheetSwitch, setPendingSheetSwitch] = useState<string | null>(null);
@@ -1608,9 +1613,14 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   useEffect(() => {
     if (editingCell && editInputRef.current) {
       editInputRef.current.focus();
-      editInputRef.current.select();
+      if (editMode === 'edit') {
+        const len = editInputRef.current.value.length;
+        editInputRef.current.setSelectionRange(len, len);
+      } else {
+        editInputRef.current.select();
+      }
     }
-  }, [editingCell]);
+  }, [editingCell, editMode]);
   
   const selectedSheet = displayableSheets.find(s => s.id === selectedSheetId) || null;
   const originalSheet = sheets.find(s => s.id === selectedSheetId);
@@ -1656,10 +1666,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
 
   const confirmSheetSwitch = () => {
     if (pendingSheetSwitch) {
-      // Discard changes and switch
       setHasTableChanges(false);
       setModifiedCells(new Set());
       setEditingCell(null);
+      setSelectedCell(null);
       setSelectedSheetId(pendingSheetSwitch);
       setPendingSheetSwitch(null);
     }
@@ -1722,6 +1732,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     setHasTableChanges(false);
     setModifiedCells(new Set());
     setEditingCell(null);
+    setSelectedCell(null);
   }, []);
 
   // Initialize table data when:
@@ -1732,7 +1743,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     if (cleanedData?.data && Array.isArray(cleanedData.data) && selectedSheetId) {
       const isNewSheet = lastInitializedSheetId !== selectedSheetId;
       const needsInitialLoad = editableTableData === null;
-      const isCurrentlyEditing = editingCell !== null;
+      const isCurrentlyEditing = editingCell !== null || selectedCell !== null;
       const canAcceptBackgroundUpdate = !hasTableChanges && !isSaving && !isCurrentlyEditing;
       
       // For new sheets: reinitialize (user has already confirmed via handleSelectSheet)
@@ -1755,11 +1766,44 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         setLastInitializedSheetId(selectedSheetId);
       }
     }
-  }, [cleanedData?.data, selectedSheetId, lastInitializedSheetId, hasTableChanges, isSaving, editableTableData, editingCell, initializeTableEditing]);
+  }, [cleanedData?.data, selectedSheetId, lastInitializedSheetId, hasTableChanges, isSaving, editableTableData, editingCell, selectedCell, initializeTableEditing]);
+
+  const getColumnKeys = useCallback(() => {
+    if (!editableTableData || editableTableData.length === 0) return [];
+    return Object.keys(editableTableData[0] || {});
+  }, [editableTableData]);
+
+  const handleCellClick = (e: React.MouseEvent, rowIndex: number, columnKey: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (editingCell) {
+      commitCellEdit(editingCell.rowIndex, editingCell.columnKey, editCellValue);
+    }
+    setSelectedCell({ rowIndex, columnKey });
+    setEditingCell(null);
+    setTimeout(() => {
+      tableContainerRef.current?.focus();
+    }, 0);
+  };
 
   const handleCellDoubleClick = (rowIndex: number, columnKey: string, currentValue: any) => {
+    setSelectedCell({ rowIndex, columnKey });
     setEditingCell({ rowIndex, columnKey });
+    setEditMode('edit');
     setEditCellValue(currentValue === null ? '' : String(currentValue));
+  };
+
+  const startEditing = (rowIndex: number, columnKey: string, initialValue: string = '', mode: EditMode = 'replace') => {
+    if (!editableTableData) return;
+    const currentValue = editableTableData[rowIndex]?.[columnKey];
+    setSelectedCell({ rowIndex, columnKey });
+    setEditingCell({ rowIndex, columnKey });
+    setEditMode(mode);
+    if (mode === 'replace') {
+      setEditCellValue(initialValue);
+    } else {
+      setEditCellValue(currentValue === null ? '' : String(currentValue));
+    }
   };
 
   const handleCellChange = (value: string) => {
@@ -1801,30 +1845,144 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     setEditingCell(null);
   };
 
-  const handleCellKeyDown = (e: React.KeyboardEvent, rowIndex: number, columnKey: string, columnKeys: string[]) => {
+  const clearSelectedCell = () => {
+    if (!selectedCell || !editableTableData) return;
+    const { rowIndex, columnKey } = selectedCell;
+    const newData = [...editableTableData];
+    const originalValue = cleanedData?.data?.[rowIndex]?.[columnKey];
+    
+    newData[rowIndex] = { ...newData[rowIndex], [columnKey]: null };
+    setEditableTableData(newData);
+    
+    const cellKey = `${rowIndex}-${columnKey}`;
+    const newModified = new Set(modifiedCells);
+    if (originalValue !== null) {
+      newModified.add(cellKey);
+      setHasTableChanges(true);
+    }
+    setModifiedCells(newModified);
+  };
+
+  const navigateCell = (direction: 'up' | 'down' | 'left' | 'right') => {
+    if (!selectedCell || !editableTableData) return;
+    const columnKeys = getColumnKeys();
+    const { rowIndex, columnKey } = selectedCell;
+    const colIndex = columnKeys.indexOf(columnKey);
+    
+    let newRow = rowIndex;
+    let newCol = colIndex;
+    
+    switch (direction) {
+      case 'up':
+        newRow = Math.max(0, rowIndex - 1);
+        break;
+      case 'down':
+        newRow = Math.min(editableTableData.length - 1, rowIndex + 1);
+        break;
+      case 'left':
+        newCol = Math.max(0, colIndex - 1);
+        break;
+      case 'right':
+        newCol = Math.min(columnKeys.length - 1, colIndex + 1);
+        break;
+    }
+    
+    setSelectedCell({ rowIndex: newRow, columnKey: columnKeys[newCol] });
+  };
+
+  const handleTableKeyDown = (e: React.KeyboardEvent) => {
+    if (!selectedCell || !editableTableData) return;
+    const columnKeys = getColumnKeys();
+    const { rowIndex, columnKey } = selectedCell;
+    
+    if (editingCell) return;
+    
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateCell('up');
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateCell('down');
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      navigateCell('left');
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      navigateCell('right');
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        const colIndex = columnKeys.indexOf(columnKey);
+        if (colIndex > 0) {
+          setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex - 1] });
+        } else if (rowIndex > 0) {
+          setSelectedCell({ rowIndex: rowIndex - 1, columnKey: columnKeys[columnKeys.length - 1] });
+        }
+      } else {
+        const colIndex = columnKeys.indexOf(columnKey);
+        if (colIndex < columnKeys.length - 1) {
+          setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex + 1] });
+        } else if (rowIndex < editableTableData.length - 1) {
+          setSelectedCell({ rowIndex: rowIndex + 1, columnKey: columnKeys[0] });
+        }
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        setSelectedCell({ rowIndex: Math.max(0, rowIndex - 1), columnKey });
+      } else {
+        startEditing(rowIndex, columnKey, '', 'edit');
+      }
+    } else if (e.key === 'F2') {
+      e.preventDefault();
+      startEditing(rowIndex, columnKey, '', 'edit');
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      clearSelectedCell();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setSelectedCell(null);
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      startEditing(rowIndex, columnKey, e.key, 'replace');
+    }
+  };
+
+  const handleCellInputKeyDown = (e: React.KeyboardEvent, rowIndex: number, columnKey: string) => {
+    const columnKeys = getColumnKeys();
+    
     if (e.key === 'Enter') {
       e.preventDefault();
       commitCellEdit(rowIndex, columnKey, editCellValue);
-      if (editableTableData && rowIndex < editableTableData.length - 1) {
-        const nextValue = editableTableData[rowIndex + 1]?.[columnKey];
-        handleCellDoubleClick(rowIndex + 1, columnKey, nextValue);
+      if (e.shiftKey) {
+        setSelectedCell({ rowIndex: Math.max(0, rowIndex - 1), columnKey });
+      } else {
+        const nextRow = Math.min((editableTableData?.length || 1) - 1, rowIndex + 1);
+        setSelectedCell({ rowIndex: nextRow, columnKey });
       }
+      tableContainerRef.current?.focus();
     } else if (e.key === 'Tab') {
       e.preventDefault();
       commitCellEdit(rowIndex, columnKey, editCellValue);
-      if (!editableTableData) return;
-      const currentColIndex = columnKeys.indexOf(columnKey);
-      if (currentColIndex < columnKeys.length - 1) {
-        const nextCol = columnKeys[currentColIndex + 1];
-        const nextValue = editableTableData[rowIndex]?.[nextCol];
-        handleCellDoubleClick(rowIndex, nextCol, nextValue);
-      } else if (rowIndex < editableTableData.length - 1) {
-        const nextValue = editableTableData[rowIndex + 1]?.[columnKeys[0]];
-        handleCellDoubleClick(rowIndex + 1, columnKeys[0], nextValue);
+      const colIndex = columnKeys.indexOf(columnKey);
+      if (e.shiftKey) {
+        if (colIndex > 0) {
+          setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex - 1] });
+        } else if (rowIndex > 0) {
+          setSelectedCell({ rowIndex: rowIndex - 1, columnKey: columnKeys[columnKeys.length - 1] });
+        }
+      } else {
+        if (colIndex < columnKeys.length - 1) {
+          setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex + 1] });
+        } else if (rowIndex < (editableTableData?.length || 1) - 1) {
+          setSelectedCell({ rowIndex: rowIndex + 1, columnKey: columnKeys[0] });
+        }
       }
+      tableContainerRef.current?.focus();
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setEditingCell(null);
+      tableContainerRef.current?.focus();
     }
   };
 
@@ -2291,9 +2449,14 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         </pre>
                       </div>
                     ) : (
-                      /* Table View - Editable with inline cell editing */
+                      /* Table View - Excel/Google Sheets style editing */
                       <div className="space-y-3">
-                        <div className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden">
+                        <div 
+                          ref={tableContainerRef}
+                          tabIndex={0}
+                          onKeyDown={handleTableKeyDown}
+                          className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                        >
                           <div className="overflow-auto max-h-[400px]">
                             {editableTableData && editableTableData.length > 0 ? (() => {
                               const columnKeys = Object.keys(editableTableData[0] || {});
@@ -2317,13 +2480,14 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                     {editableTableData.slice(0, 50).map((row: any, rowIndex: number) => (
                                       <tr 
                                         key={rowIndex} 
-                                        className={`group ${rowIndex % 2 === 1 ? 'bg-[#1A1A1A]' : ''} hover:bg-[#2A2A2A]/70 transition-colors`}
+                                        className={`group ${rowIndex % 2 === 1 ? 'bg-[#1A1A1A]' : ''} transition-colors`}
                                       >
                                         <td className="px-3 py-2.5 text-center text-xs text-gray-500 font-mono border-r border-[#2A2A2A] bg-[#1E1E1E]">
                                           {rowIndex + 1}
                                         </td>
                                         {columnKeys.map((columnKey) => {
                                           const value = row[columnKey];
+                                          const isSelectedCell = selectedCell?.rowIndex === rowIndex && selectedCell?.columnKey === columnKey;
                                           const isEditingThisCell = editingCell?.rowIndex === rowIndex && editingCell?.columnKey === columnKey;
                                           const cellKey = `${rowIndex}-${columnKey}`;
                                           const isModified = modifiedCells.has(cellKey);
@@ -2331,11 +2495,15 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                           return (
                                             <td 
                                               key={columnKey} 
-                                              className={`px-3 py-2.5 text-gray-300 whitespace-nowrap max-w-[200px] cursor-pointer transition-all relative ${
+                                              className={`px-3 py-2.5 text-gray-300 whitespace-nowrap max-w-[200px] cursor-cell transition-all relative select-none ${
                                                 isModified ? 'bg-amber-500/10' : ''
-                                              } ${isEditingThisCell ? 'p-0' : 'hover:ring-1 hover:ring-[#FF6B35]/40 hover:ring-inset'}`}
+                                              } ${isEditingThisCell ? 'p-0' : ''} ${
+                                                isSelectedCell && !isEditingThisCell 
+                                                  ? 'ring-2 ring-[#FF6B35] ring-inset bg-[#FF6B35]/10' 
+                                                  : 'hover:bg-[#2A2A2A]/50'
+                                              }`}
+                                              onClick={(e) => !isEditingThisCell && handleCellClick(e, rowIndex, columnKey)}
                                               onDoubleClick={() => !isEditingThisCell && handleCellDoubleClick(rowIndex, columnKey, value)}
-                                              title={isEditingThisCell ? '' : 'Double-click to edit'}
                                             >
                                               {isEditingThisCell ? (
                                                 <input
@@ -2344,7 +2512,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                                   value={editCellValue}
                                                   onChange={(e) => handleCellChange(e.target.value)}
                                                   onBlur={() => commitCellEdit(rowIndex, columnKey, editCellValue)}
-                                                  onKeyDown={(e) => handleCellKeyDown(e, rowIndex, columnKey, columnKeys)}
+                                                  onKeyDown={(e) => handleCellInputKeyDown(e, rowIndex, columnKey)}
                                                   className="w-full h-full px-3 py-2.5 bg-[#FF6B35]/20 text-white outline-none ring-2 ring-[#FF6B35] text-sm"
                                                   autoFocus
                                                 />
@@ -2420,7 +2588,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         
                         {/* Hint text */}
                         <p className="text-xs text-gray-500 text-center">
-                          Double-click a cell to edit • Enter to save & move down • Tab to move right • Escape to cancel
+                          Click to select • Type to edit • Arrow keys to navigate • Enter/F2 to edit in-place • Del to clear • Esc to deselect
                         </p>
                       </div>
                     )}
