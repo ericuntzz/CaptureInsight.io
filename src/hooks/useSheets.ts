@@ -108,7 +108,35 @@ export function useUpdateSheetCleanedData() {
       }
       return res.json();
     },
-    onSuccess: (_, { sheetId }) => {
+    onMutate: async ({ sheetId, cleanedData }) => {
+      // Cancel any outgoing refetches to avoid overwriting our optimistic update
+      await queryClient.cancelQueries({ queryKey: ['/api/sheets'] });
+      
+      // Snapshot the previous value
+      const previousSheets = queryClient.getQueriesData<Sheet[]>({ queryKey: ['/api/sheets'] });
+      
+      // Optimistically update all matching queries
+      queryClient.setQueriesData<Sheet[]>({ queryKey: ['/api/sheets'] }, (old) => {
+        if (!old) return old;
+        return old.map(sheet => 
+          sheet.id === sheetId 
+            ? { ...sheet, cleanedData } 
+            : sheet
+        );
+      });
+      
+      return { previousSheets };
+    },
+    onError: (_err, _variables, context) => {
+      // Rollback to the previous value on error
+      if (context?.previousSheets) {
+        context.previousSheets.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure server state is synced
       queryClient.invalidateQueries({ queryKey: ['/api/sheets'] });
     },
   });

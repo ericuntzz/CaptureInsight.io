@@ -1567,6 +1567,11 @@ function transformSheetToDisplayable(sheet: Sheet): DisplayableSheet {
   };
 }
 
+interface EditingCell {
+  rowIndex: number;
+  columnKey: string;
+}
+
 function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
   void _sources; void _sheetsData; void _onEditData; void _onRemoveSource;
   const [viewMode, setViewMode] = useState<'files' | 'data'>('files');
@@ -1576,6 +1581,16 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const [isEditing, setIsEditing] = useState(false);
   const [editedJson, setEditedJson] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
+  
+  const [editableTableData, setEditableTableData] = useState<any[] | null>(null);
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const [hasTableChanges, setHasTableChanges] = useState(false);
+  const [modifiedCells, setModifiedCells] = useState<Set<string>>(new Set());
+  const [editCellValue, setEditCellValue] = useState<string>('');
+  const editInputRef = useRef<HTMLInputElement>(null);
+  const [lastInitializedSheetId, setLastInitializedSheetId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pendingSheetSwitch, setPendingSheetSwitch] = useState<string | null>(null);
   
   const updateCleanedDataMutation = useUpdateSheetCleanedData();
   const retryProcessingMutation = useRetrySheetProcessing();
@@ -1589,6 +1604,13 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       setSelectedSheetId(null);
     }
   }, [displayableSheets.length, selectedSheetId]);
+
+  useEffect(() => {
+    if (editingCell && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingCell]);
   
   const selectedSheet = displayableSheets.find(s => s.id === selectedSheetId) || null;
   const originalSheet = sheets.find(s => s.id === selectedSheetId);
@@ -1617,6 +1639,34 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     if (score >= 80) return 'bg-emerald-500/20';
     if (score >= 60) return 'bg-amber-500/20';
     return 'bg-red-500/20';
+  };
+
+  // Handle sheet selection with unsaved changes protection
+  const handleSelectSheet = (sheetId: string) => {
+    if (sheetId === selectedSheetId) return;
+    
+    if (hasTableChanges) {
+      // Store pending switch and show confirmation
+      setPendingSheetSwitch(sheetId);
+    } else {
+      // No unsaved changes, switch immediately
+      setSelectedSheetId(sheetId);
+    }
+  };
+
+  const confirmSheetSwitch = () => {
+    if (pendingSheetSwitch) {
+      // Discard changes and switch
+      setHasTableChanges(false);
+      setModifiedCells(new Set());
+      setEditingCell(null);
+      setSelectedSheetId(pendingSheetSwitch);
+      setPendingSheetSwitch(null);
+    }
+  };
+
+  const cancelSheetSwitch = () => {
+    setPendingSheetSwitch(null);
   };
 
   const handleStartEdit = () => {
@@ -1666,9 +1716,216 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       toast.error((e as Error).message || 'Failed to retry processing');
     }
   };
+
+  const initializeTableEditing = useCallback((data: any[]) => {
+    setEditableTableData(JSON.parse(JSON.stringify(data)));
+    setHasTableChanges(false);
+    setModifiedCells(new Set());
+    setEditingCell(null);
+  }, []);
+
+  // Initialize table data when:
+  // 1. Switching to a different sheet via handleSelectSheet (which handles unsaved changes)
+  // 2. Same sheet but no table data yet (first load)
+  // 3. Same sheet, no unsaved changes, not editing, and not saving (allows background updates)
+  useEffect(() => {
+    if (cleanedData?.data && Array.isArray(cleanedData.data) && selectedSheetId) {
+      const isNewSheet = lastInitializedSheetId !== selectedSheetId;
+      const needsInitialLoad = editableTableData === null;
+      const isCurrentlyEditing = editingCell !== null;
+      const canAcceptBackgroundUpdate = !hasTableChanges && !isSaving && !isCurrentlyEditing;
+      
+      // For new sheets: reinitialize (user has already confirmed via handleSelectSheet)
+      if (isNewSheet) {
+        initializeTableEditing(cleanedData.data);
+        setLastInitializedSheetId(selectedSheetId);
+        return;
+      }
+      
+      // For first load: initialize immediately
+      if (needsInitialLoad) {
+        initializeTableEditing(cleanedData.data);
+        setLastInitializedSheetId(selectedSheetId);
+        return;
+      }
+      
+      // For background updates: only accept if not editing, no changes, and not saving
+      if (canAcceptBackgroundUpdate) {
+        initializeTableEditing(cleanedData.data);
+        setLastInitializedSheetId(selectedSheetId);
+      }
+    }
+  }, [cleanedData?.data, selectedSheetId, lastInitializedSheetId, hasTableChanges, isSaving, editableTableData, editingCell, initializeTableEditing]);
+
+  const handleCellDoubleClick = (rowIndex: number, columnKey: string, currentValue: any) => {
+    setEditingCell({ rowIndex, columnKey });
+    setEditCellValue(currentValue === null ? '' : String(currentValue));
+  };
+
+  const handleCellChange = (value: string) => {
+    setEditCellValue(value);
+  };
+
+  const commitCellEdit = (rowIndex: number, columnKey: string, newValue: string) => {
+    if (!editableTableData) return;
+    
+    const newData = [...editableTableData];
+    const originalValue = cleanedData?.data?.[rowIndex]?.[columnKey];
+    let parsedValue: any = newValue;
+    
+    if (newValue === '') {
+      parsedValue = null;
+    } else if (newValue === 'true') {
+      parsedValue = true;
+    } else if (newValue === 'false') {
+      parsedValue = false;
+    } else if (!isNaN(Number(newValue)) && newValue.trim() !== '') {
+      parsedValue = Number(newValue);
+    }
+    
+    newData[rowIndex] = { ...newData[rowIndex], [columnKey]: parsedValue };
+    setEditableTableData(newData);
+    
+    const cellKey = `${rowIndex}-${columnKey}`;
+    const newModified = new Set(modifiedCells);
+    if (parsedValue !== originalValue) {
+      newModified.add(cellKey);
+      setHasTableChanges(true);
+    } else {
+      newModified.delete(cellKey);
+      if (newModified.size === 0) {
+        setHasTableChanges(false);
+      }
+    }
+    setModifiedCells(newModified);
+    setEditingCell(null);
+  };
+
+  const handleCellKeyDown = (e: React.KeyboardEvent, rowIndex: number, columnKey: string, columnKeys: string[]) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitCellEdit(rowIndex, columnKey, editCellValue);
+      if (editableTableData && rowIndex < editableTableData.length - 1) {
+        const nextValue = editableTableData[rowIndex + 1]?.[columnKey];
+        handleCellDoubleClick(rowIndex + 1, columnKey, nextValue);
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      commitCellEdit(rowIndex, columnKey, editCellValue);
+      if (!editableTableData) return;
+      const currentColIndex = columnKeys.indexOf(columnKey);
+      if (currentColIndex < columnKeys.length - 1) {
+        const nextCol = columnKeys[currentColIndex + 1];
+        const nextValue = editableTableData[rowIndex]?.[nextCol];
+        handleCellDoubleClick(rowIndex, nextCol, nextValue);
+      } else if (rowIndex < editableTableData.length - 1) {
+        const nextValue = editableTableData[rowIndex + 1]?.[columnKeys[0]];
+        handleCellDoubleClick(rowIndex + 1, columnKeys[0], nextValue);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingCell(null);
+    }
+  };
+
+  const handleSaveTableChanges = async () => {
+    if (!selectedSheetId || !editableTableData || !cleanedData) return;
+    
+    setIsSaving(true);
+    
+    try {
+      const fullPayload = {
+        ...cleanedData,
+        data: editableTableData,
+      };
+      
+      await updateCleanedDataMutation.mutateAsync({
+        sheetId: selectedSheetId,
+        cleanedData: fullPayload,
+      });
+      
+      toast.success('Table changes saved!');
+      // Clear the change tracking to reflect that there are no pending changes
+      // Keep the current editableTableData as is - it's the saved state now
+      setHasTableChanges(false);
+      setModifiedCells(new Set());
+    } catch (e) {
+      // On error, keep hasTableChanges true to allow retry
+      toast.error((e as Error).message || 'Failed to save changes');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancelTableChanges = () => {
+    if (cleanedData?.data && Array.isArray(cleanedData.data)) {
+      initializeTableEditing(cleanedData.data);
+    }
+  };
+
+  const handleAddRow = () => {
+    if (!editableTableData || editableTableData.length === 0) return;
+    
+    const templateRow = editableTableData[0];
+    const newRow: Record<string, any> = {};
+    Object.keys(templateRow).forEach(key => {
+      newRow[key] = null;
+    });
+    
+    setEditableTableData([...editableTableData, newRow]);
+    setHasTableChanges(true);
+  };
+
+  const handleDeleteRow = (rowIndex: number) => {
+    if (!editableTableData) return;
+    
+    const newData = editableTableData.filter((_, i) => i !== rowIndex);
+    setEditableTableData(newData);
+    setHasTableChanges(true);
+    
+    const newModified = new Set<string>();
+    modifiedCells.forEach(key => {
+      const [idx] = key.split('-');
+      const keyRowIndex = parseInt(idx);
+      if (keyRowIndex < rowIndex) {
+        newModified.add(key);
+      } else if (keyRowIndex > rowIndex) {
+        const [, col] = key.split('-');
+        newModified.add(`${keyRowIndex - 1}-${col}`);
+      }
+    });
+    setModifiedCells(newModified);
+    setEditingCell(null);
+  };
   
   return (
     <div className="flex flex-col h-full bg-[#1E1E1E]">
+      {/* Confirmation dialog for switching sheets with unsaved changes */}
+      {pendingSheetSwitch && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-[#1E1E1E] rounded-xl p-6 border border-[#2A2A2A] max-w-md shadow-xl">
+            <h3 className="text-white font-medium mb-2">Unsaved Changes</h3>
+            <p className="text-gray-400 text-sm mb-4">
+              You have unsaved changes in the current table. Do you want to discard them and switch to another data source?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={cancelSheetSwitch}
+                className="px-4 py-2 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-sm rounded-lg transition-colors"
+              >
+                Keep Editing
+              </button>
+              <button
+                onClick={confirmSheetSwitch}
+                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm rounded-lg transition-colors"
+              >
+                Discard Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Header with Files/Data toggle */}
       <div className="flex-shrink-0 border-b border-[#2A2A2A]">
         <div className="flex items-center justify-between px-4 py-3">
@@ -1731,7 +1988,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
               return (
                 <div
                   key={sheet.id}
-                  onClick={() => setSelectedSheetId(sheet.id)}
+                  onClick={() => handleSelectSheet(sheet.id)}
                   className={`p-3 border-b border-[#2A2A2A] cursor-pointer transition-colors ${
                     isSelected ? 'bg-[#FF6B35]/10 border-l-2 border-l-[#FF6B35]' : 'hover:bg-[#252525]'
                   }`}
@@ -2034,45 +2291,137 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         </pre>
                       </div>
                     ) : (
-                      /* Table View */
-                      <div className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden">
-                        <div className="overflow-auto max-h-[400px]">
-                          {Array.isArray(cleanedData.data) && cleanedData.data.length > 0 ? (
-                            <table className="w-full text-sm">
-                              <thead className="bg-[#2A2A2A] sticky top-0">
-                                <tr>
-                                  {Object.keys(cleanedData.data[0] || {}).map((key) => (
-                                    <th key={key} className="px-3 py-2 text-left text-xs font-medium text-gray-400 whitespace-nowrap">
-                                      {key}
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-[#2A2A2A]">
-                                {cleanedData.data.slice(0, 50).map((row: any, i: number) => (
-                                  <tr key={i} className="hover:bg-[#2A2A2A]/50">
-                                    {Object.values(row).map((value: any, j: number) => (
-                                      <td key={j} className="px-3 py-2 text-gray-300 whitespace-nowrap max-w-[200px] truncate">
-                                        {value === null ? <span className="text-gray-500 italic">null</span> :
-                                         typeof value === 'object' ? JSON.stringify(value) :
-                                         String(value)}
-                                      </td>
+                      /* Table View - Editable with inline cell editing */
+                      <div className="space-y-3">
+                        <div className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden">
+                          <div className="overflow-auto max-h-[400px]">
+                            {editableTableData && editableTableData.length > 0 ? (() => {
+                              const columnKeys = Object.keys(editableTableData[0] || {});
+                              return (
+                                <table className="w-full text-sm">
+                                  <thead className="bg-[#252525] sticky top-0 z-10">
+                                    <tr>
+                                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 whitespace-nowrap w-12 border-r border-[#2A2A2A]">
+                                        #
+                                      </th>
+                                      {columnKeys.map((key) => (
+                                        <th key={key} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-300 whitespace-nowrap">
+                                          {key}
+                                        </th>
+                                      ))}
+                                      <th className="px-2 py-2.5 text-center text-xs font-semibold text-gray-500 whitespace-nowrap w-10">
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {editableTableData.slice(0, 50).map((row: any, rowIndex: number) => (
+                                      <tr 
+                                        key={rowIndex} 
+                                        className={`group ${rowIndex % 2 === 1 ? 'bg-[#1A1A1A]' : ''} hover:bg-[#2A2A2A]/70 transition-colors`}
+                                      >
+                                        <td className="px-3 py-2.5 text-center text-xs text-gray-500 font-mono border-r border-[#2A2A2A] bg-[#1E1E1E]">
+                                          {rowIndex + 1}
+                                        </td>
+                                        {columnKeys.map((columnKey) => {
+                                          const value = row[columnKey];
+                                          const isEditingThisCell = editingCell?.rowIndex === rowIndex && editingCell?.columnKey === columnKey;
+                                          const cellKey = `${rowIndex}-${columnKey}`;
+                                          const isModified = modifiedCells.has(cellKey);
+                                          
+                                          return (
+                                            <td 
+                                              key={columnKey} 
+                                              className={`px-3 py-2.5 text-gray-300 whitespace-nowrap max-w-[200px] cursor-pointer transition-all relative ${
+                                                isModified ? 'bg-amber-500/10' : ''
+                                              } ${isEditingThisCell ? 'p-0' : 'hover:ring-1 hover:ring-[#FF6B35]/40 hover:ring-inset'}`}
+                                              onDoubleClick={() => !isEditingThisCell && handleCellDoubleClick(rowIndex, columnKey, value)}
+                                              title={isEditingThisCell ? '' : 'Double-click to edit'}
+                                            >
+                                              {isEditingThisCell ? (
+                                                <input
+                                                  ref={editInputRef}
+                                                  type="text"
+                                                  value={editCellValue}
+                                                  onChange={(e) => handleCellChange(e.target.value)}
+                                                  onBlur={() => commitCellEdit(rowIndex, columnKey, editCellValue)}
+                                                  onKeyDown={(e) => handleCellKeyDown(e, rowIndex, columnKey, columnKeys)}
+                                                  className="w-full h-full px-3 py-2.5 bg-[#FF6B35]/20 text-white outline-none ring-2 ring-[#FF6B35] text-sm"
+                                                  autoFocus
+                                                />
+                                              ) : (
+                                                <span className="truncate block">
+                                                  {value === null ? <span className="text-gray-500 italic">null</span> :
+                                                   typeof value === 'object' ? JSON.stringify(value) :
+                                                   String(value)}
+                                                </span>
+                                              )}
+                                              {isModified && !isEditingThisCell && (
+                                                <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400" title="Modified" />
+                                              )}
+                                            </td>
+                                          );
+                                        })}
+                                        <td className="px-2 py-2.5 text-center">
+                                          <button
+                                            onClick={() => handleDeleteRow(rowIndex)}
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
+                                            title="Delete row"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </td>
+                                      </tr>
                                     ))}
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          ) : (
-                            <div className="p-4 text-center text-gray-500 text-sm">
-                              No tabular data available
+                                  </tbody>
+                                </table>
+                              );
+                            })() : (
+                              <div className="p-4 text-center text-gray-500 text-sm">
+                                No tabular data available
+                              </div>
+                            )}
+                          </div>
+                          {editableTableData && editableTableData.length > 50 && (
+                            <div className="px-3 py-2 bg-[#2A2A2A] text-xs text-gray-400 text-center">
+                              Showing 50 of {editableTableData.length} records
                             </div>
                           )}
                         </div>
-                        {Array.isArray(cleanedData.data) && cleanedData.data.length > 50 && (
-                          <div className="px-3 py-2 bg-[#2A2A2A] text-xs text-gray-400 text-center">
-                            Showing 50 of {cleanedData.data.length} records
+                        
+                        {/* Add Row button */}
+                        {editableTableData && editableTableData.length > 0 && (
+                          <button
+                            onClick={handleAddRow}
+                            className="w-full py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-gray-400 hover:text-white text-xs rounded-lg transition-colors flex items-center justify-center gap-2 border border-dashed border-[#3A3A3A] hover:border-[#FF6B35]/50"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add Row
+                          </button>
+                        )}
+                        
+                        {/* Save/Cancel buttons when there are changes */}
+                        {hasTableChanges && (
+                          <div className="flex gap-2 pt-2 border-t border-[#2A2A2A]">
+                            <button
+                              onClick={handleSaveTableChanges}
+                              disabled={updateCleanedDataMutation.isPending}
+                              className="flex-1 py-2 px-4 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all"
+                            >
+                              {updateCleanedDataMutation.isPending ? 'Saving...' : 'Save Changes'}
+                            </button>
+                            <button
+                              onClick={handleCancelTableChanges}
+                              className="py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-sm rounded-lg transition-colors"
+                            >
+                              Cancel
+                            </button>
                           </div>
                         )}
+                        
+                        {/* Hint text */}
+                        <p className="text-xs text-gray-500 text-center">
+                          Double-click a cell to edit • Enter to save & move down • Tab to move right • Escape to cancel
+                        </p>
                       </div>
                     )}
                   </>
