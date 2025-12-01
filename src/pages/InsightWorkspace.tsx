@@ -2562,10 +2562,26 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         {isSourcesListCollapsed && (
           <div 
             onClick={() => setIsSourcesListCollapsed(false)}
-            className="w-[14px] min-w-[14px] bg-[#2A2A2A] border-r border-[#2A2A2A] flex items-center justify-center cursor-pointer hover:bg-[#1E1E1E] hover:border-[#1E1E1E] transition-colors group"
+            className="flex cursor-pointer group"
             title="Expand sources list"
           >
-            <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
+            {/* Orange indicator lines for each data source */}
+            <div className="flex flex-col justify-center gap-1 py-2">
+              {displayableSheets.map((sheet) => (
+                <div
+                  key={sheet.id}
+                  className={`w-[2px] h-8 rounded-full transition-colors ${
+                    selectedSheetId === sheet.id 
+                      ? 'bg-[#FF6B35]' 
+                      : 'bg-[#FF6B35]/40 group-hover:bg-[#FF6B35]/60'
+                  }`}
+                />
+              ))}
+            </div>
+            {/* Collapse bar */}
+            <div className="w-[14px] min-w-[14px] bg-[#2A2A2A] border-r border-[#2A2A2A] flex items-center justify-center group-hover:bg-[#1E1E1E] group-hover:border-[#1E1E1E] transition-colors">
+              <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
+            </div>
           </div>
         )}
         
