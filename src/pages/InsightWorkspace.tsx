@@ -2668,8 +2668,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
               </div>
             )}
             {/* Collapse bar */}
-            <div className="w-[14px] min-w-[14px] h-full bg-[#2A2A2A] border-r border-[#2A2A2A] flex items-center justify-center shrink-0 group-hover:bg-[#1E1E1E] group-hover:border-[#1E1E1E] transition-colors">
-              <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
+            <div className="w-[14px] min-w-[14px] h-full bg-[#2A2A2A] border-r border-[#2A2A2A] flex items-center justify-center shrink-0 group-hover:bg-[#FF6B35]/20 group-hover:border-[#FF6B35]/20 transition-colors">
+              <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-[#FF6B35] transition-colors" />
             </div>
           </div>
         )}
