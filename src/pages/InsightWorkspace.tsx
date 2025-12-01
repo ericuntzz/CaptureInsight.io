@@ -1617,6 +1617,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const [isEditing, setIsEditing] = useState(false);
   const [editedJson, setEditedJson] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [hasJsonChanges, setHasJsonChanges] = useState(false);
+  const jsonAutoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const [editableTableData, setEditableTableData] = useState<any[] | null>(null);
   const [selectedCell, setSelectedCell] = useState<CellPosition | null>(null);
@@ -2226,8 +2228,61 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     return () => {
       if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
       if (savedStatusTimeoutRef.current) clearTimeout(savedStatusTimeoutRef.current);
+      if (jsonAutoSaveTimeoutRef.current) clearTimeout(jsonAutoSaveTimeoutRef.current);
     };
   }, []);
+
+  // JSON auto-save function
+  const performJsonAutoSave = async () => {
+    if (!selectedSheetId || !editedJson || !cleanedData || jsonError) return;
+    
+    setAutoSaveStatus('saving');
+    
+    try {
+      const parsedData = JSON.parse(editedJson);
+      const fullPayload = {
+        ...cleanedData,
+        data: parsedData,
+      };
+      
+      await updateCleanedDataMutation.mutateAsync({
+        sheetId: selectedSheetId,
+        cleanedData: fullPayload,
+      });
+      
+      setHasJsonChanges(false);
+      setAutoSaveStatus('saved');
+      
+      if (savedStatusTimeoutRef.current) {
+        clearTimeout(savedStatusTimeoutRef.current);
+      }
+      savedStatusTimeoutRef.current = setTimeout(() => {
+        setAutoSaveStatus('idle');
+      }, 3000);
+    } catch (e) {
+      setAutoSaveStatus('idle');
+      toast.error((e as Error).message || 'Failed to auto-save JSON');
+    }
+  };
+
+  // JSON auto-save effect
+  useEffect(() => {
+    if (hasJsonChanges && editedJson && selectedSheetId && cleanedData && !jsonError) {
+      if (jsonAutoSaveTimeoutRef.current) {
+        clearTimeout(jsonAutoSaveTimeoutRef.current);
+      }
+      
+      jsonAutoSaveTimeoutRef.current = setTimeout(() => {
+        performJsonAutoSave();
+      }, 1000);
+    }
+    
+    return () => {
+      if (jsonAutoSaveTimeoutRef.current) {
+        clearTimeout(jsonAutoSaveTimeoutRef.current);
+      }
+    };
+  }, [hasJsonChanges, editedJson, selectedSheetId, jsonError]);
 
   const handleCancelTableChanges = () => {
     if (cleanedData?.data && Array.isArray(cleanedData.data)) {
@@ -2824,9 +2879,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                     </div>
 
                     {isEditing ? (
-                      /* Edit JSON View */
-                      <div className="space-y-3">
-                        <div className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden">
+                      /* Edit JSON View - Auto-saves like table view */
+                      <div className="flex-1 flex flex-col gap-3 min-h-0">
+                        <div className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden flex-1 flex flex-col min-h-0">
                           <textarea
                             value={editedJson}
                             onChange={(e) => {
@@ -2834,32 +2889,21 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                               try {
                                 JSON.parse(e.target.value);
                                 setJsonError(null);
+                                setHasJsonChanges(true);
                               } catch {
                                 setJsonError('Invalid JSON syntax');
                               }
                             }}
-                            className="w-full h-[400px] p-4 text-xs text-gray-300 bg-transparent font-mono resize-none outline-none"
+                            className="w-full flex-1 p-4 text-xs text-gray-300 bg-transparent font-mono resize-none outline-none"
                             spellCheck={false}
                           />
                         </div>
                         {jsonError && (
-                          <p className="text-xs text-red-400">{jsonError}</p>
+                          <p className="shrink-0 text-xs text-red-400">{jsonError}</p>
                         )}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleSaveEdit}
-                            disabled={!!jsonError || updateCleanedDataMutation.isPending}
-                            className="flex-1 py-2 px-4 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all"
-                          >
-                            {updateCleanedDataMutation.isPending ? 'Saving...' : 'Save Changes'}
-                          </button>
-                          <button
-                            onClick={() => setIsEditing(false)}
-                            className="py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-sm rounded-lg transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                        <p className="shrink-0 text-xs text-gray-500 text-center">
+                          Edit JSON directly • Changes auto-save
+                        </p>
                       </div>
                     ) : (
                       /* Table View - Excel/Google Sheets style editing */
