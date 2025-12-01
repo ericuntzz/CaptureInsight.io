@@ -40,6 +40,11 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '../components/ui/resizable';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../components/ui/tooltip';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
 import {
   DndContext,
@@ -2528,10 +2533,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
           {selectedSheet ? (
             viewMode === 'files' ? (
               /* FILES VIEW - Original raw data display */
-              <div className="space-y-4">
+              <div className="h-full flex flex-col">
                 {/* Preview image */}
                 {selectedSheet.preview && (
-                  <div className="rounded-lg overflow-hidden border border-[#2A2A2A]">
+                  <div className="rounded-lg overflow-hidden border border-[#2A2A2A] mb-4 shrink-0">
                     <img 
                       src={selectedSheet.preview} 
                       alt={selectedSheet.name}
@@ -2540,38 +2545,53 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                   </div>
                 )}
                 
-                {/* Source info */}
-                <div>
-                  <h3 className="text-lg font-medium text-white mb-2">{selectedSheet.name}</h3>
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                {/* Source info - with copyable link */}
+                <div className="mb-4 shrink-0">
+                  {/* Full link display - clickable to copy */}
+                  {selectedSheet.type === 'link' ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedSheet.name);
+                            toast.success('Link copied to clipboard');
+                          }}
+                          className="text-left w-full group"
+                        >
+                          <p className="text-sm text-purple-400 break-all hover:text-purple-300 transition-colors cursor-pointer">
+                            {selectedSheet.name}
+                          </p>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                        <p className="text-xs">Click to copy link</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <h3 className="text-lg font-medium text-white mb-2">{selectedSheet.name}</h3>
+                  )}
+                  <div className="flex items-center gap-2 text-xs text-gray-400 mt-2">
                     {(selectedSheet.type === 'screenshot' || selectedSheet.type === 'capture') && <Image className="w-3.5 h-3.5 text-blue-400" />}
                     {selectedSheet.type === 'file' && <FileText className="w-3.5 h-3.5 text-green-400" />}
                     {selectedSheet.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
                     <span className="capitalize">{selectedSheet.type}</span>
                     <span>•</span>
                     <span>{selectedSheet.date}</span>
-                    {selectedSheet.rowCount !== null && selectedSheet.rowCount > 0 && (
-                      <>
-                        <span>•</span>
-                        <span>{selectedSheet.rowCount} rows</span>
-                      </>
-                    )}
                   </div>
                 </div>
                 
-                {/* Raw data preview */}
+                {/* Raw data preview - expands to fill remaining space */}
                 {originalSheet?.data && typeof originalSheet.data === 'object' && (
-                  <div className="bg-[#212121] rounded-lg p-4 border border-[#2A2A2A]">
-                    <h4 className="text-sm font-medium text-[#FF6B35] mb-3">Raw Data Preview</h4>
-                    <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto">
+                  <div className="bg-[#212121] rounded-lg p-4 border border-[#2A2A2A] flex-1 flex flex-col min-h-0">
+                    <h4 className="text-sm font-medium text-[#FF6B35] mb-3 shrink-0">Raw Data Preview</h4>
+                    <div className="grid grid-cols-2 gap-3 overflow-y-auto flex-1">
                       {Object.entries(originalSheet.data as Record<string, any>)
                         .filter(([key]) => !['screenshot', 'screenshotUrl', 'preview'].includes(key))
-                        .slice(0, 10)
                         .map(([key, value]) => (
                           <div key={key} className="bg-[#1A1A1A] rounded-lg p-3">
-                            <p className="text-xs text-gray-400 mb-1 truncate">{key}</p>
-                            <p className="text-sm font-medium text-white truncate">
-                              {typeof value === 'object' ? JSON.stringify(value).slice(0, 50) : String(value).slice(0, 50)}
+                            <p className="text-xs text-gray-400 mb-1">{key}</p>
+                            <p className="text-sm font-medium text-white break-all">
+                              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                             </p>
                           </div>
                         ))}
