@@ -2325,8 +2325,13 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       <div className="flex-shrink-0 border-b border-[#2A2A2A]">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-[#FF6B35]" />
-            <span className="text-sm font-medium text-white">Data Sources</span>
+            <button
+              onClick={() => toast.info('Add data source functionality coming soon!')}
+              className="p-1.5 bg-[#FF6B35] hover:bg-[#E55A2B] text-white rounded-lg transition-colors"
+              title="Add data source"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
             <span className="px-2 py-0.5 bg-[#2A2F3E] rounded-full text-xs text-gray-400">
               {displayableSheets.length}
             </span>
@@ -2358,7 +2363,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
             <button
               onClick={onToggle}
               className="p-1.5 text-[#6B7280] hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
-              title="Collapse Data Sources"
+              title="Collapse panel"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -2960,17 +2965,6 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
             </div>
           )}
         </div>
-      </div>
-      
-      {/* Add source button */}
-      <div className="flex-shrink-0 p-4 border-t border-[#2A2A2A]">
-        <button
-          onClick={() => toast.info('Add data source functionality coming soon!')}
-          className="w-full py-2.5 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] text-white text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Add Data Source
-        </button>
       </div>
     </div>
   );
