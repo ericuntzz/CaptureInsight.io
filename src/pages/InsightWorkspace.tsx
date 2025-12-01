@@ -2436,12 +2436,20 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const handleDeleteSheet = (e: React.MouseEvent, sheetId: string) => {
     e.stopPropagation();
     
-    // If this is the selected sheet, clear selection
+    // If this is the selected sheet, clear selection and update localStorage
     if (selectedSheetId === sheetId) {
       // Find next available sheet to select
       const currentIndex = displayableSheets.findIndex(s => s.id === sheetId);
       const nextSheet = displayableSheets[currentIndex + 1] || displayableSheets[currentIndex - 1];
-      setSelectedSheetId(nextSheet?.id || null);
+      const newSelectedId = nextSheet?.id || null;
+      setSelectedSheetId(newSelectedId);
+      
+      // Update localStorage
+      if (newSelectedId) {
+        localStorage.setItem(SELECTED_SHEET_KEY, newSelectedId);
+      } else {
+        localStorage.removeItem(SELECTED_SHEET_KEY);
+      }
     }
     
     deleteSheetMutation.mutate(sheetId, {

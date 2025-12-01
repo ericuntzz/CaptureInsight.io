@@ -344,6 +344,7 @@ export function useDeleteSheet() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
     },
   });
 }
