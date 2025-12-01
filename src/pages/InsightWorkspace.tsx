@@ -2318,6 +2318,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const handleAddRow = () => {
     if (!editableTableData || editableTableData.length === 0) return;
     
+    // Save current state to undo stack before adding
+    setUndoStack(prev => [...prev, JSON.parse(JSON.stringify(editableTableData))]);
+    setRedoStack([]); // Clear redo stack on new action
+    
     const templateRow = editableTableData[0];
     const newRow: Record<string, any> = {};
     Object.keys(templateRow).forEach(key => {
@@ -2330,6 +2334,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
 
   const handleDeleteRow = (rowIndex: number) => {
     if (!editableTableData) return;
+    
+    // Save current state to undo stack before deleting
+    setUndoStack(prev => [...prev, JSON.parse(JSON.stringify(editableTableData))]);
+    setRedoStack([]); // Clear redo stack on new action
     
     const newData = editableTableData.filter((_, i) => i !== rowIndex);
     setEditableTableData(newData);
@@ -2791,66 +2799,72 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                           Raw JSON
                         </button>
                         
-                        {/* Auto-save status indicator */}
-                        {autoSaveStatus !== 'idle' && (
-                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                            {autoSaveStatus === 'saving' ? (
-                              <>
-                                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF6B35]" />
-                                <span>Saving...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Cloud className="w-3.5 h-3.5 text-emerald-400" />
-                                <Check className="w-3 h-3 text-emerald-400 -ml-2.5 mt-0.5" />
-                                <span className="text-emerald-400">Saved</span>
-                              </>
-                            )}
-                          </div>
-                        )}
+                        {/* Undo/Redo buttons - always visible */}
+                        <div className="flex items-center gap-1 border-l border-[#2A2A2A] pl-2">
+                          <button
+                            onClick={handleUndo}
+                            disabled={undoStack.length === 0}
+                            className={`p-1 rounded transition-colors ${
+                              undoStack.length > 0 
+                                ? 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]' 
+                                : 'text-gray-600 cursor-not-allowed'
+                            }`}
+                            title={`Undo (Ctrl+Z)${undoStack.length > 0 ? ` - ${undoStack.length} change${undoStack.length > 1 ? 's' : ''}` : ''}`}
+                          >
+                            <Undo2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={handleRedo}
+                            disabled={redoStack.length === 0}
+                            className={`p-1 rounded transition-colors ${
+                              redoStack.length > 0 
+                                ? 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]' 
+                                : 'text-gray-600 cursor-not-allowed'
+                            }`}
+                            title={`Redo (Ctrl+Y)${redoStack.length > 0 ? ` - ${redoStack.length} change${redoStack.length > 1 ? 's' : ''}` : ''}`}
+                          >
+                            <Redo2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                         
-                        {/* Undo/Redo buttons */}
-                        {(undoStack.length > 0 || redoStack.length > 0) && (
-                          <div className="flex items-center gap-1 border-l border-[#2A2A2A] pl-2">
+                        {/* Copy button with tooltip */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
                             <button
-                              onClick={handleUndo}
-                              disabled={undoStack.length === 0}
-                              className={`p-1 rounded transition-colors ${
-                                undoStack.length > 0 
-                                  ? 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]' 
-                                  : 'text-gray-600 cursor-not-allowed'
-                              }`}
-                              title={`Undo (Ctrl+Z)${undoStack.length > 0 ? ` - ${undoStack.length} change${undoStack.length > 1 ? 's' : ''}` : ''}`}
+                              onClick={() => {
+                                const jsonStr = JSON.stringify(cleanedData.data, null, 2);
+                                copyToClipboard(jsonStr);
+                                toast.success('JSON copied to clipboard');
+                              }}
+                              className="p-1 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
                             >
-                              <Undo2 className="w-3.5 h-3.5" />
+                              <Copy className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              onClick={handleRedo}
-                              disabled={redoStack.length === 0}
-                              className={`p-1 rounded transition-colors ${
-                                redoStack.length > 0 
-                                  ? 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]' 
-                                  : 'text-gray-600 cursor-not-allowed'
-                              }`}
-                              title={`Redo (Ctrl+Y)${redoStack.length > 0 ? ` - ${redoStack.length} change${redoStack.length > 1 ? 's' : ''}` : ''}`}
-                            >
-                              <Redo2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                            <p className="text-xs">Copy data as JSON</p>
+                          </TooltipContent>
+                        </Tooltip>
                         
-                        {/* Copy button */}
-                        <button
-                          onClick={() => {
-                            const jsonStr = JSON.stringify(cleanedData.data, null, 2);
-                            copyToClipboard(jsonStr);
-                            toast.success('JSON copied to clipboard');
-                          }}
-                          className="p-1 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
-                          title="Copy JSON"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
+                        {/* Auto-save status indicator - always at the end */}
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400 border-l border-[#2A2A2A] pl-2">
+                          {autoSaveStatus === 'saving' ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF6B35]" />
+                              <span>Saving...</span>
+                            </>
+                          ) : autoSaveStatus === 'saved' ? (
+                            <>
+                              <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                              <Check className="w-3 h-3 text-emerald-400 -ml-2.5 mt-0.5" />
+                              <span className="text-emerald-400">Saved</span>
+                            </>
+                          ) : (
+                            <>
+                              <Cloud className="w-3.5 h-3.5 text-gray-500" />
+                            </>
+                          )}
+                        </div>
                       </>
                     )}
                     
