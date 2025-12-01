@@ -28,6 +28,7 @@ import {
   useDeleteChatConversation,
 } from '../hooks/useChatConversations';
 import { useWorkspaceSheets, useUpdateSheetCleanedData, useRetrySheetProcessing, type Sheet } from '../hooks/useSheets';
+import { useUpdateSheet } from '../hooks/useSpaces';
 import { ChevronDown } from 'lucide-react';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
@@ -1618,6 +1619,12 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   
   const updateCleanedDataMutation = useUpdateSheetCleanedData();
   const retryProcessingMutation = useRetrySheetProcessing();
+  const updateSheetMutation = useUpdateSheet();
+  
+  // Sheet title editing state
+  const [editingSheetTitleId, setEditingSheetTitleId] = useState<string | null>(null);
+  const [editingSheetTitleValue, setEditingSheetTitleValue] = useState('');
+  const sheetTitleInputRef = useRef<HTMLInputElement>(null);
   
   const displayableSheets = sheets.map(transformSheetToDisplayable);
   
@@ -2174,6 +2181,102 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     setModifiedCells(newModified);
     setEditingCell(null);
   };
+
+  // Helper function to get the display title for a sheet
+  // Priority: cleanedData.title (AI-generated) > sheet.name (user-set or original)
+  const getSheetDisplayTitle = (sheetId: string): string => {
+    const sheetOriginal = sheets.find(s => s.id === sheetId);
+    const sheetCleanedData = (sheetOriginal as any)?.cleanedData as { title?: string } | null;
+    
+    // Use AI-generated title if available
+    if (sheetCleanedData?.title) {
+      return sheetCleanedData.title;
+    }
+    
+    // Fall back to sheet name (from sheets query which includes cleaningStatus, etc.)
+    if ((sheetOriginal as any)?.name) {
+      return (sheetOriginal as any).name;
+    }
+    
+    // Final fallback to displayable sheets
+    const displaySheet = displayableSheets.find(s => s.id === sheetId);
+    return displaySheet?.name || 'Untitled';
+  };
+
+  // Handle double-click to start editing sheet title
+  const handleSheetTitleDoubleClick = (e: React.MouseEvent, sheetId: string) => {
+    e.stopPropagation();
+    const currentTitle = getSheetDisplayTitle(sheetId);
+    setEditingSheetTitleId(sheetId);
+    setEditingSheetTitleValue(currentTitle);
+    setTimeout(() => {
+      sheetTitleInputRef.current?.focus();
+      sheetTitleInputRef.current?.select();
+    }, 0);
+  };
+
+  // Handle saving sheet title
+  const handleSheetTitleSave = (sheetId: string) => {
+    const newTitle = editingSheetTitleValue.trim();
+    if (!newTitle || newTitle === getSheetDisplayTitle(sheetId)) {
+      setEditingSheetTitleId(null);
+      setEditingSheetTitleValue('');
+      return;
+    }
+    
+    // Get the current sheet's cleanedData
+    const sheetOriginal = sheets.find(s => s.id === sheetId);
+    const currentCleanedData = (sheetOriginal as any)?.cleanedData;
+    
+    // If cleanedData exists (AI has processed the sheet), update cleanedData.title
+    // This preserves all AI-generated fields (type, data, metadata, etc.)
+    if (currentCleanedData && typeof currentCleanedData === 'object' && currentCleanedData.data) {
+      const updatedCleanedData = {
+        ...currentCleanedData,
+        title: newTitle
+      };
+      
+      updateCleanedDataMutation.mutate(
+        { sheetId, cleanedData: updatedCleanedData },
+        {
+          onSuccess: () => {
+            toast.success('Title updated');
+          },
+          onError: () => {
+            toast.error('Failed to update title');
+          }
+        }
+      );
+    } else {
+      // No cleanedData yet (sheet still processing or pending)
+      // Update the sheet name instead
+      updateSheetMutation.mutate(
+        { id: sheetId, data: { name: newTitle } },
+        {
+          onSuccess: () => {
+            toast.success('Title updated');
+          },
+          onError: () => {
+            toast.error('Failed to update title');
+          }
+        }
+      );
+    }
+    
+    setEditingSheetTitleId(null);
+    setEditingSheetTitleValue('');
+  };
+
+  // Handle title input key down
+  const handleSheetTitleKeyDown = (e: React.KeyboardEvent, sheetId: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSheetTitleSave(sheetId);
+    } else if (e.key === 'Escape') {
+      setEditingSheetTitleId(null);
+      setEditingSheetTitleValue('');
+    }
+  };
   
   return (
     <div className="flex flex-col h-full bg-[#1E1E1E]">
@@ -2261,6 +2364,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
               const isSelected = selectedSheetId === sheet.id;
               const sheetOriginal = sheets.find(s => s.id === sheet.id);
               const sheetCleaningStatus = (sheetOriginal as any)?.cleaningStatus || 'pending';
+              const displayTitle = getSheetDisplayTitle(sheet.id);
+              const isEditingTitle = editingSheetTitleId === sheet.id;
               
               return (
                 <div
@@ -2277,20 +2382,40 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                       {sheet.type === 'link' && <Link2 className="w-3.5 h-3.5 text-purple-400" />}
                       <span className="text-xs text-gray-400">{sheet.type}</span>
                     </div>
-                    {viewMode === 'data' && (
+                    {/* Only show status badge if NOT completed (no "Ready" badge) */}
+                    {viewMode === 'data' && sheetCleaningStatus !== 'completed' && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        sheetCleaningStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
                         sheetCleaningStatus === 'processing' ? 'bg-amber-500/20 text-amber-400' :
                         sheetCleaningStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
                         'bg-gray-500/20 text-gray-400'
                       }`}>
-                        {sheetCleaningStatus === 'completed' ? 'Ready' :
-                         sheetCleaningStatus === 'processing' ? 'Processing' :
+                        {sheetCleaningStatus === 'processing' ? 'Processing' :
                          sheetCleaningStatus === 'failed' ? 'Failed' : 'Pending'}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-white truncate">{sheet.name}</p>
+                  {/* Title - editable on double-click */}
+                  {isEditingTitle ? (
+                    <input
+                      ref={sheetTitleInputRef}
+                      type="text"
+                      value={editingSheetTitleValue}
+                      onChange={(e) => setEditingSheetTitleValue(e.target.value)}
+                      onBlur={() => handleSheetTitleSave(sheet.id)}
+                      onKeyDown={(e) => handleSheetTitleKeyDown(e, sheet.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full text-sm text-white bg-[#2A2A2A] border border-[#FF6B35] rounded px-1.5 py-0.5 outline-none"
+                      autoFocus
+                    />
+                  ) : (
+                    <p 
+                      className="text-sm text-white truncate cursor-text hover:text-[#FF6B35] transition-colors"
+                      onDoubleClick={(e) => handleSheetTitleDoubleClick(e, sheet.id)}
+                      title="Double-click to edit title"
+                    >
+                      {displayTitle}
+                    </p>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">{sheet.date}</p>
                 </div>
               );
@@ -2378,9 +2503,27 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                 {/* Data header with quality score */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-lg font-medium text-white">
-                      {cleanedData?.title || selectedSheet.name}
-                    </h3>
+                    {/* Editable title on double-click */}
+                    {editingSheetTitleId === selectedSheetId ? (
+                      <input
+                        ref={sheetTitleInputRef}
+                        type="text"
+                        value={editingSheetTitleValue}
+                        onChange={(e) => setEditingSheetTitleValue(e.target.value)}
+                        onBlur={() => handleSheetTitleSave(selectedSheetId!)}
+                        onKeyDown={(e) => handleSheetTitleKeyDown(e, selectedSheetId!)}
+                        className="text-lg font-medium text-white bg-[#2A2A2A] border border-[#FF6B35] rounded px-2 py-1 outline-none flex-1 mr-2"
+                        autoFocus
+                      />
+                    ) : (
+                      <h3 
+                        className="text-lg font-medium text-white cursor-text hover:text-[#FF6B35] transition-colors"
+                        onDoubleClick={(e) => handleSheetTitleDoubleClick(e, selectedSheetId!)}
+                        title="Double-click to edit title"
+                      >
+                        {cleanedData?.title || selectedSheet.name}
+                      </h3>
+                    )}
                     <div className="flex items-center gap-2">
                       {/* Quality Score Badge */}
                       {cleaningStatus === 'completed' && qualityScore !== null && (
