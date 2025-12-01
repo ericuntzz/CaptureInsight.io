@@ -1592,12 +1592,24 @@ interface CellPosition {
 
 type EditMode = 'replace' | 'edit';
 
-interface CellEdit {
+// Cell-level edit entry
+interface CellEditEntry {
+  type?: 'cell-edit'; // optional for backward compatibility
   rowIndex: number;
   columnKey: string;
   previousValue: any;
   newValue: any;
 }
+
+// Row-level operation entry (delete or add)
+interface RowOperationEntry {
+  type: 'delete-row' | 'add-row';
+  rowIndex: number;
+  rowData: any;
+}
+
+// Unified undo/redo stack entry type
+type UndoEntry = CellEditEntry | RowOperationEntry;
 
 const DATA_SOURCES_VIEW_MODE_KEY = 'captureinsight_data_sources_view_mode';
 const SELECTED_SHEET_KEY = 'captureinsight_selected_sheet_id';
@@ -1654,8 +1666,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const savedStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Undo/Redo history
-  const [undoStack, setUndoStack] = useState<CellEdit[]>([]);
-  const [redoStack, setRedoStack] = useState<CellEdit[]>([]);
+  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
   
   // Column widths for resizing
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
@@ -1830,14 +1842,18 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     }
   };
 
-  const initializeTableEditing = useCallback((data: any[]) => {
+  const initializeTableEditing = useCallback((data: any[], clearUndoHistory: boolean = true) => {
     setEditableTableData(JSON.parse(JSON.stringify(data)));
     setHasTableChanges(false);
     setModifiedCells(new Set());
     setEditingCell(null);
     setSelectedCell(null);
-    setUndoStack([]);
-    setRedoStack([]);
+    // Only clear undo/redo stacks when explicitly requested (e.g., switching sheets)
+    // This preserves undo history during background updates after auto-save
+    if (clearUndoHistory) {
+      setUndoStack([]);
+      setRedoStack([]);
+    }
     setColumnWidths({});
   }, []);
 
@@ -1867,8 +1883,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       }
       
       // For background updates: only accept if not editing, no changes, and not saving
+      // Pass false for clearUndoHistory to preserve undo stack after auto-save
       if (canAcceptBackgroundUpdate) {
-        initializeTableEditing(cleanedData.data);
+        initializeTableEditing(cleanedData.data, false);
         setLastInitializedSheetId(selectedSheetId);
       }
     }
@@ -1990,8 +2007,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       return;
     }
     
-    // Handle cell-level edits
-    const { rowIndex, columnKey, previousValue } = lastEdit;
+    // Handle cell-level edits (type guard for TypeScript)
+    const cellEdit = lastEdit as CellEditEntry;
+    const { rowIndex, columnKey, previousValue } = cellEdit;
     
     const newData = [...editableTableData];
     newData[rowIndex] = { ...newData[rowIndex], [columnKey]: previousValue };
@@ -2039,8 +2057,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       return;
     }
     
-    // Handle cell-level edits
-    const { rowIndex, columnKey, newValue } = nextEdit;
+    // Handle cell-level edits (type guard for TypeScript)
+    const cellEdit = nextEdit as CellEditEntry;
+    const { rowIndex, columnKey, newValue } = cellEdit;
     
     const newData = [...editableTableData];
     newData[rowIndex] = { ...newData[rowIndex], [columnKey]: newValue };
