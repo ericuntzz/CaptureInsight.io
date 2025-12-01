@@ -213,7 +213,7 @@ const getStorageKey = (baseKey: string, workspaceId?: string | null) => {
   return baseKey;
 };
 
-export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, workspaceId }: InsightWorkspaceProps) {
+export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse, workspaceId }: InsightWorkspaceProps) {
   useAuth();
   
   // Panel refs for imperative control
