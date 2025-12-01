@@ -1537,10 +1537,11 @@ interface DisplayableSheet {
   date: string;
   rowCount: number | null;
   dataSourceMeta: any;
+  sourceUrl: string | null;
 }
 
 function transformSheetToDisplayable(sheet: Sheet): DisplayableSheet {
-  const meta = sheet.dataSourceMeta as { preview?: string; url?: string; screenshotUrl?: string } | null;
+  const meta = sheet.dataSourceMeta as { preview?: string; url?: string; sourceUrl?: string; screenshotUrl?: string } | null;
   const dataType = sheet.dataSourceType?.toLowerCase() || 'capture';
   
   let type: DisplayableSheet['type'] = 'capture';
@@ -1566,6 +1567,9 @@ function transformSheetToDisplayable(sheet: Sheet): DisplayableSheet {
     ? new Date(sheet.lastModified).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
     : 'Unknown date';
   
+  // Extract full source URL from meta (priority: url > sourceUrl) or fall back to name if it looks like a URL
+  const sourceUrl = meta?.url || meta?.sourceUrl || (sheet.name.startsWith('http') ? sheet.name : null);
+  
   return {
     id: sheet.id,
     name: sheet.name,
@@ -1574,6 +1578,7 @@ function transformSheetToDisplayable(sheet: Sheet): DisplayableSheet {
     date,
     rowCount: sheet.rowCount,
     dataSourceMeta: sheet.dataSourceMeta,
+    sourceUrl,
   };
 }
 
@@ -2673,13 +2678,14 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(selectedSheet.name);
+                            const fullUrl = selectedSheet.sourceUrl || selectedSheet.name;
+                            navigator.clipboard.writeText(fullUrl);
                             toast.success('Link copied to clipboard');
                           }}
                           className="text-left w-full group"
                         >
                           <p className="text-sm text-purple-400 break-all hover:text-purple-300 transition-colors cursor-pointer">
-                            {selectedSheet.name}
+                            {selectedSheet.sourceUrl || selectedSheet.name}
                           </p>
                         </button>
                       </TooltipTrigger>
