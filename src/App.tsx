@@ -78,24 +78,41 @@ export default function App() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   
+  // On initial load, restore the last visited URL if at root
+  const [hasRestoredUrl, setHasRestoredUrl] = useState(false);
+  
+  useEffect(() => {
+    if (hasRestoredUrl) return;
+    setHasRestoredUrl(true);
+    
+    // Only restore if we're at the root path (fresh page load/refresh)
+    if (window.location.pathname === '/') {
+      const savedUrl = localStorage.getItem('captureinsight_current_url');
+      if (savedUrl && savedUrl !== '/') {
+        // Use replace to avoid adding to history
+        router.replace(savedUrl);
+      }
+    }
+  }, [hasRestoredUrl, router]);
+  
+  // Persist current URL to localStorage whenever it changes
+  useEffect(() => {
+    const currentUrl = router.pathname + router.search + router.hash;
+    localStorage.setItem('captureinsight_current_url', currentUrl);
+  }, [router.pathname, router.search, router.hash]);
+  
   // Initialize view from URL or localStorage
   const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights' | 'workspace'>(() => {
     if (typeof window !== 'undefined') {
-      // First try to get view from URL
-      const viewFromUrl = getCurrentView(window.location.pathname);
-      
-      // If URL indicates a specific view (not root), use it
-      if (viewFromUrl !== 'capture' || window.location.pathname === '/') {
-        return viewFromUrl;
+      // First check if there's a saved URL to restore
+      const savedUrl = localStorage.getItem('captureinsight_current_url');
+      if (window.location.pathname === '/' && savedUrl && savedUrl !== '/') {
+        // Get view from saved URL
+        return getCurrentView(savedUrl.split('?')[0].split('#')[0]);
       }
       
-      // Otherwise, check localStorage as fallback
-      const savedView = localStorage.getItem('captureinsight_current_view');
-      if (savedView && ['capture', 'data', 'changelogs', 'insights', 'workspace'].includes(savedView)) {
-        return savedView as 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace';
-      }
-      
-      return viewFromUrl;
+      // Otherwise get view from current URL
+      return getCurrentView(window.location.pathname);
     }
     return 'capture';
   });
@@ -128,10 +145,7 @@ export default function App() {
     window.location.href = '/api/logout';
   };
   
-  // Persist current view to localStorage
-  useEffect(() => {
-    localStorage.setItem('captureinsight_current_view', currentView);
-  }, [currentView]);
+  // Note: Current view is now persisted via the full URL in captureinsight_current_url
   
   // Sync URL with current view when router changes (back/forward navigation)
   useEffect(() => {

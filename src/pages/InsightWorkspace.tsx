@@ -1593,6 +1593,7 @@ interface CellEdit {
 }
 
 const DATA_SOURCES_VIEW_MODE_KEY = 'captureinsight_data_sources_view_mode';
+const SELECTED_SHEET_KEY = 'captureinsight_selected_sheet_id';
 
 function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
   void _sources; void _sheetsData; void _onEditData; void _onRemoveSource;
@@ -1605,7 +1606,12 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     }
     return 'data'; // Default to 'data' view
   });
-  const [selectedSheetId, setSelectedSheetId] = useState<string | null>(null);
+  
+  // Initialize selected sheet from localStorage
+  const [selectedSheetId, setSelectedSheetId] = useState<string | null>(() => {
+    const saved = localStorage.getItem(SELECTED_SHEET_KEY);
+    return saved || null;
+  });
   const [showRawJson, setShowRawJson] = useState(false);
   const [showQualityDetails, setShowQualityDetails] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -1657,9 +1663,26 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     localStorage.setItem(DATA_SOURCES_VIEW_MODE_KEY, viewMode);
   }, [viewMode]);
   
+  // Persist selected sheet to localStorage
   useEffect(() => {
-    if (displayableSheets.length > 0 && !selectedSheetId) {
-      setSelectedSheetId(displayableSheets[0].id);
+    if (selectedSheetId) {
+      localStorage.setItem(SELECTED_SHEET_KEY, selectedSheetId);
+    }
+  }, [selectedSheetId]);
+  
+  useEffect(() => {
+    if (displayableSheets.length > 0) {
+      // Check if saved selection still exists in current sheets
+      const savedId = localStorage.getItem(SELECTED_SHEET_KEY);
+      const savedExists = savedId && displayableSheets.some(s => s.id === savedId);
+      
+      if (!selectedSheetId && savedExists) {
+        // Restore saved selection
+        setSelectedSheetId(savedId);
+      } else if (!selectedSheetId || !displayableSheets.some(s => s.id === selectedSheetId)) {
+        // Fall back to first sheet if no valid selection
+        setSelectedSheetId(displayableSheets[0].id);
+      }
     } else if (displayableSheets.length === 0) {
       setSelectedSheetId(null);
     }

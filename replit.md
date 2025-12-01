@@ -14,6 +14,7 @@ CaptureInsight is a screenshot-based analytics platform for marketing managers. 
 - **Default to the most useful view**: When a user first views a feature, default to the most valuable/actionable view (e.g., "Data" view instead of "Files" view for data sources).
 - **Remember user preferences**: Always persist the user's last selected view/state to localStorage so it remains when they refresh or return later.
 - **Pattern**: Use localStorage with a descriptive key (e.g., `captureinsight_<feature>_<setting>`) and initialize state with a function that checks localStorage first, falling back to the default.
+- **Full URL Persistence**: The complete URL path is saved to localStorage (`captureinsight_current_url`) so users return to the exact page they were on after a browser refresh. This includes the current view, any deep link parameters, and query strings.
 
 ## System Architecture
 CaptureInsight is a full-stack application. The frontend uses React 18 (TypeScript) with Vite, Radix UI, Tailwind CSS, TanStack React Query, TipTap, and Motion library. The backend is an Express.js (Node.js) server with PostgreSQL (Neon Serverless) and Drizzle ORM. Authentication is handled via Replit Auth (OAuth), and sessions use `connect-pg-simple`.
