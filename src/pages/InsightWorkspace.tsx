@@ -2838,7 +2838,21 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                     {cleaningStatus === 'completed' && cleanedData?.data && (
                       <>
                         <button
-                          onClick={() => { setShowRawJson(false); setIsEditing(false); }}
+                          onClick={() => { 
+                            // Sync JSON edits back to table when switching to Table View
+                            if (showRawJson && editedJson && !jsonError) {
+                              try {
+                                const parsed = JSON.parse(editedJson);
+                                if (Array.isArray(parsed)) {
+                                  setEditableTableData(parsed);
+                                }
+                              } catch (e) {
+                                // Invalid JSON, don't sync
+                              }
+                            }
+                            setShowRawJson(false); 
+                            setIsEditing(false); 
+                          }}
                           className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
                             !showRawJson ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
                           }`}
@@ -2849,7 +2863,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                           onClick={() => { 
                             setShowRawJson(true); 
                             setIsEditing(true);
-                            setEditedJson(JSON.stringify(cleanedData?.data || [], null, 2));
+                            // Use editableTableData (reflects table edits) instead of cleanedData
+                            setEditedJson(JSON.stringify(editableTableData || cleanedData?.data || [], null, 2));
                             setJsonError(null);
                           }}
                           className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
