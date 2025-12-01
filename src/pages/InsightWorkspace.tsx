@@ -2562,10 +2562,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         {isSourcesListCollapsed && (
           <div 
             onClick={() => setIsSourcesListCollapsed(false)}
-            className="w-[14px] min-w-[14px] bg-[#151515] border-r border-[#2A2A2A] flex items-center justify-center cursor-pointer hover:bg-[#1A1A1A] hover:border-[#FF6B35]/50 transition-colors group"
+            className="w-[14px] min-w-[14px] bg-[#2A2A2A] border-r border-[#2A2A2A] flex items-center justify-center cursor-pointer hover:bg-[#1E1E1E] hover:border-[#1E1E1E] transition-colors group"
             title="Expand sources list"
           >
-            <ChevronRight className="w-3 h-3 text-gray-500 group-hover:text-[#FF6B35] transition-colors" />
+            <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
           </div>
         )}
         
