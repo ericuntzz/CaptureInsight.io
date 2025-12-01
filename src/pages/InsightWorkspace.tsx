@@ -1584,9 +1584,19 @@ interface CellEdit {
   newValue: any;
 }
 
+const DATA_SOURCES_VIEW_MODE_KEY = 'captureinsight_data_sources_view_mode';
+
 function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
   void _sources; void _sheetsData; void _onEditData; void _onRemoveSource;
-  const [viewMode, setViewMode] = useState<'files' | 'data'>('files');
+  
+  // Initialize view mode from localStorage, defaulting to 'data'
+  const [viewMode, setViewMode] = useState<'files' | 'data'>(() => {
+    const saved = localStorage.getItem(DATA_SOURCES_VIEW_MODE_KEY);
+    if (saved === 'files' || saved === 'data') {
+      return saved;
+    }
+    return 'data'; // Default to 'data' view
+  });
   const [selectedSheetId, setSelectedSheetId] = useState<string | null>(null);
   const [showRawJson, setShowRawJson] = useState(false);
   const [showQualityDetails, setShowQualityDetails] = useState(false);
@@ -1627,6 +1637,11 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const sheetTitleInputRef = useRef<HTMLInputElement>(null);
   
   const displayableSheets = sheets.map(transformSheetToDisplayable);
+  
+  // Persist view mode preference to localStorage
+  useEffect(() => {
+    localStorage.setItem(DATA_SOURCES_VIEW_MODE_KEY, viewMode);
+  }, [viewMode]);
   
   useEffect(() => {
     if (displayableSheets.length > 0 && !selectedSheetId) {
