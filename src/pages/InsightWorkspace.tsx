@@ -1967,6 +1967,30 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     if (undoStack.length === 0 || !editableTableData) return;
     
     const lastEdit = undoStack[undoStack.length - 1];
+    
+    // Handle row-level operations (delete/add)
+    if (lastEdit.type === 'delete-row') {
+      // Restore the deleted row
+      const newData = [...editableTableData];
+      newData.splice(lastEdit.rowIndex, 0, lastEdit.rowData);
+      setEditableTableData(newData);
+      setUndoStack(prev => prev.slice(0, -1));
+      setRedoStack(prev => [...prev, lastEdit]);
+      setHasTableChanges(true);
+      return;
+    }
+    
+    if (lastEdit.type === 'add-row') {
+      // Remove the added row
+      const newData = editableTableData.filter((_, i) => i !== lastEdit.rowIndex);
+      setEditableTableData(newData);
+      setUndoStack(prev => prev.slice(0, -1));
+      setRedoStack(prev => [...prev, lastEdit]);
+      setHasTableChanges(true);
+      return;
+    }
+    
+    // Handle cell-level edits
     const { rowIndex, columnKey, previousValue } = lastEdit;
     
     const newData = [...editableTableData];
@@ -1992,6 +2016,30 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     if (redoStack.length === 0 || !editableTableData) return;
     
     const nextEdit = redoStack[redoStack.length - 1];
+    
+    // Handle row-level operations (delete/add)
+    if (nextEdit.type === 'delete-row') {
+      // Re-delete the row
+      const newData = editableTableData.filter((_, i) => i !== nextEdit.rowIndex);
+      setEditableTableData(newData);
+      setRedoStack(prev => prev.slice(0, -1));
+      setUndoStack(prev => [...prev, nextEdit]);
+      setHasTableChanges(true);
+      return;
+    }
+    
+    if (nextEdit.type === 'add-row') {
+      // Re-add the row
+      const newData = [...editableTableData];
+      newData.splice(nextEdit.rowIndex, 0, nextEdit.rowData);
+      setEditableTableData(newData);
+      setRedoStack(prev => prev.slice(0, -1));
+      setUndoStack(prev => [...prev, nextEdit]);
+      setHasTableChanges(true);
+      return;
+    }
+    
+    // Handle cell-level edits
     const { rowIndex, columnKey, newValue } = nextEdit;
     
     const newData = [...editableTableData];
@@ -2317,15 +2365,21 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const handleAddRow = () => {
     if (!editableTableData || editableTableData.length === 0) return;
     
-    // Save current state to undo stack before adding
-    setUndoStack(prev => [...prev, JSON.parse(JSON.stringify(editableTableData))]);
-    setRedoStack([]); // Clear redo stack on new action
-    
     const templateRow = editableTableData[0];
     const newRow: Record<string, any> = {};
     Object.keys(templateRow).forEach(key => {
       newRow[key] = null;
     });
+    
+    const newRowIndex = editableTableData.length;
+    
+    // Save typed undo entry for add-row operation
+    setUndoStack(prev => [...prev, { 
+      type: 'add-row', 
+      rowIndex: newRowIndex, 
+      rowData: JSON.parse(JSON.stringify(newRow)) 
+    }]);
+    setRedoStack([]); // Clear redo stack on new action
     
     setEditableTableData([...editableTableData, newRow]);
     setHasTableChanges(true);
@@ -2334,8 +2388,15 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const handleDeleteRow = (rowIndex: number) => {
     if (!editableTableData) return;
     
-    // Save current state to undo stack before deleting
-    setUndoStack(prev => [...prev, JSON.parse(JSON.stringify(editableTableData))]);
+    // Capture the row data before deleting
+    const deletedRowData = JSON.parse(JSON.stringify(editableTableData[rowIndex]));
+    
+    // Save typed undo entry for delete-row operation
+    setUndoStack(prev => [...prev, { 
+      type: 'delete-row', 
+      rowIndex, 
+      rowData: deletedRowData 
+    }]);
     setRedoStack([]); // Clear redo stack on new action
     
     const newData = editableTableData.filter((_, i) => i !== rowIndex);
