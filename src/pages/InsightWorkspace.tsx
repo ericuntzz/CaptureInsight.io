@@ -2114,6 +2114,13 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                     <Database className="w-12 h-12 text-[#3A3A3A] mx-auto mb-3" />
                     <p className="text-gray-400 text-sm">Data processing pending</p>
                     <p className="text-gray-500 text-xs mt-1">This data will be automatically processed</p>
+                    <button
+                      onClick={handleRetry}
+                      disabled={retryProcessingMutation.isPending}
+                      className="mt-4 px-4 py-2 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#D04A1B] disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all"
+                    >
+                      {retryProcessingMutation.isPending ? 'Starting...' : 'Start Processing Now'}
+                    </button>
                   </div>
                 )}
               </div>

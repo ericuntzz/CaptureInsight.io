@@ -2175,6 +2175,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .then(result => {
             if (result.success) {
               console.log(`[Routes] Data ingestion completed for sheet ${sheet.id}: ${result.rowCount} rows`);
+              // After ingestion, trigger AI data cleaning
+              triggerDataCleaning(sheet.id);
             } else {
               console.warn(`[Routes] Data ingestion failed for sheet ${sheet.id}: ${result.error}`);
             }
@@ -2182,6 +2184,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .catch(err => {
             console.error(`[Routes] Data ingestion error for sheet ${sheet.id}:`, err);
           });
+      } else if (isLinkOnly) {
+        // For non-Google Sheets links, trigger data cleaning directly
+        triggerDataCleaning(sheet.id);
       }
 
       // Create an insight linked to this capture
