@@ -31,7 +31,7 @@ import {
   useDeleteChatConversation,
 } from '../hooks/useChatConversations';
 import { useWorkspaceSheets, useUpdateSheetCleanedData, useRetrySheetProcessing, type Sheet } from '../hooks/useSheets';
-import { useUpdateSheet } from '../hooks/useSpaces';
+import { useUpdateSheet, useDeleteSheet } from '../hooks/useSpaces';
 import { ChevronDown } from 'lucide-react';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
@@ -1638,6 +1638,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const updateCleanedDataMutation = useUpdateSheetCleanedData();
   const retryProcessingMutation = useRetrySheetProcessing();
   const updateSheetMutation = useUpdateSheet();
+  const deleteSheetMutation = useDeleteSheet();
   
   // Sheet title editing state
   const [editingSheetTitleId, setEditingSheetTitleId] = useState<string | null>(null);
@@ -2326,6 +2327,28 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     setEditingSheetTitleValue('');
   };
 
+  // Handle deleting a sheet
+  const handleDeleteSheet = (e: React.MouseEvent, sheetId: string) => {
+    e.stopPropagation();
+    
+    // If this is the selected sheet, clear selection
+    if (selectedSheetId === sheetId) {
+      // Find next available sheet to select
+      const currentIndex = displayableSheets.findIndex(s => s.id === sheetId);
+      const nextSheet = displayableSheets[currentIndex + 1] || displayableSheets[currentIndex - 1];
+      setSelectedSheetId(nextSheet?.id || null);
+    }
+    
+    deleteSheetMutation.mutate(sheetId, {
+      onSuccess: () => {
+        toast.success('Data source deleted');
+      },
+      onError: () => {
+        toast.error('Failed to delete data source');
+      }
+    });
+  };
+
   // Handle title input key down
   const handleSheetTitleKeyDown = (e: React.KeyboardEvent, sheetId: string) => {
     if (e.key === 'Enter') {
@@ -2435,7 +2458,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                 <div
                   key={sheet.id}
                   onClick={() => handleSelectSheet(sheet.id)}
-                  className={`p-3 border-b border-[#2A2A2A] cursor-pointer transition-colors ${
+                  className={`group p-3 border-b border-[#2A2A2A] cursor-pointer transition-colors ${
                     isSelected ? 'bg-[#FF6B35]/10 border-l-2 border-l-[#FF6B35]' : 'hover:bg-[#252525]'
                   }`}
                 >
@@ -2458,29 +2481,42 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                       </span>
                     )}
                   </div>
-                  {/* Title - editable on double-click */}
-                  {isEditingTitle ? (
-                    <input
-                      ref={sheetTitleInputRef}
-                      type="text"
-                      value={editingSheetTitleValue}
-                      onChange={(e) => setEditingSheetTitleValue(e.target.value)}
-                      onBlur={() => handleSheetTitleSave(sheet.id)}
-                      onKeyDown={(e) => handleSheetTitleKeyDown(e, sheet.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-full text-sm text-white bg-[#2A2A2A] border border-[#FF6B35] rounded px-1.5 py-0.5 outline-none"
-                      autoFocus
-                    />
-                  ) : (
-                    <p 
-                      className="text-sm text-white truncate cursor-text hover:text-[#FF6B35] transition-colors"
-                      onDoubleClick={(e) => handleSheetTitleDoubleClick(e, sheet.id)}
-                      title="Double-click to edit title"
+                  {/* Title row with delete button */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      {/* Title - editable on double-click */}
+                      {isEditingTitle ? (
+                        <input
+                          ref={sheetTitleInputRef}
+                          type="text"
+                          value={editingSheetTitleValue}
+                          onChange={(e) => setEditingSheetTitleValue(e.target.value)}
+                          onBlur={() => handleSheetTitleSave(sheet.id)}
+                          onKeyDown={(e) => handleSheetTitleKeyDown(e, sheet.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full text-sm text-white bg-[#2A2A2A] border border-[#FF6B35] rounded px-1.5 py-0.5 outline-none"
+                          autoFocus
+                        />
+                      ) : (
+                        <p 
+                          className="text-sm text-white truncate cursor-text hover:text-[#FF6B35] transition-colors"
+                          onDoubleClick={(e) => handleSheetTitleDoubleClick(e, sheet.id)}
+                          title="Double-click to edit title"
+                        >
+                          {displayTitle}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">{sheet.date}</p>
+                    </div>
+                    {/* Delete button */}
+                    <button
+                      onClick={(e) => handleDeleteSheet(e, sheet.id)}
+                      className="p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors opacity-0 group-hover:opacity-100"
+                      title="Delete data source"
                     >
-                      {displayTitle}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">{sheet.date}</p>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               );
             })
@@ -2542,24 +2578,6 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                     </div>
                   </div>
                 )}
-                
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => toast.info('Edit functionality coming soon!')}
-                    className="flex-1 py-2 px-4 bg-[#2A2A2A] hover:bg-[#3A3A3A] text-white text-sm rounded-lg transition-colors"
-                  >
-                    Edit Data
-                  </button>
-                  <button
-                    onClick={() => {
-                      toast.info('Remove functionality coming soon!');
-                    }}
-                    className="py-2 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
               </div>
             ) : (
               /* DATA VIEW - Cleaned JSON data display */
