@@ -62,7 +62,7 @@ export interface Sheet {
 }
 
 export function useWorkspaceSheets(spaceId: string | null, workspaceId: string | null) {
-  return useQuery<Sheet[]>({
+  const query = useQuery<Sheet[]>({
     queryKey: ['/api/sheets', { spaceId, workspaceId }],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -73,9 +73,18 @@ export function useWorkspaceSheets(spaceId: string | null, workspaceId: string |
       return res.json();
     },
     enabled: !!spaceId,
-    staleTime: 0, // Always refetch to ensure deleted items don't reappear
+    staleTime: 0,
     refetchOnMount: true,
+    refetchInterval: (query) => {
+      const sheets = query.state.data;
+      if (!sheets) return false;
+      const hasPendingSheets = sheets.some(
+        (sheet: Sheet) => sheet.cleaningStatus === 'pending' || sheet.cleaningStatus === 'processing'
+      );
+      return hasPendingSheets ? 3000 : false;
+    },
   });
+  return query;
 }
 
 export function useSheets(spaceId: string | null) {
