@@ -1348,6 +1348,7 @@ export function InsightWorkspace({ spaceId, insightId, onSidebarCollapse, worksp
       onToggle={handleCollapseData}
       onEditData={handleEditData}
       onRemoveSource={handleRemoveSource}
+      onAddData={onBack}
     />
   );
 
@@ -1527,6 +1528,7 @@ interface DataSourcesPanelProps {
   onToggle: () => void;
   onEditData: (sourceId: string, newData: any) => void;
   onRemoveSource: (sourceId: string) => void;
+  onAddData: () => void;
 }
 
 interface DisplayableSheet {
@@ -1600,7 +1602,7 @@ const DATA_SOURCES_VIEW_MODE_KEY = 'captureinsight_data_sources_view_mode';
 const SELECTED_SHEET_KEY = 'captureinsight_selected_sheet_id';
 const SOURCES_LIST_COLLAPSED_KEY = 'captureinsight_sources_list_collapsed';
 
-function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource }: DataSourcesPanelProps) {
+function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource, onAddData }: DataSourcesPanelProps) {
   void _sources; void _sheetsData; void _onEditData; void _onRemoveSource;
   
   // Initialize view mode from localStorage, defaulting to 'data'
@@ -2505,7 +2507,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       <div className="flex-shrink-0 border-b border-[#2A2A2A]">
         <div className="flex items-center justify-between px-4 py-3">
           <button
-            onClick={() => toast.info('Add data source functionality coming soon!')}
+            onClick={onAddData}
             className="p-1.5 bg-[#FF6B35] hover:bg-[#E55A2B] text-white rounded-lg transition-colors"
             title="Add data source"
           >
