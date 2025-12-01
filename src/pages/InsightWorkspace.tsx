@@ -2558,9 +2558,12 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         cleaningStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
                         'bg-gray-500/20 text-gray-400'
                       }`}>
-                        {cleaningStatus === 'completed' ? 'AI Processed' :
-                         cleaningStatus === 'processing' ? 'Processing...' :
-                         cleaningStatus === 'failed' ? 'Processing Failed' : 'Awaiting Processing'}
+                        {cleaningStatus === 'completed' 
+                          ? cleanedData?.metadata?.extractedAt 
+                            ? `Processed ${new Date(cleanedData.metadata.extractedAt).toLocaleDateString()}`
+                            : 'AI Processed'
+                          : cleaningStatus === 'processing' ? 'Processing...' :
+                            cleaningStatus === 'failed' ? 'Processing Failed' : 'Awaiting Processing'}
                       </span>
                     </div>
                   </div>
@@ -2625,17 +2628,6 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                   
                   {cleanedData?.description && (
                     <p className="text-sm text-gray-400">{cleanedData.description}</p>
-                  )}
-                  {cleanedData?.metadata && (
-                    <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                      {cleanedData.metadata.rowCount && <span>{cleanedData.metadata.rowCount} records</span>}
-                      {cleanedData.metadata.columnCount && <span>•</span>}
-                      {cleanedData.metadata.columnCount && <span>{cleanedData.metadata.columnCount} fields</span>}
-                      {cleanedData.metadata.extractedAt && <span>•</span>}
-                      {cleanedData.metadata.extractedAt && (
-                        <span>Processed {new Date(cleanedData.metadata.extractedAt).toLocaleDateString()}</span>
-                      )}
-                    </div>
                   )}
                 </div>
 
