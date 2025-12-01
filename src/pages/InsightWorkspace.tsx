@@ -2668,7 +2668,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
               </div>
             )}
             {/* Collapse bar - entire bar turns orange on hover */}
-            <div className="w-[14px] min-w-[14px] h-full bg-[#2A2A2A] border-r border-[#2A2A2A] flex items-center justify-center shrink-0 group-hover:bg-[#FF6B35] group-hover:border-[#FF6B35] transition-colors">
+            <div className="w-[14px] min-w-[14px] h-full bg-[#2A2A2A] border-r border-[#2A2A2A] flex items-center justify-center shrink-0 hover:bg-[#FF6B35] hover:border-[#FF6B35] transition-colors">
               <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
             </div>
           </div>
