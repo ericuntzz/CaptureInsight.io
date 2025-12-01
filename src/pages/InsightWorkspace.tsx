@@ -2419,18 +2419,13 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       {/* Header with Files/Data toggle */}
       <div className="flex-shrink-0 border-b border-[#2A2A2A]">
         <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => toast.info('Add data source functionality coming soon!')}
-              className="p-1.5 bg-[#FF6B35] hover:bg-[#E55A2B] text-white rounded-lg transition-colors"
-              title="Add data source"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-            <span className="px-2 py-0.5 bg-[#2A2F3E] rounded-full text-xs text-gray-400">
-              {displayableSheets.length}
-            </span>
-          </div>
+          <button
+            onClick={() => toast.info('Add data source functionality coming soon!')}
+            className="p-1.5 bg-[#FF6B35] hover:bg-[#E55A2B] text-white rounded-lg transition-colors"
+            title="Add data source"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
           <div className="flex items-center gap-2">
             {/* Files/Data Toggle */}
             <div className="flex bg-[#2A2A2A] rounded-lg p-0.5">
