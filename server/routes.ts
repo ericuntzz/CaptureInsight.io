@@ -1049,15 +1049,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // For link type sheets, the URL might be in the name field
-      // Store it in dataSourceMeta.url for ingestion to find
-      if (sheetData.dataSourceType === 'link' && sheetData.name && isGoogleSheetsUrl(sheetData.name)) {
-        const sourceUrl = sheetData.name;
-        sheetData.dataSourceMeta = {
-          ...sheetData.dataSourceMeta,
-          url: sourceUrl,
-        };
-        console.log(`[Routes] Google Sheets link detected in name: ${sourceUrl}`);
+      // For link type sheets, ensure we have a valid URL in dataSourceMeta
+      // Priority: 1) dataSourceMeta.url (already set), 2) name field (legacy fallback)
+      const existingUrl = sheetData.dataSourceMeta?.url;
+      if (sheetData.dataSourceType === 'link') {
+        if (existingUrl && isGoogleSheetsUrl(existingUrl)) {
+          // URL already properly set in dataSourceMeta - use it
+          console.log(`[Routes] Google Sheets URL from dataSourceMeta: ${existingUrl}`);
+        } else if (sheetData.name && isGoogleSheetsUrl(sheetData.name) && sheetData.name.length > 50) {
+          // Legacy fallback: URL is in name field (only if it's a full URL, not truncated)
+          const sourceUrl = sheetData.name;
+          sheetData.dataSourceMeta = {
+            ...sheetData.dataSourceMeta,
+            url: sourceUrl,
+          };
+          console.log(`[Routes] Google Sheets link detected in name (legacy): ${sourceUrl}`);
+        }
       }
       
       if (securityMode === 0 && sheetData.data !== undefined && sheetData.data !== null) {
