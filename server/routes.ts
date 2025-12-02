@@ -23,9 +23,10 @@ import { ingestOnCreate, isGoogleSheetsUrl } from "./ai/dataIngestion";
 import { triggerDataCleaning } from "./ai/dataCleaning";
 import { serverEncryption } from "./encryption";
 import { db } from "./db";
-import { userEncryptionKeys, serverEncryptionKeys } from "../shared/schema";
+import { userEncryptionKeys, serverEncryptionKeys, users, aiFeedback, chatMessages } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import * as OTPAuth from "otpauth";
+import { filterPII } from "./ai/piiFilter";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -638,6 +639,194 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error verifying login 2FA:", error);
       res.status(500).json({ message: "Failed to verify login 2FA code" });
+    }
+  });
+
+  // ==================== AI LEARNING CONSENT & FEEDBACK ====================
+  
+  // Get user's AI learning consent and onboarding status
+  app.get('/api/user/ai-learning-consent', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json({
+        aiLearningConsent: user.aiLearningConsent ?? false,
+        aiLearningConsentDate: user.aiLearningConsentDate,
+        hasCompletedOnboarding: user.hasCompletedOnboarding ?? false,
+      });
+    } catch (error) {
+      console.error("Error fetching AI learning consent:", error);
+      res.status(500).json({ message: "Failed to fetch AI learning consent" });
+    }
+  });
+  
+  // Update user's AI learning consent
+  app.post('/api/user/ai-learning-consent', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { consent } = req.body;
+      
+      if (typeof consent !== 'boolean') {
+        return res.status(400).json({ message: "Consent must be a boolean value" });
+      }
+      
+      await db
+        .update(users)
+        .set({
+          aiLearningConsent: consent,
+          aiLearningConsentDate: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+      
+      res.json({
+        success: true,
+        aiLearningConsent: consent,
+        aiLearningConsentDate: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error updating AI learning consent:", error);
+      res.status(500).json({ message: "Failed to update AI learning consent" });
+    }
+  });
+  
+  // Get user's onboarding status
+  app.get('/api/user/onboarding-status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json({
+        hasCompletedOnboarding: user.hasCompletedOnboarding ?? false,
+      });
+    } catch (error) {
+      console.error("Error fetching onboarding status:", error);
+      res.status(500).json({ message: "Failed to fetch onboarding status" });
+    }
+  });
+  
+  // Complete onboarding with consent settings
+  app.post('/api/user/complete-onboarding', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { aiLearningConsent } = req.body;
+      
+      await db
+        .update(users)
+        .set({
+          hasCompletedOnboarding: true,
+          aiLearningConsent: aiLearningConsent === true,
+          aiLearningConsentDate: aiLearningConsent === true ? new Date() : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+      
+      res.json({
+        success: true,
+        hasCompletedOnboarding: true,
+        aiLearningConsent: aiLearningConsent === true,
+      });
+    } catch (error) {
+      console.error("Error completing onboarding:", error);
+      res.status(500).json({ message: "Failed to complete onboarding" });
+    }
+  });
+  
+  // Submit feedback on an AI response
+  app.post('/api/ai/feedback', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { messageId, threadId, rating, feedbackType, comment, query, response, metrics } = req.body;
+      
+      if (!messageId || !rating) {
+        return res.status(400).json({ message: "Missing required fields: messageId and rating" });
+      }
+      
+      if (rating !== 1 && rating !== 2) {
+        return res.status(400).json({ message: "Rating must be 1 (thumbs down) or 2 (thumbs up)" });
+      }
+      
+      // Check if user has given consent for AI learning
+      const user = await storage.getUser(userId);
+      if (!user?.aiLearningConsent) {
+        return res.status(403).json({ 
+          message: "AI learning consent required to submit feedback",
+          requiresConsent: true 
+        });
+      }
+      
+      // Anonymize the query by stripping PII
+      let anonymizedQuery: string | null = null;
+      if (query) {
+        const filtered = filterPII(query, { enabled: true });
+        anonymizedQuery = filtered.text;
+      }
+      
+      // Store feedback with anonymized data
+      const [feedback] = await db
+        .insert(aiFeedback)
+        .values({
+          messageId,
+          threadId,
+          userId, // Stored for consent verification, not used in training
+          rating,
+          feedbackType: feedbackType || (rating === 2 ? 'helpful' : 'not_helpful'),
+          comment: comment || null,
+          anonymizedQuery,
+          anonymizedResponse: response || null, // AI responses shouldn't contain PII
+          responseMetrics: metrics ? {
+            hadCitations: metrics.hadCitations ?? false,
+            citationCount: metrics.citationCount ?? 0,
+            responseLength: metrics.responseLength ?? 0,
+            ragContextUsed: metrics.ragContextUsed ?? false,
+          } : null,
+        })
+        .returning();
+      
+      res.json({
+        success: true,
+        feedbackId: feedback.id,
+        message: "Thank you for your feedback!",
+      });
+    } catch (error) {
+      console.error("Error submitting AI feedback:", error);
+      res.status(500).json({ message: "Failed to submit feedback" });
+    }
+  });
+  
+  // Get feedback stats for a user (optional, for settings page)
+  app.get('/api/ai/feedback/stats', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      const feedbacks = await db
+        .select()
+        .from(aiFeedback)
+        .where(eq(aiFeedback.userId, userId));
+      
+      const thumbsUp = feedbacks.filter(f => f.rating === 2).length;
+      const thumbsDown = feedbacks.filter(f => f.rating === 1).length;
+      
+      res.json({
+        totalFeedback: feedbacks.length,
+        thumbsUp,
+        thumbsDown,
+        contributionMessage: feedbacks.length > 0 
+          ? `You've helped improve our AI ${feedbacks.length} time${feedbacks.length > 1 ? 's' : ''}!`
+          : null,
+      });
+    } catch (error) {
+      console.error("Error fetching feedback stats:", error);
+      res.status(500).json({ message: "Failed to fetch feedback stats" });
     }
   });
 

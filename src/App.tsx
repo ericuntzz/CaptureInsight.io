@@ -42,6 +42,8 @@ import {
   useUpdateTag,
   useDeleteTag,
 } from './hooks/useSpaces';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from './lib/queryClient';
 
 type CaptureMode = 'window' | 'region';
 
@@ -77,6 +79,42 @@ interface FileData {
 export default function App() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  
+  // Check if user has completed onboarding
+  const { data: onboardingStatus } = useQuery({
+    queryKey: ['/api/user/onboarding-status'],
+    queryFn: async () => {
+      const response = await fetch('/api/user/onboarding-status', { credentials: 'include' });
+      if (!response.ok) return { hasCompletedOnboarding: true }; // Default to completed if error
+      return response.json();
+    },
+    enabled: isAuthenticated,
+    staleTime: 60000,
+  });
+  
+  // Mutation to complete onboarding
+  const completeOnboardingMutation = useMutation({
+    mutationFn: async (aiLearningConsent: boolean) => {
+      const response = await apiRequest('POST', '/api/user/complete-onboarding', { aiLearningConsent });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/onboarding-status'] });
+      toast.success('Welcome to CaptureInsight!');
+    },
+    onError: () => {
+      toast.error('Failed to save preferences. Please try again.');
+    },
+  });
+  
+  // Handle onboarding completion
+  const handleOnboardingComplete = (aiLearningConsent: boolean) => {
+    completeOnboardingMutation.mutate(aiLearningConsent);
+  };
+  
+  // Show welcome overlay for new users who haven't completed onboarding
+  const showWelcomeOverlay = isAuthenticated && onboardingStatus && !onboardingStatus.hasCompletedOnboarding;
   
   // On initial load, restore the last visited URL if at root
   const [hasRestoredUrl, setHasRestoredUrl] = useState(false);
@@ -178,7 +216,6 @@ export default function App() {
     }
   };
   
-  const [showWelcome, setShowWelcome] = useState(false);
   const [captureMode, setCaptureMode] = useState<CaptureMode>('region');
   const [captures, setCaptures] = useState<CaptureData[]>([]);
   const [shareLinks, setShareLinks] = useState<ShareLinkData[]>([]);
@@ -1765,6 +1802,12 @@ export default function App() {
           onSelectedCapturesChange={setPanelSelectedCaptureIds}
         />
       )}
+      
+      {/* Welcome Overlay for new users - includes AI learning consent */}
+      <WelcomeOverlay
+        isOpen={showWelcomeOverlay ?? false}
+        onComplete={handleOnboardingComplete}
+      />
     </div>
   );
 }
