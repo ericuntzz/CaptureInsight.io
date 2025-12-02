@@ -81,16 +81,29 @@ export default function App() {
   const router = useRouter();
   const queryClient = useQueryClient();
   
+  // Local state to optimistically close overlay immediately after successful completion
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  
   // Check if user has completed onboarding
-  const { data: onboardingStatus } = useQuery({
+  const { 
+    data: onboardingStatus, 
+    isError: onboardingError,
+    isLoading: onboardingLoading,
+    refetch: refetchOnboarding,
+    isFetching: onboardingFetching,
+  } = useQuery({
     queryKey: ['/api/user/onboarding-status'],
     queryFn: async () => {
       const response = await fetch('/api/user/onboarding-status', { credentials: 'include' });
-      if (!response.ok) return { hasCompletedOnboarding: true }; // Default to completed if error
+      if (!response.ok) {
+        throw new Error('Failed to fetch onboarding status');
+      }
       return response.json();
     },
     enabled: isAuthenticated,
     staleTime: 60000,
+    retry: 2,
   });
   
   // Mutation to complete onboarding
@@ -100,6 +113,8 @@ export default function App() {
       return response.json();
     },
     onSuccess: () => {
+      // Optimistically close the overlay immediately
+      setOnboardingCompleted(true);
       queryClient.invalidateQueries({ queryKey: ['/api/user/onboarding-status'] });
       toast.success('Welcome to CaptureInsight!');
     },
@@ -113,8 +128,28 @@ export default function App() {
     completeOnboardingMutation.mutate(aiLearningConsent);
   };
   
+  // Handle retry when there's an error
+  const handleOnboardingRetry = async () => {
+    setIsRetrying(true);
+    try {
+      await refetchOnboarding();
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+  
   // Show welcome overlay for new users who haven't completed onboarding
-  const showWelcomeOverlay = isAuthenticated && onboardingStatus && !onboardingStatus.hasCompletedOnboarding;
+  // Optimistically close when completed locally
+  // Show during loading to prevent flash of main app
+  // Safer default: show overlay if we can't confirm they've completed (captures consent reliably)
+  const showWelcomeOverlay = isAuthenticated && !onboardingCompleted && (
+    // Show while loading (prevents flash of main app)
+    onboardingLoading ||
+    // Show if we got the status and user hasn't completed onboarding
+    (onboardingStatus && !onboardingStatus.hasCompletedOnboarding) ||
+    // Also show if there was an error fetching status (safer to capture consent than skip)
+    onboardingError
+  );
   
   // On initial load, restore the last visited URL if at root
   const [hasRestoredUrl, setHasRestoredUrl] = useState(false);
@@ -1807,6 +1842,11 @@ export default function App() {
       <WelcomeOverlay
         isOpen={showWelcomeOverlay ?? false}
         onComplete={handleOnboardingComplete}
+        isLoading={completeOnboardingMutation.isPending}
+        isStatusLoading={onboardingLoading || onboardingFetching}
+        hasError={onboardingError && !isRetrying}
+        onRetry={handleOnboardingRetry}
+        isRetrying={isRetrying}
       />
     </div>
   );
