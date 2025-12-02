@@ -45,6 +45,9 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   loginTotpSecret: text("login_totp_secret"), // Encrypted TOTP secret for login 2FA
   loginTotpEnabled: boolean("login_totp_enabled").default(false), // Whether login 2FA is enabled
+  aiLearningConsent: boolean("ai_learning_consent").default(false), // Whether user consents to anonymous feedback for AI improvement
+  aiLearningConsentDate: timestamp("ai_learning_consent_date"), // When consent was given/updated
+  hasCompletedOnboarding: boolean("has_completed_onboarding").default(false), // Whether user has seen the welcome screen
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -438,6 +441,47 @@ export const documentEmbeddings = pgTable("document_embeddings", {
   index("idx_document_embeddings_entity").on(table.entityType, table.entityId),
 ]);
 
+// AI Feedback table for collecting anonymous user feedback on AI responses
+// This data is used to improve AI quality - only collected when user has given consent
+export const aiFeedback = pgTable("ai_feedback", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: varchar("message_id").references(() => chatMessages.id), // The AI response being rated
+  threadId: varchar("thread_id").references(() => chatThreads.id),
+  userId: varchar("user_id").references(() => users.id), // For consent verification only, not included in training data
+  rating: integer("rating"), // 1 = thumbs down, 2 = thumbs up (simple binary for now)
+  feedbackType: varchar("feedback_type"), // 'helpful' | 'not_helpful' | 'inaccurate' | 'incomplete' | 'other'
+  comment: text("comment"), // Optional additional feedback
+  // Anonymized context for training (PII stripped)
+  anonymizedQuery: text("anonymized_query"), // User's question with PII removed
+  anonymizedResponse: text("anonymized_response"), // AI response (already no PII)
+  responseMetrics: jsonb("response_metrics").$type<{
+    hadCitations: boolean;
+    citationCount: number;
+    responseLength: number;
+    ragContextUsed: boolean;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_ai_feedback_user").on(table.userId),
+  index("idx_ai_feedback_rating").on(table.rating),
+  index("idx_ai_feedback_created").on(table.createdAt),
+]);
+
+export const aiFeedbackRelations = relations(aiFeedback, ({ one }) => ({
+  message: one(chatMessages, {
+    fields: [aiFeedback.messageId],
+    references: [chatMessages.id],
+  }),
+  thread: one(chatThreads, {
+    fields: [aiFeedback.threadId],
+    references: [chatThreads.id],
+  }),
+  user: one(users, {
+    fields: [aiFeedback.userId],
+    references: [users.id],
+  }),
+}));
+
 // Companies table
 export const companies = pgTable("companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -575,3 +619,6 @@ export type ChangeLog = typeof changeLogs.$inferSelect;
 
 export type InsertDocumentEmbedding = typeof documentEmbeddings.$inferInsert;
 export type DocumentEmbedding = typeof documentEmbeddings.$inferSelect;
+
+export type InsertAiFeedback = typeof aiFeedback.$inferInsert;
+export type AiFeedback = typeof aiFeedback.$inferSelect;
