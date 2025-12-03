@@ -1629,12 +1629,20 @@ export default function App() {
             </a>
           </div>
         ) : (
-          <a
-            href="/api/login"
-            className="bg-[#FF6B35] hover:bg-[#FF8F5E] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-          >
-            Login with Replit
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href="/api/login"
+              className="text-white/80 hover:text-white px-3 py-2 text-sm font-medium transition-colors"
+            >
+              Login
+            </a>
+            <a
+              href="/api/login"
+              className="bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] hover:shadow-lg hover:shadow-[#FF6B35]/30 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all"
+            >
+              Get Started Free
+            </a>
+          </div>
         )}
       </div>
 
