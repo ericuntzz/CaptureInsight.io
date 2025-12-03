@@ -223,7 +223,7 @@ const getStorageKey = (baseKey: string, workspaceId?: string | null) => {
 };
 
 export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse, workspaceId }: InsightWorkspaceProps) {
-  useAuth();
+  const { aiLearningConsent } = useAuth();
   
   // Panel refs for imperative control
   const chatPanelRef = useRef<ImperativePanelHandle>(null);
@@ -784,15 +784,23 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   }, [localTitle, notes, canvasSelection]);
 
   const handleQuickAction = useCallback((action: QuickActionType) => {
+    if (!aiLearningConsent) {
+      toast.error('AI features require your consent. You can enable this in Settings.');
+      return;
+    }
     const canvasContext = getCanvasContext();
     if (!canvasContext.notes.trim() && !canvasContext.title.trim()) {
       toast.error('Please add some content to the canvas first');
       return;
     }
     sendCanvasAction(action, canvasContext);
-  }, [getCanvasContext, sendCanvasAction]);
+  }, [getCanvasContext, sendCanvasAction, aiLearningConsent]);
 
   const handleRefineSelection = useCallback((selection: SelectionInfo) => {
+    if (!aiLearningConsent) {
+      toast.error('AI features require your consent. You can enable this in Settings.');
+      return;
+    }
     if (!selection.text.trim()) {
       toast.error('Please select some text to refine');
       return;
@@ -809,7 +817,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     };
     
     sendCanvasAction('polish', context);
-  }, [localTitle, notes, sendCanvasAction]);
+  }, [localTitle, notes, sendCanvasAction, aiLearningConsent]);
 
   const handleApplyEditProposal = useCallback((proposal: AIEditProposal) => {
     const suggestedText = proposal.suggestedText;
@@ -1463,63 +1471,63 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
               </div>
               <button
                 onClick={() => handleQuickAction('polish')}
-                disabled={isAiTyping}
+                disabled={isAiTyping || !aiLearningConsent}
                 className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Polish and improve clarity"
+                title={!aiLearningConsent ? "AI features require consent. Enable in Settings." : "Polish and improve clarity"}
               >
                 <Wand2 className="w-3 h-3" />
                 Polish
               </button>
               <button
                 onClick={() => handleQuickAction('shorten')}
-                disabled={isAiTyping}
+                disabled={isAiTyping || !aiLearningConsent}
                 className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Make shorter and more concise"
+                title={!aiLearningConsent ? "AI features require consent. Enable in Settings." : "Make shorter and more concise"}
               >
                 <Minimize2 className="w-3 h-3" />
                 Shorten
               </button>
               <button
                 onClick={() => handleQuickAction('expand')}
-                disabled={isAiTyping}
+                disabled={isAiTyping || !aiLearningConsent}
                 className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Add more detail and context"
+                title={!aiLearningConsent ? "AI features require consent. Enable in Settings." : "Add more detail and context"}
               >
                 <Maximize2 className="w-3 h-3" />
                 Expand
               </button>
               <button
                 onClick={() => handleQuickAction('simplify')}
-                disabled={isAiTyping}
+                disabled={isAiTyping || !aiLearningConsent}
                 className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Simplify language"
+                title={!aiLearningConsent ? "AI features require consent. Enable in Settings." : "Simplify language"}
               >
                 <TextQuote className="w-3 h-3" />
                 Simplify
               </button>
               <button
                 onClick={() => handleQuickAction('professional')}
-                disabled={isAiTyping}
+                disabled={isAiTyping || !aiLearningConsent}
                 className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Make more professional"
+                title={!aiLearningConsent ? "AI features require consent. Enable in Settings." : "Make more professional"}
               >
                 <ShieldCheck className="w-3 h-3" />
                 Professional
               </button>
               <button
                 onClick={() => handleQuickAction('fix_grammar')}
-                disabled={isAiTyping}
+                disabled={isAiTyping || !aiLearningConsent}
                 className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Fix grammar and spelling"
+                title={!aiLearningConsent ? "AI features require consent. Enable in Settings." : "Fix grammar and spelling"}
               >
                 <Eraser className="w-3 h-3" />
                 Grammar
               </button>
               <button
                 onClick={() => handleQuickAction('summarize')}
-                disabled={isAiTyping}
+                disabled={isAiTyping || !aiLearningConsent}
                 className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Summarize content"
+                title={!aiLearningConsent ? "AI features require consent. Enable in Settings." : "Summarize content"}
               >
                 <FileDigit className="w-3 h-3" />
                 Summarize
@@ -1583,6 +1591,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
                 onChange={setNotes}
                 onSelectionChange={setCanvasSelection}
                 onRefineSelection={handleRefineSelection}
+                aiConsentEnabled={aiLearningConsent}
                 placeholder="Start writing your insight..."
               />
             </div>

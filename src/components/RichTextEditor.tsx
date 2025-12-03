@@ -81,6 +81,7 @@ interface RichTextEditorProps {
   onRefineSelection?: (selection: SelectionInfo) => void;
   placeholder?: string;
   disabled?: boolean;
+  aiConsentEnabled?: boolean;
 }
 
 export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(function RichTextEditor({ 
@@ -90,7 +91,8 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
   onSelectionChange,
   onRefineSelection,
   placeholder = 'Add your notes here...',
-  disabled = false 
+  disabled = false,
+  aiConsentEnabled = true
 }, ref) {
   const isInternalUpdate = useRef(false);
   const lastExternalContent = useRef(content);
@@ -300,14 +302,16 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           }}
         >
           <div className="flex items-center gap-1 bg-[#1A1A1A] border border-[#3A3A3A] rounded-lg p-1 shadow-xl">
-            <button
-              onClick={handleRefineClick}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gradient-to-r from-[#FF6B35] to-[#FF8F5C] hover:from-[#E55A2B] hover:to-[#FF6B35] text-white rounded-md transition-all font-medium"
-              title="Refine selection with AI"
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              <span>Refine</span>
-            </button>
+            {aiConsentEnabled && (
+              <button
+                onClick={handleRefineClick}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gradient-to-r from-[#FF6B35] to-[#FF8F5C] hover:from-[#E55A2B] hover:to-[#FF6B35] text-white rounded-md transition-all font-medium"
+                title="Refine selection with AI"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                <span>Refine</span>
+              </button>
+            )}
             <button
               onClick={toggleCommentMode}
               className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors"

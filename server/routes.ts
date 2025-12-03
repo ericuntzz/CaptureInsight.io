@@ -1681,6 +1681,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!insight) {
         return res.status(404).json({ message: "Insight not found" });
       }
+      
+      // Regenerate embeddings for updated content (async, don't block response)
+      if (insight.spaceId) {
+        // Get the decrypted summary for embedding
+        let plainTextSummary = insight.summary || '';
+        if (insight.encryptedSummary && insight.encryptionIv && securityMode === 0) {
+          try {
+            const decrypted = await serverEncryption.decryptForUser(userId, insight.encryptedSummary, insight.encryptionIv);
+            if (decrypted) {
+              plainTextSummary = decrypted;
+            }
+          } catch (e) {
+            console.error('Failed to decrypt summary for embedding:', e);
+          }
+        }
+        
+        // Create a plain insight object for embedding
+        const insightForEmbedding = {
+          ...insight,
+          summary: plainTextSummary,
+        };
+        
+        embedAndStoreInsight(insightForEmbedding, insight.spaceId).catch(err => {
+          console.error('Failed to regenerate insight embedding:', err);
+        });
+      }
+      
       res.json(insight);
     } catch (error) {
       console.error("Error updating insight:", error);
@@ -2098,6 +2125,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Server-side consent verification for canvas AI operations
+      if (canvasContext) {
+        const userId = req.user.claims.sub;
+        const [userRecord] = await db
+          .select({ aiLearningConsent: users.aiLearningConsent })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        
+        if (!userRecord?.aiLearningConsent) {
+          return res.status(403).json({ 
+            message: "AI features require your consent. You can enable this in Settings." 
+          });
+        }
+      }
+
       const chatMessages: ChatMessage[] = messages.map((m: any) => ({
         role: m.role,
         content: m.content,
@@ -2110,7 +2153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } : undefined;
 
       // Apply PII filtering to canvas context if PII filtering is enabled
-      let filteredCanvasContext = undefined;
+      let filteredCanvasContext: { title: string; notes: string; selection?: any } | undefined = undefined;
       if (canvasContext) {
         let filteredTitle = canvasContext.title || '';
         let filteredNotes = canvasContext.notes || '';

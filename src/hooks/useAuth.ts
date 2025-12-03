@@ -7,6 +7,7 @@ interface User {
   firstName?: string;
   lastName?: string;
   profileImageUrl?: string;
+  aiLearningConsent?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -21,6 +22,7 @@ export function useAuth() {
     user,
     isLoading,
     isAuthenticated: !!user,
+    aiLearningConsent: user?.aiLearningConsent ?? false,
     error,
   };
 }
