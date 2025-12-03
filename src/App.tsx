@@ -139,14 +139,10 @@ export default function App() {
   };
   
   // Show welcome overlay ONLY for first-time users who haven't completed onboarding
-  // Returning users skip the onboarding even if hasCompletedOnboarding is false
-  const showWelcomeOverlay = isAuthenticated && !onboardingCompleted && (
-    // Show while loading only if we're still fetching
-    (onboardingLoading && !onboardingStatus) ||
-    // Show only if: user exists, is first login, and hasn't completed onboarding
-    (onboardingStatus && onboardingStatus.isFirstLogin && !onboardingStatus.hasCompletedOnboarding)
-    // Note: We no longer show on error - returning users should not see onboarding
-  );
+  // Wait for onboarding status to load before showing - prevents flash for returning users
+  const showWelcomeOverlay = isAuthenticated && !onboardingCompleted && 
+    // Only show after data loads AND user is a first-time user who hasn't completed onboarding
+    onboardingStatus?.isFirstLogin && !onboardingStatus?.hasCompletedOnboarding;
   
   // On initial load, restore the last visited URL if at root
   const [hasRestoredUrl, setHasRestoredUrl] = useState(false);
