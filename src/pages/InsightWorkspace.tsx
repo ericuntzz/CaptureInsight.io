@@ -20,10 +20,18 @@ import {
   Cloud,
   Check,
   Loader2,
+  Sparkles,
+  Wand2,
+  TextQuote,
+  Minimize2,
+  Maximize2,
+  ShieldCheck,
+  Eraser,
+  FileDigit,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
-import { useChat } from '../hooks/useChat';
+import { useChat, type QuickActionType, type AIEditProposal, type CanvasContext } from '../hooks/useChat';
 import { useInsights, useInsight, useCreateInsight, useUpdateInsight, useDeleteInsight } from '../hooks/useInsights';
 import { 
   useChatConversations, 
@@ -540,7 +548,17 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   
   const activeInsightId = insightId || activeTabId;
   
-  const { messages: chatMessages, sendMessage, isLoading: isAiTyping, isLoadingHistory, historyLoadError, retryLoadHistory } = useChat({
+  const { 
+    messages: chatMessages, 
+    sendMessage, 
+    sendCanvasAction,
+    isLoading: isAiTyping, 
+    isLoadingHistory, 
+    historyLoadError, 
+    retryLoadHistory,
+    pendingEditProposal,
+    clearPendingEditProposal,
+  } = useChat({
     spaceId,
     insightId: activeInsightId,
     chatId: activeChatId,
@@ -745,11 +763,82 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   const handleDoubleClickExpandCanvas = handleExpandCanvas;
   const handleDoubleClickExpandData = handleExpandData;
   
+  // Canvas AI handlers
+  const getCanvasContext = useCallback((): CanvasContext => {
+    return {
+      title: localTitle,
+      notes: notes,
+    };
+  }, [localTitle, notes]);
+
+  const handleQuickAction = useCallback((action: QuickActionType) => {
+    const canvasContext = getCanvasContext();
+    if (!canvasContext.notes.trim() && !canvasContext.title.trim()) {
+      toast.error('Please add some content to the canvas first');
+      return;
+    }
+    sendCanvasAction(action, canvasContext);
+  }, [getCanvasContext, sendCanvasAction]);
+
+  const handleApplyEditProposal = useCallback((proposal: AIEditProposal) => {
+    // Validate the suggested text before applying
+    const suggestedText = proposal.suggestedText;
+    
+    // Check if suggestedText is empty or whitespace-only
+    if (!suggestedText || !suggestedText.trim()) {
+      toast.error('Cannot apply empty edit suggestion');
+      clearPendingEditProposal();
+      return;
+    }
+    
+    // Check if suggestedText looks like explanatory text rather than actual content
+    const lowerText = suggestedText.toLowerCase().trim();
+    const explanatoryPatterns = [
+      /^here['']?s\s/,
+      /^i['']?ve\s/,
+      /^i have\s/,
+      /^i can\s/,
+      /^let me\s/,
+      /^sure[,!]\s/,
+      /^certainly[,!]?\s/,
+      /^of course[,!]?\s/,
+      /^i['']?ll\s/,
+      /^the following\s/,
+      /^below is\s/,
+      /^as requested[,:]?\s/,
+    ];
+    
+    for (const pattern of explanatoryPatterns) {
+      if (pattern.test(lowerText)) {
+        toast.error('This suggestion appears to be explanatory text, not content. Please review manually.');
+        clearPendingEditProposal();
+        return;
+      }
+    }
+    
+    // Apply the validated edit
+    if (proposal.targetType === 'title') {
+      setLocalTitle(suggestedText);
+    } else if (proposal.targetType === 'notes' || proposal.targetType === 'selection') {
+      setNotes(suggestedText);
+    }
+    clearPendingEditProposal();
+    toast.success('Edit applied successfully');
+  }, [clearPendingEditProposal]);
+
+  const handleRejectEditProposal = useCallback(() => {
+    clearPendingEditProposal();
+    toast('Edit proposal dismissed');
+  }, [clearPendingEditProposal]);
+
   // Chat handlers
   const handleSendMessage = async () => {
     if (!aiChatInput.trim()) return;
     const messageContent = aiChatInput.trim();
     setAiChatInput('');
+    
+    // Include canvas context with the chat message so AI can reference it
+    const canvasContext = getCanvasContext();
     
     // Auto-generate title from first message if chat title is "New Chat"
     const currentChat = chatConversations.find(c => c.id === activeChatId);
@@ -774,7 +863,8 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         });
     }
     
-    await sendMessage(messageContent);
+    // Pass canvas context so AI can reference the current document
+    await sendMessage(messageContent, canvasContext.notes.trim() || canvasContext.title.trim() ? canvasContext : undefined);
   };
   
   const handleCopyMessage = (content: string) => {
@@ -1322,9 +1412,129 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
               value={localTitle}
               onChange={(e) => setLocalTitle(e.target.value)}
               onBlur={handleTitleBlur}
-              className="w-full text-xl text-white bg-transparent border-none outline-none focus:opacity-80 transition-opacity mb-6"
+              className="w-full text-xl text-white bg-transparent border-none outline-none focus:opacity-80 transition-opacity mb-4"
               placeholder="Add a title..."
             />
+            
+            {/* AI Quick Actions Bar */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <div className="flex items-center gap-1 text-xs text-[#6B7280] mr-2">
+                <Sparkles className="w-3 h-3" />
+                <span>AI Actions:</span>
+              </div>
+              <button
+                onClick={() => handleQuickAction('polish')}
+                disabled={isAiTyping}
+                className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Polish and improve clarity"
+              >
+                <Wand2 className="w-3 h-3" />
+                Polish
+              </button>
+              <button
+                onClick={() => handleQuickAction('shorten')}
+                disabled={isAiTyping}
+                className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Make shorter and more concise"
+              >
+                <Minimize2 className="w-3 h-3" />
+                Shorten
+              </button>
+              <button
+                onClick={() => handleQuickAction('expand')}
+                disabled={isAiTyping}
+                className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Add more detail and context"
+              >
+                <Maximize2 className="w-3 h-3" />
+                Expand
+              </button>
+              <button
+                onClick={() => handleQuickAction('simplify')}
+                disabled={isAiTyping}
+                className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Simplify language"
+              >
+                <TextQuote className="w-3 h-3" />
+                Simplify
+              </button>
+              <button
+                onClick={() => handleQuickAction('professional')}
+                disabled={isAiTyping}
+                className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Make more professional"
+              >
+                <ShieldCheck className="w-3 h-3" />
+                Professional
+              </button>
+              <button
+                onClick={() => handleQuickAction('fix_grammar')}
+                disabled={isAiTyping}
+                className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Fix grammar and spelling"
+              >
+                <Eraser className="w-3 h-3" />
+                Grammar
+              </button>
+              <button
+                onClick={() => handleQuickAction('summarize')}
+                disabled={isAiTyping}
+                className="px-2.5 py-1 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Summarize content"
+              >
+                <FileDigit className="w-3 h-3" />
+                Summarize
+              </button>
+              {isAiTyping && (
+                <div className="flex items-center gap-1.5 text-xs text-[#FF6B35]">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>AI thinking...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Edit Proposal UI */}
+            {pendingEditProposal && (
+              <div className="mb-4 p-4 bg-gradient-to-r from-[#FF6B35]/10 to-[#2A2A2A] border border-[#FF6B35]/30 rounded-lg">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#FF6B35]" />
+                    <span className="text-sm font-medium text-white">AI Suggestion</span>
+                    <span className="text-xs text-[#6B7280] bg-[#2A2A2A] px-2 py-0.5 rounded">
+                      {pendingEditProposal.type} • {pendingEditProposal.targetType}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleRejectEditProposal}
+                    className="p-1 text-[#6B7280] hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-[#9CA3AF] mb-3">{pendingEditProposal.rationale}</p>
+                <div className="bg-[#1A1A1A] rounded p-3 mb-3 max-h-32 overflow-y-auto">
+                  <p className="text-sm text-white whitespace-pre-wrap">
+                    {pendingEditProposal.suggestedText.slice(0, 500)}
+                    {pendingEditProposal.suggestedText.length > 500 && '...'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleApplyEditProposal(pendingEditProposal)}
+                    className="px-3 py-1.5 text-xs bg-[#FF6B35] hover:bg-[#E55B25] text-white rounded-md transition-colors flex items-center gap-1.5"
+                  >
+                    <Check className="w-3 h-3" />
+                    Apply Changes
+                  </button>
+                  <button
+                    onClick={handleRejectEditProposal}
+                    className="px-3 py-1.5 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
             
             <div className="bg-[#1A1A1A] rounded-lg min-h-[400px]">
               <RichTextEditor

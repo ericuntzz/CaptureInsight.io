@@ -2,6 +2,26 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
+export interface CanvasContext {
+  title: string;
+  notes: string;
+  selection?: {
+    text: string;
+    start?: number;
+    end?: number;
+  };
+}
+
+export type QuickActionType = 'polish' | 'shorten' | 'expand' | 'simplify' | 'professional' | 'fix_grammar' | 'summarize';
+
+export interface AIEditProposal {
+  type: 'replace' | 'insert' | 'delete' | 'rewrite';
+  targetType: 'title' | 'notes' | 'selection';
+  originalText?: string;
+  suggestedText: string;
+  rationale: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -13,6 +33,7 @@ export interface ChatMessage {
     name: string;
     relevanceScore: number;
   }>;
+  editProposals?: AIEditProposal[];
 }
 
 export interface UseChatOptions {
@@ -23,7 +44,8 @@ export interface UseChatOptions {
 
 export interface UseChatReturn {
   messages: ChatMessage[];
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, canvasContext?: CanvasContext) => Promise<void>;
+  sendCanvasAction: (action: QuickActionType, canvasContext: CanvasContext) => Promise<void>;
   isLoading: boolean;
   isLoadingHistory: boolean;
   historyLoadError: string | null;
@@ -31,6 +53,8 @@ export interface UseChatReturn {
   error: string | null;
   clearError: () => void;
   clearMessages: () => void;
+  pendingEditProposal: AIEditProposal | null;
+  clearPendingEditProposal: () => void;
 }
 
 export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptions): UseChatReturn {
@@ -41,6 +65,7 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
   const [error, setError] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
+  const [pendingEditProposal, setPendingEditProposal] = useState<AIEditProposal | null>(null);
   const loadedChatIdRef = useRef<string | null>(null);
   const currentChatIdRef = useRef<string | null>(chatId || null);
 
@@ -51,6 +76,10 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
   const clearMessages = useCallback(() => {
     setMessages([]);
     loadedChatIdRef.current = null;
+  }, []);
+
+  const clearPendingEditProposal = useCallback(() => {
+    setPendingEditProposal(null);
   }, []);
 
   // Function to load chat history
@@ -122,7 +151,7 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
     setHistoryLoadError(null);
   }, [spaceId]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, canvasContext?: CanvasContext) => {
     if (!content.trim()) return;
 
     if (isAuthLoading) {
@@ -169,6 +198,7 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
     setError(null);
+    setPendingEditProposal(null);
 
     // Helper to persist message to the ORIGINAL chat (not current)
     const persistToOriginalChat = async (role: 'user' | 'assistant', msgContent: string, citations?: any[]): Promise<boolean> => {
@@ -210,6 +240,7 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
           messages: chatHistory,
           spaceId: spaceId,
           useRag: true,
+          canvasContext: canvasContext,
         }),
       });
 
@@ -249,12 +280,25 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
         relevanceScore: c.relevanceScore,
       }));
 
+      const editProposals: AIEditProposal[] | undefined = data.editProposals?.map((p: any) => ({
+        type: p.type,
+        targetType: p.targetType,
+        originalText: p.originalText,
+        suggestedText: p.suggestedText,
+        rationale: p.rationale,
+      }));
+
+      if (editProposals && editProposals.length > 0) {
+        setPendingEditProposal(editProposals[0]);
+      }
+
       const aiMessage: ChatMessage = {
         id: `msg-${Date.now()}-ai`,
         role: 'assistant',
         content: data.response,
         timestamp: new Date(),
         citations: citations?.length > 0 ? citations : undefined,
+        editProposals: editProposals?.length > 0 ? editProposals : undefined,
       };
 
       // Persist AI message to the ORIGINAL chat
@@ -286,9 +330,103 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
     }
   }, [messages, spaceId, isAuthenticated, isAuthLoading, isLoadingHistory, chatId, historyLoadError]);
 
+  const sendCanvasAction = useCallback(async (action: QuickActionType, canvasContext: CanvasContext) => {
+    if (isAuthLoading) {
+      toast.error('Please wait while authentication is loading...');
+      return;
+    }
+
+    if (!isAuthenticated) {
+      setError('Please log in to use the AI assistant.');
+      toast.error('Please log in to use the AI assistant.');
+      return;
+    }
+
+    if (!spaceId) {
+      setError('Please select a space first.');
+      toast.error('Please select a space first.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setPendingEditProposal(null);
+
+    try {
+      const actionLabels: Record<QuickActionType, string> = {
+        polish: 'Polish content',
+        shorten: 'Make shorter',
+        expand: 'Expand content',
+        simplify: 'Simplify language',
+        professional: 'Make professional',
+        fix_grammar: 'Fix grammar',
+        summarize: 'Summarize',
+      };
+
+      const userMessage: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'user',
+        content: `${actionLabels[action]}`,
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, userMessage]);
+
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: actionLabels[action] }],
+          spaceId: spaceId,
+          useRag: false,
+          canvasContext: canvasContext,
+          quickAction: action,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to get AI response');
+      }
+
+      const data = await response.json();
+
+      const editProposals: AIEditProposal[] | undefined = data.editProposals?.map((p: any) => ({
+        type: p.type,
+        targetType: p.targetType,
+        originalText: p.originalText,
+        suggestedText: p.suggestedText,
+        rationale: p.rationale,
+      }));
+
+      if (editProposals && editProposals.length > 0) {
+        setPendingEditProposal(editProposals[0]);
+      }
+
+      const aiMessage: ChatMessage = {
+        id: `msg-${Date.now()}-ai`,
+        role: 'assistant',
+        content: data.response,
+        timestamp: new Date(),
+        editProposals: editProposals?.length > 0 ? editProposals : undefined,
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
+    } catch (err) {
+      console.error('Canvas action error:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Failed to process canvas action';
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [spaceId, isAuthenticated, isAuthLoading]);
+
   return {
     messages,
     sendMessage,
+    sendCanvasAction,
     isLoading,
     isLoadingHistory,
     historyLoadError,
@@ -296,5 +434,7 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
     error,
     clearError,
     clearMessages,
+    pendingEditProposal,
+    clearPendingEditProposal,
   };
 }

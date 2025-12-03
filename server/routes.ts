@@ -2086,7 +2086,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ai/chat', isAuthenticated, async (req: any, res) => {
     try {
-      const { messages, context, spaceGoals, spaceId, useRag, piiFilter } = req.body;
+      const { messages, context, spaceGoals, spaceId, useRag, piiFilter, canvasContext, quickAction } = req.body;
 
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({ message: "Messages must be an array" });
@@ -2103,16 +2103,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content: m.content,
       }));
 
+      // Prepare PII filter options
+      const piiFilterOptions = piiFilter ? {
+        enabled: piiFilter.enabled === true,
+        patterns: piiFilter.patterns,
+      } : undefined;
+
+      // Apply PII filtering to canvas context if PII filtering is enabled
+      let filteredCanvasContext = undefined;
+      if (canvasContext) {
+        let filteredTitle = canvasContext.title || '';
+        let filteredNotes = canvasContext.notes || '';
+        let filteredSelection = canvasContext.selection;
+
+        if (piiFilterOptions?.enabled) {
+          // Filter PII from canvas title and notes before sending to AI
+          const titleFiltered = filterPII(filteredTitle, piiFilterOptions);
+          const notesFiltered = filterPII(filteredNotes, piiFilterOptions);
+          
+          filteredTitle = titleFiltered.text;
+          filteredNotes = notesFiltered.text;
+          
+          // Also filter selection text if present
+          if (filteredSelection?.text) {
+            const selectionFiltered = filterPII(filteredSelection.text, piiFilterOptions);
+            filteredSelection = {
+              ...filteredSelection,
+              text: selectionFiltered.text,
+            };
+          }
+        }
+
+        filteredCanvasContext = {
+          title: filteredTitle,
+          notes: filteredNotes,
+          selection: filteredSelection,
+        };
+      }
+
       const result = await chat({
         messages: chatMessages,
         spaceId,
         spaceGoals,
         additionalContext: context,
         useRag: useRag !== false,
-        piiFilter: piiFilter ? {
-          enabled: piiFilter.enabled === true,
-          patterns: piiFilter.patterns,
-        } : undefined,
+        piiFilter: piiFilterOptions,
+        canvasContext: filteredCanvasContext,
+        quickAction: quickAction,
       });
       res.json(result);
     } catch (error) {

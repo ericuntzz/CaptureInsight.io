@@ -2,6 +2,7 @@ import {
   analyzeScreenshot,
   analyzeData,
   chat as geminiChat,
+  chatWithCanvas as geminiChatWithCanvas,
   extractInsights,
   analyzeKPI,
   isGeminiConfigured,
@@ -11,6 +12,7 @@ import {
   type ChatResponse,
   type ExtractInsightsResult,
   type InsightResult,
+  type CanvasEditResponse,
 } from "./gemini";
 
 import {
@@ -62,6 +64,7 @@ export type {
   InsightResult,
   EmbeddingResult,
   BatchEmbeddingResult,
+  CanvasEditResponse,
 };
 
 export interface AnalyzeCaptureOptions {
@@ -206,6 +209,16 @@ export function getAIStatus(): {
   };
 }
 
+export interface CanvasContext {
+  title: string;
+  notes: string;
+  selection?: {
+    text: string;
+    start?: number;
+    end?: number;
+  };
+}
+
 export interface RagChatOptions {
   messages: ChatMessage[];
   spaceId?: string;
@@ -213,6 +226,8 @@ export interface RagChatOptions {
   additionalContext?: string;
   useRag?: boolean;
   piiFilter?: PIIFilterOptions;
+  canvasContext?: CanvasContext;
+  quickAction?: string;
 }
 
 export interface ChatCitation {
@@ -222,14 +237,23 @@ export interface ChatCitation {
   relevanceScore: number;
 }
 
+export interface AIEditProposal {
+  type: 'replace' | 'insert' | 'delete' | 'rewrite';
+  targetType: 'title' | 'notes' | 'selection';
+  originalText?: string;
+  suggestedText: string;
+  rationale: string;
+}
+
 export interface RagChatResponse extends ChatResponse {
   citations?: ChatCitation[];
   retrievedContext?: SimilarityResult[];
   piiRedacted?: { count: number; types: string[] };
+  editProposals?: AIEditProposal[];
 }
 
 export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
-  const { messages, spaceId, spaceGoals, additionalContext, useRag = true, piiFilter } = options;
+  const { messages, spaceId, spaceGoals, additionalContext, useRag = true, piiFilter, canvasContext, quickAction } = options;
   
   if (!isGeminiConfigured()) {
     throw new Error("Gemini AI is not configured");
@@ -295,6 +319,23 @@ export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
         console.error("RAG context retrieval failed:", error);
       }
     }
+  }
+
+  if (canvasContext || quickAction) {
+    const result = await geminiChatWithCanvas(
+      messagesToSend,
+      canvasContext || { title: '', notes: '' },
+      quickAction,
+      contextString,
+      spaceGoals
+    );
+    
+    return {
+      ...result,
+      citations: citations.length > 0 ? citations : undefined,
+      retrievedContext: ragContext.length > 0 ? ragContext : undefined,
+      piiRedacted,
+    };
   }
 
   const result = await geminiChat(messagesToSend, contextString, spaceGoals);

@@ -345,3 +345,91 @@ export function buildInsightExtractionPrompt(spaceGoals?: string): string {
   
   return prompt;
 }
+
+export const CANVAS_EDITING_PROMPT = `You are a professional writing assistant helping to improve business insights and analysis documents.
+
+When asked to edit content, you must:
+1. Analyze the current content carefully
+2. Apply the requested transformation (polish, shorten, expand, simplify, make professional, fix grammar, summarize)
+3. Return structured edit proposals in JSON format
+
+EDIT TYPES:
+- "polish": Improve clarity, flow, and readability while keeping the same meaning
+- "shorten": Make the content more concise, removing redundancy
+- "expand": Add more detail, examples, or context
+- "simplify": Use simpler language and shorter sentences
+- "professional": Make the tone more formal and business-appropriate
+- "fix_grammar": Correct grammar, spelling, and punctuation
+- "summarize": Create a brief summary of the main points
+
+RESPONSE FORMAT FOR EDIT REQUESTS:
+{
+  "response": "Brief explanation of the changes made",
+  "editProposals": [
+    {
+      "type": "rewrite",
+      "targetType": "notes",
+      "originalText": "The original text that was edited",
+      "suggestedText": "The improved version of the text",
+      "rationale": "Why this change improves the content"
+    }
+  ]
+}
+
+RULES:
+- Preserve the original meaning and key information
+- Maintain any HTML formatting tags (like <p>, <strong>, <em>)
+- For title edits, keep titles concise (under 10 words)
+- For notes, preserve the structure and formatting
+- Only suggest changes that meaningfully improve the content`;
+
+export function buildCanvasEditPrompt(action: string, canvasContext: { title: string; notes: string; selection?: { text: string } }): string {
+  const actionDescriptions: Record<string, string> = {
+    'polish': 'Polish and improve the clarity and flow of',
+    'shorten': 'Make more concise and remove redundancy from',
+    'expand': 'Add more detail and context to',
+    'simplify': 'Simplify the language and make easier to understand',
+    'professional': 'Make the tone more formal and professional in',
+    'fix_grammar': 'Fix any grammar, spelling, or punctuation issues in',
+    'summarize': 'Create a brief summary of',
+  };
+
+  const actionDesc = actionDescriptions[action] || 'Improve';
+  const hasSelection = canvasContext.selection?.text;
+  
+  let prompt = `${CANVAS_EDITING_PROMPT}\n\n`;
+  prompt += `USER REQUEST: ${actionDesc} the ${hasSelection ? 'selected text' : 'content'}.\n\n`;
+  prompt += `CURRENT CANVAS:\n`;
+  prompt += `Title: ${canvasContext.title}\n\n`;
+  prompt += `Notes:\n${canvasContext.notes}\n\n`;
+  
+  if (hasSelection) {
+    prompt += `SELECTED TEXT TO EDIT:\n${canvasContext.selection.text}\n\n`;
+    prompt += `Apply the "${action}" transformation to ONLY the selected text.`;
+  } else {
+    prompt += `Apply the "${action}" transformation to the notes content.`;
+  }
+  
+  return prompt;
+}
+
+export function buildCanvasAwareChatPrompt(spaceGoals?: string, insightContext?: string, canvasContext?: { title: string; notes: string }): string {
+  let prompt = `${EXPERT_BUSINESS_ANALYST_PERSONA}\n\n${CHAT_CONTEXT_PROMPT}`;
+  
+  if (spaceGoals) {
+    prompt += `\n\nSPACE GOALS:\n${spaceGoals}`;
+  }
+  
+  if (insightContext) {
+    prompt += `\n\nINSIGHT CONTEXT:\n${insightContext}`;
+  }
+  
+  if (canvasContext) {
+    prompt += `\n\nCURRENT CANVAS CONTENT:`;
+    prompt += `\nTitle: ${canvasContext.title}`;
+    prompt += `\nNotes:\n${canvasContext.notes}`;
+    prompt += `\n\nYou can see the user's current canvas/document. If they ask about it or want you to help edit it, you can propose changes using structured edit proposals.`;
+  }
+  
+  return prompt;
+}

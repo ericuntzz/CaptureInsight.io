@@ -5,6 +5,8 @@ import {
   buildAnalysisPrompt,
   buildChatPrompt,
   buildInsightExtractionPrompt,
+  buildCanvasEditPrompt,
+  buildCanvasAwareChatPrompt,
   SCREENSHOT_ANALYSIS_PROMPT,
   DATA_TABLE_ANALYSIS_PROMPT,
   EXPERT_BUSINESS_ANALYST_PERSONA,
@@ -257,6 +259,145 @@ function extractSuggestedFollowUps(response: string): string[] {
   }
   
   return followUps;
+}
+
+export interface CanvasEditProposal {
+  type: 'replace' | 'insert' | 'delete' | 'rewrite';
+  targetType: 'title' | 'notes' | 'selection';
+  originalText?: string;
+  suggestedText: string;
+  rationale: string;
+}
+
+export interface CanvasEditResponse extends ChatResponse {
+  editProposals?: CanvasEditProposal[];
+}
+
+export interface CanvasContext {
+  title: string;
+  notes: string;
+  selection?: {
+    text: string;
+    start?: number;
+    end?: number;
+  };
+}
+
+export async function chatWithCanvas(
+  messages: ChatMessage[],
+  canvasContext: CanvasContext,
+  quickAction?: string,
+  context?: string,
+  spaceGoals?: string
+): Promise<CanvasEditResponse> {
+  return rateLimiter(async () => {
+    let systemPrompt: string;
+    let userPrompt: string | null = null;
+    
+    if (quickAction) {
+      systemPrompt = buildCanvasEditPrompt(quickAction, canvasContext);
+      userPrompt = `Apply the "${quickAction}" transformation now and return the result in JSON format with editProposals.`;
+    } else {
+      systemPrompt = buildCanvasAwareChatPrompt(spaceGoals, context, canvasContext);
+    }
+    
+    const contents = messages.map((msg) => ({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }],
+    }));
+
+    if (userPrompt) {
+      contents.push({
+        role: "user",
+        parts: [{ text: userPrompt }],
+      });
+    }
+
+    const useProModel = messages.length > 10 || 
+      messages.some(m => m.content.length > 2000);
+    
+    const response = await generateWithRetry(
+      useProModel ? PRO_MODEL : FLASH_MODEL,
+      contents,
+      systemPrompt
+    );
+    
+    if (quickAction) {
+      try {
+        // Try to extract JSON from ```json blocks first (more reliable)
+        const jsonBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+        let jsonContent: string | null = null;
+        
+        if (jsonBlockMatch) {
+          jsonContent = jsonBlockMatch[1].trim();
+        } else {
+          // Fall back to matching any JSON object
+          const jsonMatch = response.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            jsonContent = jsonMatch[0];
+          }
+        }
+        
+        if (jsonContent) {
+          const parsed = JSON.parse(jsonContent);
+          
+          // Validate the parsed structure has the expected shape
+          if (parsed.editProposals && Array.isArray(parsed.editProposals)) {
+            // Validate each edit proposal has required fields and sensible content
+            const validProposals = parsed.editProposals.filter((proposal: any) => {
+              if (!proposal.suggestedText || typeof proposal.suggestedText !== 'string') {
+                return false;
+              }
+              // Filter out proposals where suggestedText looks like explanatory text
+              const lowerText = proposal.suggestedText.toLowerCase().trim();
+              const explanatoryPatterns = [
+                /^here['']?s/,
+                /^i['']?ve/,
+                /^i have/,
+                /^i can/,
+                /^let me/,
+                /^sure[,!]/,
+                /^certainly/,
+                /^of course/,
+                /^i['']?ll/,
+                /^this is/,
+                /^the following/,
+              ];
+              for (const pattern of explanatoryPatterns) {
+                if (pattern.test(lowerText)) {
+                  console.warn("Filtered out edit proposal with explanatory text:", proposal.suggestedText.slice(0, 100));
+                  return false;
+                }
+              }
+              return true;
+            });
+            
+            return {
+              response: parsed.response || `Applied "${quickAction}" transformation to your content.`,
+              editProposals: validProposals,
+              suggestedFollowUps: [],
+            };
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse canvas edit JSON:", e);
+      }
+      
+      // When JSON parsing fails or structure is invalid, do NOT create an edit proposal
+      // Just return the text response so the user can see what the AI said
+      console.warn("Canvas edit JSON parsing failed - returning text response only without edit proposals");
+      return {
+        response: `I tried to process your "${quickAction}" request, but couldn't generate a proper edit. Here's my response:\n\n${response}`,
+        editProposals: [], // Empty array - no garbage proposals
+        suggestedFollowUps: [],
+      };
+    }
+    
+    return {
+      response,
+      suggestedFollowUps: extractSuggestedFollowUps(response),
+    };
+  });
 }
 
 export interface InsightResult {
