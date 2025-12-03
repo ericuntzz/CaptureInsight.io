@@ -41,7 +41,7 @@ import {
 } from '../hooks/useChatConversations';
 import { useWorkspaceSheets, useUpdateSheetCleanedData, useRetrySheetProcessing, type Sheet } from '../hooks/useSheets';
 import { useUpdateSheet, useDeleteSheet } from '../hooks/useSpaces';
-import { RichTextEditor } from '../components/RichTextEditor';
+import { RichTextEditor, type RichTextEditorRef, type SelectionInfo } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
 import {
   ResizablePanelGroup,
@@ -341,6 +341,8 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   const [viewMode, setViewMode] = useState<'default' | 'slide'>('default');
   const [notes, setNotes] = useState('');
   const [localTitle, setLocalTitle] = useState('Untitled Insight');
+  const [canvasSelection, setCanvasSelection] = useState<SelectionInfo | null>(null);
+  const editorRef = useRef<RichTextEditorRef>(null);
   
   // Track pending saves for debouncing
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -765,11 +767,21 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   
   // Canvas AI handlers
   const getCanvasContext = useCallback((): CanvasContext => {
-    return {
+    const context: CanvasContext = {
       title: localTitle,
       notes: notes,
     };
-  }, [localTitle, notes]);
+    
+    if (canvasSelection) {
+      context.selection = {
+        text: canvasSelection.text,
+        start: canvasSelection.from,
+        end: canvasSelection.to,
+      };
+    }
+    
+    return context;
+  }, [localTitle, notes, canvasSelection]);
 
   const handleQuickAction = useCallback((action: QuickActionType) => {
     const canvasContext = getCanvasContext();
@@ -780,18 +792,34 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     sendCanvasAction(action, canvasContext);
   }, [getCanvasContext, sendCanvasAction]);
 
+  const handleRefineSelection = useCallback((selection: SelectionInfo) => {
+    if (!selection.text.trim()) {
+      toast.error('Please select some text to refine');
+      return;
+    }
+    
+    const context: CanvasContext = {
+      title: localTitle,
+      notes: notes,
+      selection: {
+        text: selection.text,
+        start: selection.from,
+        end: selection.to,
+      },
+    };
+    
+    sendCanvasAction('polish', context);
+  }, [localTitle, notes, sendCanvasAction]);
+
   const handleApplyEditProposal = useCallback((proposal: AIEditProposal) => {
-    // Validate the suggested text before applying
     const suggestedText = proposal.suggestedText;
     
-    // Check if suggestedText is empty or whitespace-only
     if (!suggestedText || !suggestedText.trim()) {
       toast.error('Cannot apply empty edit suggestion');
       clearPendingEditProposal();
       return;
     }
     
-    // Check if suggestedText looks like explanatory text rather than actual content
     const lowerText = suggestedText.toLowerCase().trim();
     const explanatoryPatterns = [
       /^here['']?s\s/,
@@ -816,15 +844,26 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
       }
     }
     
-    // Apply the validated edit
     if (proposal.targetType === 'title') {
       setLocalTitle(suggestedText);
-    } else if (proposal.targetType === 'notes' || proposal.targetType === 'selection') {
+    } else if (proposal.targetType === 'selection' && editorRef.current) {
+      const selectionRange = proposal.originalSelection || 
+        (canvasSelection ? { from: canvasSelection.from, to: canvasSelection.to } : null);
+      
+      if (selectionRange) {
+        editorRef.current.replaceSelection(selectionRange.from, selectionRange.to, suggestedText);
+        setCanvasSelection(null);
+      } else {
+        toast.error('Selection range not found. Please select text and try again.');
+        clearPendingEditProposal();
+        return;
+      }
+    } else if (proposal.targetType === 'notes') {
       setNotes(suggestedText);
     }
     clearPendingEditProposal();
     toast.success('Edit applied successfully');
-  }, [clearPendingEditProposal]);
+  }, [clearPendingEditProposal, canvasSelection]);
 
   const handleRejectEditProposal = useCallback(() => {
     clearPendingEditProposal();
@@ -1538,9 +1577,12 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
             
             <div className="bg-[#1A1A1A] rounded-lg min-h-[400px]">
               <RichTextEditor
+                ref={editorRef}
                 key={activeTabId}
                 content={notes}
                 onChange={setNotes}
+                onSelectionChange={setCanvasSelection}
+                onRefineSelection={handleRefineSelection}
                 placeholder="Start writing your insight..."
               />
             </div>

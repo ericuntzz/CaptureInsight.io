@@ -20,6 +20,10 @@ export interface AIEditProposal {
   originalText?: string;
   suggestedText: string;
   rationale: string;
+  originalSelection?: {
+    from: number;
+    to: number;
+  };
 }
 
 export interface ChatMessage {
@@ -392,13 +396,22 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
 
       const data = await response.json();
 
-      const editProposals: AIEditProposal[] | undefined = data.editProposals?.map((p: any) => ({
-        type: p.type,
-        targetType: p.targetType,
-        originalText: p.originalText,
-        suggestedText: p.suggestedText,
-        rationale: p.rationale,
-      }));
+      const editProposals: AIEditProposal[] | undefined = data.editProposals?.map((p: any) => {
+        const proposal: AIEditProposal = {
+          type: p.type,
+          targetType: p.targetType,
+          originalText: p.originalText,
+          suggestedText: p.suggestedText,
+          rationale: p.rationale,
+        };
+        if (p.targetType === 'selection' && canvasContext.selection) {
+          proposal.originalSelection = {
+            from: canvasContext.selection.start,
+            to: canvasContext.selection.end,
+          };
+        }
+        return proposal;
+      });
 
       if (editProposals && editProposals.length > 0) {
         setPendingEditProposal(editProposals[0]);

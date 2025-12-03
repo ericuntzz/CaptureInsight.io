@@ -16,6 +16,10 @@ export interface AIEditProposal {
   originalText?: string;
   suggestedText: string;
   rationale: string;
+  originalSelection?: {
+    from: number;
+    to: number;
+  };
 }
 
 export interface AICanvasResponse {
