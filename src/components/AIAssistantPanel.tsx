@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Sparkles, ExternalLink, Copy, ThumbsUp, ThumbsDown, Download, RefreshCw, MoreHorizontal, Tag as TagIcon, Check, X, AlertCircle, LogIn } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { Send, ExternalLink, Copy, ThumbsUp, ThumbsDown, Download, RefreshCw, MoreHorizontal, Tag as TagIcon, Check, X, AlertCircle, LogIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Tag, Insight } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
 import { TagSelector } from './TagSelector';
 import { CreateInsightCard } from './CreateInsightCard';
+import { TypewriterText } from './TypewriterText';
 import { toast } from 'sonner';
 import { copyToClipboard } from '../utils/clipboard';
 import { useAuth } from '../hooks/useAuth';
@@ -75,6 +76,10 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Simple animation trigger: detect when AI finishes responding
+  const wasThinkingRef = useRef(false);
+  const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(null);
 
   // Fetch tags from real API
   const { data: tagsData = [] } = useTags(spaceId);
@@ -101,9 +106,26 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Auto-scroll chat to bottom
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+  
+  // Trigger animation when AI finishes responding (isThinking goes from true → false)
+  useEffect(() => {
+    if (wasThinkingRef.current && !isThinking && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === 'assistant') {
+        setAnimatingMessageId(lastMessage.id);
+      }
+    }
+    wasThinkingRef.current = isThinking;
+  }, [isThinking, messages]);
+  
+  // Clear animation when complete
+  const handleAnimationComplete = useCallback(() => {
+    setAnimatingMessageId(null);
+  }, []);
 
   // Show "Tag Chat" button after first user message
   useEffect(() => {
@@ -334,11 +356,13 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
         {messages.map((message) => {
           const isSelected = selectedMessageIds.includes(message.id);
           const messageTags = message.tags?.map(tagId => tags.find(t => t.id === tagId)).filter(Boolean) as Tag[];
+          const isUser = message.role === 'user';
+          const shouldAnimate = !isUser && animatingMessageId === message.id;
 
           return (
             <div
               key={message.id}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
             >
               <div className="flex items-start gap-3 max-w-[80%]">
                 {/* Selection Circle */}
@@ -358,17 +382,27 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
                 {/* Message Content */}
                 <div
                   onClick={() => isTagSelectionMode && message.id !== '1' && handleMessageSelect(message.id)}
-                  className={`flex-1 rounded-xl px-4 py-3 transition-all ${
-                    message.role === 'user'
-                      ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
-                      : 'bg-[#1A1F2E] text-[#E5E7EB]'
+                  className={`flex-1 rounded-xl transition-all ${
+                    isUser
+                      ? 'bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-4 py-3'
+                      : 'text-[#E5E7EB] py-2'
                   } ${
                     isSelected ? 'ring-2 ring-[#FF6B35]' : ''
                   } ${
                     isTagSelectionMode && message.id !== '1' ? 'cursor-pointer hover:ring-1 hover:ring-[#FF6B35]' : ''
                   }`}
                 >
-                  <div className="whitespace-pre-wrap text-sm">{message.content}</div>
+                  <div className="whitespace-pre-wrap text-sm">
+                    {shouldAnimate ? (
+                      <TypewriterText 
+                        text={message.content}
+                        speed={15}
+                        onComplete={handleAnimationComplete}
+                      />
+                    ) : (
+                      message.content
+                    )}
+                  </div>
                   
                   {/* Message Tags */}
                   {messageTags && messageTags.length > 0 && (
@@ -396,7 +430,7 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
                   )}
 
                   {/* Action Buttons - Only for assistant messages */}
-                  {message.role === 'assistant' && !isTagSelectionMode && (
+                  {!isUser && !isTagSelectionMode && (
                     <div className="flex items-center gap-1 mt-3">
                       <button
                         type="button"
@@ -458,15 +492,11 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
         {/* Thinking indicator */}
         {isThinking && (
           <div className="flex justify-start">
-            <div className="bg-[#1A1F2E] rounded-xl px-4 py-3">
-              <div className="flex items-center gap-2 text-[#9CA3AF]">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                >
-                  <Sparkles className="w-4 h-4 text-[#FF6B35]" />
-                </motion.div>
-                <span className="text-sm">Analyzing your data...</span>
+            <div className="py-2">
+              <div className="flex gap-1.5 items-center">
+                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>

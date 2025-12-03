@@ -72,6 +72,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { TypewriterText } from '../components/TypewriterText';
 
 // Draggable collapsed panel content for canvas and data - must be outside component to use hooks
 function DraggableCollapsedPanel({ 
@@ -355,6 +356,10 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   // Chat state
   const [aiChatInput, setAiChatInput] = useState('');
   const aiChatContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Simple animation trigger: detect when AI finishes responding
+  const wasTypingRef = useRef(false);
+  const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(null);
   
   // Chat tabs state
   const activeChatStorageKey = getStorageKey('insight-workspace-active-chat', workspaceId);
@@ -708,6 +713,27 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
       aiChatContainerRef.current.scrollTop = aiChatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
+  
+  // Trigger animation when AI finishes responding (isAiTyping goes from true → false)
+  useEffect(() => {
+    if (wasTypingRef.current && !isAiTyping && chatMessages.length > 0) {
+      const lastMessage = chatMessages[chatMessages.length - 1];
+      if (lastMessage.role === 'assistant') {
+        setAnimatingMessageId(lastMessage.id);
+      }
+    }
+    wasTypingRef.current = isAiTyping;
+  }, [isAiTyping, chatMessages]);
+  
+  // Reset animation on chat switch
+  useEffect(() => {
+    setAnimatingMessageId(null);
+  }, [activeChatId]);
+  
+  // Clear animation when complete
+  const handleAnimationComplete = useCallback(() => {
+    setAnimatingMessageId(null);
+  }, []);
   
   // Handle panel expand/collapse using imperative panel resize
   const handleExpandChat = useCallback(() => {
@@ -1248,35 +1274,60 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
           </div>
         )}
         
-        {chatMessages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex gap-3 group ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className="relative max-w-[85%] rounded-lg p-3 transition-all bg-[#1A1F2E] text-[#E5E7EB]">
-              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-              <p className="text-xs opacity-60 mt-1">{formatRelativeTime(message.timestamp)}</p>
-              
-              <div className="absolute -top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-[#1A1F2E] border border-[#2D3B4E] rounded px-1 py-1">
-                <button
-                  onClick={() => handleCopyMessage(message.content)}
-                  className="p-1 text-[#6B7280] hover:text-white transition-colors"
-                  title="Copy message"
-                >
-                  <Copy className="w-3 h-3" />
-                </button>
+        {chatMessages.map((message) => {
+          const isUser = message.role === 'user';
+          const shouldAnimate = !isUser && animatingMessageId === message.id;
+          
+          return (
+            <div
+              key={message.id}
+              className={`flex gap-3 group ${isUser ? 'justify-end' : 'justify-start'}`}
+            >
+              <div 
+                className={`relative max-w-[85%] rounded-lg transition-all ${
+                  isUser 
+                    ? 'bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] text-white px-4 py-3' 
+                    : 'text-[#E5E7EB] py-2'
+                }`}
+              >
+                <div className="text-sm whitespace-pre-wrap">
+                  {shouldAnimate ? (
+                    <TypewriterText 
+                      text={message.content}
+                      speed={15}
+                      onComplete={handleAnimationComplete}
+                    />
+                  ) : (
+                    message.content
+                  )}
+                </div>
+                <p className={`text-xs mt-1 ${isUser ? 'opacity-70' : 'opacity-50 text-[#9CA3AF]'}`}>
+                  {formatRelativeTime(message.timestamp)}
+                </p>
+                
+                {!isUser && (
+                  <div className="absolute -top-2 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-[#1A1F2E] border border-[#2D3B4E] rounded px-1 py-1">
+                    <button
+                      onClick={() => handleCopyMessage(message.content)}
+                      className="p-1 text-[#6B7280] hover:text-white transition-colors"
+                      title="Copy message"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         
         {isAiTyping && (
-          <div className="flex gap-3">
-            <div className="bg-[#1A1F2E] rounded-lg p-3">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-[#6B7280] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div className="flex gap-3 justify-start">
+            <div className="py-2">
+              <div className="flex gap-1.5 items-center">
+                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
