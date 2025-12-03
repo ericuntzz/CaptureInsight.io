@@ -403,7 +403,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     setNotes('');
     lastSavedContentRef.current = { title: '', summary: '' };
     lastInsightIdsRef.current = '';
-    lastWorkspaceIdRef.current = workspaceId ?? null;
+    // Note: Do NOT update lastWorkspaceIdRef here - let the sync effect detect the change
   }, [workspaceId]);
   
   // Sync tabs with API data - MERGES insights instead of replacing to prevent data loss
