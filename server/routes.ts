@@ -705,8 +705,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
+      // Check if this is the user's first login session
+      const isFirstLogin = await storage.isFirstLogin(userId);
+      
       res.json({
         hasCompletedOnboarding: user.hasCompletedOnboarding ?? false,
+        isFirstLogin: isFirstLogin,
       });
     } catch (error) {
       console.error("Error fetching onboarding status:", error);

@@ -138,17 +138,14 @@ export default function App() {
     }
   };
   
-  // Show welcome overlay for new users who haven't completed onboarding
-  // Optimistically close when completed locally
-  // Show during loading to prevent flash of main app
-  // Safer default: show overlay if we can't confirm they've completed (captures consent reliably)
+  // Show welcome overlay ONLY for first-time users who haven't completed onboarding
+  // Returning users skip the onboarding even if hasCompletedOnboarding is false
   const showWelcomeOverlay = isAuthenticated && !onboardingCompleted && (
-    // Show while loading (prevents flash of main app)
-    onboardingLoading ||
-    // Show if we got the status and user hasn't completed onboarding
-    (onboardingStatus && !onboardingStatus.hasCompletedOnboarding) ||
-    // Also show if there was an error fetching status (safer to capture consent than skip)
-    onboardingError
+    // Show while loading only if we're still fetching
+    (onboardingLoading && !onboardingStatus) ||
+    // Show only if: user exists, is first login, and hasn't completed onboarding
+    (onboardingStatus && onboardingStatus.isFirstLogin && !onboardingStatus.hasCompletedOnboarding)
+    // Note: We no longer show on error - returning users should not see onboarding
   );
   
   // On initial load, restore the last visited URL if at root

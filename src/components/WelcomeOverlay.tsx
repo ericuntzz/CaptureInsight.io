@@ -189,41 +189,6 @@ export function WelcomeOverlay({
                 })}
               </div>
 
-              {/* Key Features - Collapsible on mobile */}
-              <div className="bg-[rgba(255,107,53,0.05)] border border-[rgba(255,107,53,0.2)] rounded-xl p-4 sm:p-6 mb-6">
-                <h3 className="text-white font-medium mb-3 sm:mb-4">Key Features</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#FF6B35] mt-1.5 shrink-0" />
-                    <div>
-                      <div className="text-xs sm:text-sm text-white mb-0.5 sm:mb-1">No API Connections Needed</div>
-                      <div className="text-xs text-[#9CA3AF]">Capture data from any source visually</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#FF6B35] mt-1.5 shrink-0" />
-                    <div>
-                      <div className="text-xs sm:text-sm text-white mb-0.5 sm:mb-1">Persistent Capture Boxes</div>
-                      <div className="text-xs text-[#9CA3AF]">Boxes save and reappear when you return</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#FF6B35] mt-1.5 shrink-0" />
-                    <div>
-                      <div className="text-xs sm:text-sm text-white mb-0.5 sm:mb-1">Cross-Source Insights</div>
-                      <div className="text-xs text-[#9CA3AF]">AI analyzes data from multiple tools</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#FF6B35] mt-1.5 shrink-0" />
-                    <div>
-                      <div className="text-xs sm:text-sm text-white mb-0.5 sm:mb-1">Full Markup Tools</div>
-                      <div className="text-xs text-[#9CA3AF]">Annotate, blur, and highlight captures</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* AI Learning Consent Section */}
               <motion.div 
                 initial={{ opacity: 0, y: 10 }}

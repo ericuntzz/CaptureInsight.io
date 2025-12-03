@@ -55,6 +55,7 @@ export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  isFirstLogin(userId: string): Promise<boolean>;
 
   // Login 2FA operations
   getUserLoginTotp(userId: string): Promise<{ secret: string | null, enabled: boolean }>;
@@ -145,18 +146,43 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
+    // Check if user already exists to determine if this is a first-time login
+    const existingUser = await this.getUser(userData.id);
+    const now = new Date();
+    
+    if (existingUser) {
+      // Returning user - update lastLoginAt but preserve firstLoginAt
+      const [user] = await db
+        .update(users)
+        .set({
           ...userData,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return user;
+          lastLoginAt: now,
+          updatedAt: now,
+        })
+        .where(eq(users.id, userData.id))
+        .returning();
+      return user;
+    } else {
+      // New user - set both firstLoginAt and lastLoginAt
+      const [user] = await db
+        .insert(users)
+        .values({
+          ...userData,
+          firstLoginAt: now,
+          lastLoginAt: now,
+        })
+        .returning();
+      return user;
+    }
+  }
+  
+  async isFirstLogin(userId: string): Promise<boolean> {
+    const user = await this.getUser(userId);
+    if (!user) return true; // New user
+    // First login if firstLoginAt equals lastLoginAt (within 1 minute tolerance)
+    if (!user.firstLoginAt || !user.lastLoginAt) return true;
+    const diff = Math.abs(user.lastLoginAt.getTime() - user.firstLoginAt.getTime());
+    return diff < 60000; // Less than 1 minute apart = first login session
   }
 
   // Login 2FA operations

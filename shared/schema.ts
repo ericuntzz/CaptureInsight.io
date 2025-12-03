@@ -48,6 +48,8 @@ export const users = pgTable("users", {
   aiLearningConsent: boolean("ai_learning_consent").default(false), // Whether user consents to anonymous feedback for AI improvement
   aiLearningConsentDate: timestamp("ai_learning_consent_date"), // When consent was given/updated
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false), // Whether user has seen the welcome screen
+  firstLoginAt: timestamp("first_login_at"), // When user first logged in (null = never logged in before)
+  lastLoginAt: timestamp("last_login_at"), // Most recent login timestamp
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
