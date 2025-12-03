@@ -147,7 +147,9 @@ export class DatabaseStorage implements IStorage {
 
   async upsertUser(userData: UpsertUser): Promise<User> {
     // Check if user already exists to determine if this is a first-time login
-    const existingUser = await this.getUser(userData.id);
+    // The id is required from Replit Auth claims, so it's always present
+    const userId = userData.id!;
+    const existingUser = await this.getUser(userId);
     const now = new Date();
     
     if (existingUser) {
@@ -159,7 +161,7 @@ export class DatabaseStorage implements IStorage {
           lastLoginAt: now,
           updatedAt: now,
         })
-        .where(eq(users.id, userData.id))
+        .where(eq(users.id, userId))
         .returning();
       return user;
     } else {
