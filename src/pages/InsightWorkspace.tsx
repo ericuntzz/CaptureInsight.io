@@ -1274,7 +1274,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
           </div>
         )}
         
-        {chatMessages.map((message) => {
+        {chatMessages.filter(m => m.source !== 'canvas').map((message) => {
           const isUser = message.role === 'user';
           const shouldAnimate = !isUser && animatingMessageId === message.id;
           

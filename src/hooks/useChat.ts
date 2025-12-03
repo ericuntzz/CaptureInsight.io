@@ -38,6 +38,7 @@ export interface ChatMessage {
     relevanceScore: number;
   }>;
   editProposals?: AIEditProposal[];
+  source?: 'chat' | 'canvas'; // 'canvas' for quick action messages (hidden from chat UI)
 }
 
 export interface UseChatOptions {
@@ -367,8 +368,16 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
         summarize: 'Summarize',
       };
 
-      // Note: We don't add canvas action messages to chat - they work silently
-      // and only show the edit proposal in the canvas panel
+      // Create user message for canvas action (tagged with source: 'canvas' to filter from chat UI)
+      const userMessage: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'user',
+        content: actionLabels[action],
+        timestamp: new Date(),
+        source: 'canvas',
+      };
+
+      setMessages(prev => [...prev, userMessage]);
 
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
@@ -411,7 +420,17 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
         setPendingEditProposal(editProposals[0]);
       }
 
-      // Canvas actions don't add messages to chat - the edit proposal appears in the canvas panel
+      // Create AI response message (tagged with source: 'canvas' to filter from chat UI)
+      const aiMessage: ChatMessage = {
+        id: `msg-${Date.now()}-ai`,
+        role: 'assistant',
+        content: data.response,
+        timestamp: new Date(),
+        editProposals: editProposals?.length > 0 ? editProposals : undefined,
+        source: 'canvas',
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
     } catch (err) {
       console.error('Canvas action error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Failed to process canvas action';

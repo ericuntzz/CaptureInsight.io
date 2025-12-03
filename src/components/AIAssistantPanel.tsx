@@ -353,7 +353,7 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 px-[238px] py-[317px] relative" style={{ paddingBottom: '400px' }}>
-        {messages.map((message) => {
+        {messages.filter(m => m.source !== 'canvas').map((message) => {
           const isSelected = selectedMessageIds.includes(message.id);
           const messageTags = message.tags?.map(tagId => tags.find(t => t.id === tagId)).filter(Boolean) as Tag[];
           const isUser = message.role === 'user';
