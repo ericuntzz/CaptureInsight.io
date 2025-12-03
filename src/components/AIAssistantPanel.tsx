@@ -6,6 +6,7 @@ import { TagBadge } from './TagBadge';
 import { TagSelector } from './TagSelector';
 import { CreateInsightCard } from './CreateInsightCard';
 import { TypewriterText } from './TypewriterText';
+import { GlowingDot } from './GlowingDot';
 import { toast } from 'sonner';
 import { copyToClipboard } from '../utils/clipboard';
 import { useAuth } from '../hooks/useAuth';
@@ -396,7 +397,7 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
                     {shouldAnimate ? (
                       <TypewriterText 
                         text={message.content}
-                        speed={15}
+                        speed={8}
                         onComplete={handleAnimationComplete}
                       />
                     ) : (
@@ -493,11 +494,7 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
         {isThinking && (
           <div className="flex justify-start">
             <div className="py-2">
-              <div className="flex gap-1.5 items-center">
-                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
+              <GlowingDot />
             </div>
           </div>
         )}

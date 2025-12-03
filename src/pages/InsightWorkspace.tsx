@@ -73,6 +73,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TypewriterText } from '../components/TypewriterText';
+import { GlowingDot } from '../components/GlowingDot';
 
 // Draggable collapsed panel content for canvas and data - must be outside component to use hooks
 function DraggableCollapsedPanel({ 
@@ -1294,7 +1295,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
                   {shouldAnimate ? (
                     <TypewriterText 
                       text={message.content}
-                      speed={15}
+                      speed={8}
                       onComplete={handleAnimationComplete}
                     />
                   ) : (
@@ -1324,11 +1325,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         {isAiTyping && (
           <div className="flex gap-3 justify-start">
             <div className="py-2">
-              <div className="flex gap-1.5 items-center">
-                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
+              <GlowingDot />
             </div>
           </div>
         )}
