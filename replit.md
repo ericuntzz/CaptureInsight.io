@@ -34,6 +34,20 @@ CaptureInsight is a full-stack application. The frontend uses React 18 (TypeScri
 **AI Integration:**
 A hybrid AI architecture leverages Gemini 2.5 Pro/Flash (via Replit AI Integrations) for screenshot/data analysis and chat. OpenAI (text-embedding-3-small) is used for text embeddings with `pgvector` for semantic search.
 
+**AI Canvas Editing (ChatGPT Canvas-like):**
+The Insight Workspace features AI-powered canvas editing similar to ChatGPT's Canvas mode:
+-   **Quick Action Buttons**: 7 AI-powered editing buttons in the canvas panel header:
+    -   Polish, Shorten, Expand, Simplify, Professional, Grammar, Summarize
+-   **Edit Proposals**: AI returns structured edit proposals with preview, rationale, and Apply/Dismiss actions
+-   **Highlight-to-Refine**: Select text in the canvas and a BubbleMenu appears with "Refine" button to improve just that selection
+-   **Selection Persistence**: Selection coordinates are captured with the AI request and survive the async cycle
+-   **Security Features**:
+    -   PII filtering applied to canvas content (title, notes, selection) before sending to AI
+    -   JSON parsing validation to reject malformed AI responses
+    -   HTML sanitization before inserting AI suggestions into the editor
+    -   Validation to reject explanatory text patterns in edit proposals
+-   **Types**: Defined in `shared/types/canvasAI.ts` (CanvasContext, AIEditProposal, AICanvasResponse, CanvasQuickAction)
+
 **Data Ingestion Pipeline:**
 Supports Google Sheets import, parsing CSV data, generating text embeddings for RAG, and background processing for asynchronous ingestion.
 
