@@ -460,7 +460,7 @@ export function CaptureAssignmentPanel({
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute left-full top-0 ml-3 w-[240px]"
+                  className="absolute left-full top-0 ml-3 w-[320px]"
                   onMouseEnter={() => setHoveredCaptureId(hoveredCaptureId)}
                   onMouseLeave={() => setHoveredCaptureId(null)}
                 >
