@@ -69,8 +69,6 @@ interface SortableColumnRowProps {
   column: TemplateColumn;
   onUpdate: (updates: Partial<TemplateColumn>) => void;
   onDelete: () => void;
-  onToggleExpand: () => void;
-  isExpanded: boolean;
   onAddAlias: (alias: string) => void;
   onRemoveAlias: (alias: string) => void;
   suggestion?: ColumnMappingSuggestion;
@@ -82,8 +80,6 @@ function SortableColumnRow({
   column, 
   onUpdate, 
   onDelete, 
-  onToggleExpand, 
-  isExpanded,
   onAddAlias,
   onRemoveAlias,
   suggestion,
@@ -123,7 +119,7 @@ function SortableColumnRow({
           onReject={onRejectSuggestion}
         />
       )}
-      <div className={`flex items-center gap-2 p-3 bg-[#0A0E1A] rounded-lg border ${isExpanded ? 'border-[#FF6B35]/50' : 'border-[#1A1F2E]'} hover:border-[#FF6B35]/30 transition-colors group`}>
+      <div className="flex items-center gap-2 p-3 bg-[#0A0E1A] rounded-lg rounded-b-none border border-b-0 border-[#1A1F2E] hover:border-[#FF6B35]/30 transition-colors group">
         <button
           {...attributes}
           {...listeners}
@@ -174,14 +170,6 @@ function SortableColumnRow({
         </div>
         
         <button
-          onClick={onToggleExpand}
-          className="p-1.5 text-gray-400 hover:text-[#FF6B35] transition-colors"
-          title="Validation rules & aliases"
-        >
-          {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-        </button>
-        
-        <button
           onClick={onDelete}
           className="p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
         >
@@ -189,144 +177,133 @@ function SortableColumnRow({
         </button>
       </div>
       
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="ml-8 mt-2 p-4 bg-[#0A0E1A]/50 rounded-lg border border-[#1A1F2E] space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">Format Pattern</label>
-                  <input
-                    type="text"
-                    value={column.validationRules?.format || ''}
-                    onChange={(e) => onUpdate({ 
-                      validationRules: { ...column.validationRules, format: e.target.value } 
-                    })}
-                    placeholder="e.g., $X.XX or MM/DD/YYYY"
-                    className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">Regex Pattern</label>
-                  <input
-                    type="text"
-                    value={column.validationRules?.pattern || ''}
-                    onChange={(e) => onUpdate({ 
-                      validationRules: { ...column.validationRules, pattern: e.target.value } 
-                    })}
-                    placeholder="^[A-Z]+$"
-                    className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-              
-              {(column.dataType === 'integer' || column.dataType === 'decimal' || column.dataType === 'currency' || column.dataType === 'percentage') && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Min Value</label>
-                    <input
-                      type="number"
-                      value={column.validationRules?.min ?? ''}
-                      onChange={(e) => onUpdate({ 
-                        validationRules: { ...column.validationRules, min: e.target.value ? Number(e.target.value) : undefined } 
-                      })}
-                      className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Max Value</label>
-                    <input
-                      type="number"
-                      value={column.validationRules?.max ?? ''}
-                      onChange={(e) => onUpdate({ 
-                        validationRules: { ...column.validationRules, max: e.target.value ? Number(e.target.value) : undefined } 
-                      })}
-                      className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              )}
-              
-              {column.dataType === 'text' && (
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">Max Length</label>
-                  <input
-                    type="number"
-                    value={column.validationRules?.maxLength ?? ''}
-                    onChange={(e) => onUpdate({ 
-                      validationRules: { ...column.validationRules, maxLength: e.target.value ? Number(e.target.value) : undefined } 
-                    })}
-                    className="w-32 px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
-                  />
-                </div>
-              )}
-              
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Allowed Values (comma-separated)</label>
-                <input
-                  type="text"
-                  value={column.validationRules?.allowedValues?.join(', ') || ''}
-                  onChange={(e) => onUpdate({ 
-                    validationRules: { 
-                      ...column.validationRules, 
-                      allowedValues: e.target.value ? e.target.value.split(',').map(v => v.trim()) : undefined 
-                    } 
-                  })}
-                  placeholder="value1, value2, value3"
-                  className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
-                />
-              </div>
-              
-              <div className="border-t border-[#1A1F2E] pt-4">
-                <label className="block text-xs text-gray-400 mb-2">Column Aliases</label>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {(column.aliases || []).map((alias, idx) => (
-                    <span 
-                      key={idx}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-[#1A1F2E] rounded text-xs text-gray-300"
-                    >
-                      {alias}
-                      <button 
-                        onClick={() => onRemoveAlias(alias)}
-                        className="text-gray-500 hover:text-red-400"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newAliasValue}
-                    onChange={(e) => setNewAliasValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddAlias();
-                      }
-                    }}
-                    placeholder="Add alias..."
-                    className="flex-1 px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
-                  />
-                  <button
-                    onClick={handleAddAlias}
-                    className="px-3 py-1.5 bg-[#FF6B35]/20 hover:bg-[#FF6B35]/30 text-[#FF6B35] rounded text-sm transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
+      {/* Validation settings - always visible */}
+      <div className="ml-8 p-4 bg-[#0A0E1A]/50 rounded-lg rounded-t-none border border-t-0 border-[#1A1F2E] space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Format Pattern</label>
+            <input
+              type="text"
+              value={column.validationRules?.format || ''}
+              onChange={(e) => onUpdate({ 
+                validationRules: { ...column.validationRules, format: e.target.value } 
+              })}
+              placeholder="e.g., $X.XX or MM/DD/YYYY"
+              className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Regex Pattern</label>
+            <input
+              type="text"
+              value={column.validationRules?.pattern || ''}
+              onChange={(e) => onUpdate({ 
+                validationRules: { ...column.validationRules, pattern: e.target.value } 
+              })}
+              placeholder="^[A-Z]+$"
+              className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
+            />
+          </div>
+        </div>
+        
+        {(column.dataType === 'integer' || column.dataType === 'decimal' || column.dataType === 'currency' || column.dataType === 'percentage') && (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">Min Value</label>
+              <input
+                type="number"
+                value={column.validationRules?.min ?? ''}
+                onChange={(e) => onUpdate({ 
+                  validationRules: { ...column.validationRules, min: e.target.value ? Number(e.target.value) : undefined } 
+                })}
+                className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
+              />
             </div>
-          </motion.div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">Max Value</label>
+              <input
+                type="number"
+                value={column.validationRules?.max ?? ''}
+                onChange={(e) => onUpdate({ 
+                  validationRules: { ...column.validationRules, max: e.target.value ? Number(e.target.value) : undefined } 
+                })}
+                className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
+              />
+            </div>
+          </div>
         )}
-      </AnimatePresence>
+        
+        {column.dataType === 'text' && (
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Max Length</label>
+            <input
+              type="number"
+              value={column.validationRules?.maxLength ?? ''}
+              onChange={(e) => onUpdate({ 
+                validationRules: { ...column.validationRules, maxLength: e.target.value ? Number(e.target.value) : undefined } 
+              })}
+              className="w-32 px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
+            />
+          </div>
+        )}
+        
+        <div>
+          <label className="block text-xs text-gray-400 mb-1.5">Allowed Values (comma-separated)</label>
+          <input
+            type="text"
+            value={column.validationRules?.allowedValues?.join(', ') || ''}
+            onChange={(e) => onUpdate({ 
+              validationRules: { 
+                ...column.validationRules, 
+                allowedValues: e.target.value ? e.target.value.split(',').map(v => v.trim()) : undefined 
+              } 
+            })}
+            placeholder="value1, value2, value3"
+            className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
+          />
+        </div>
+        
+        <div className="border-t border-[#1A1F2E] pt-4">
+          <label className="block text-xs text-gray-400 mb-2">Column Aliases</label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {(column.aliases || []).map((alias, idx) => (
+              <span 
+                key={idx}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-[#1A1F2E] rounded text-xs text-gray-300"
+              >
+                {alias}
+                <button 
+                  onClick={() => onRemoveAlias(alias)}
+                  className="text-gray-500 hover:text-red-400"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newAliasValue}
+              onChange={(e) => setNewAliasValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddAlias();
+                }
+              }}
+              placeholder="Add alias..."
+              className="flex-1 px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
+            />
+            <button
+              onClick={handleAddAlias}
+              className="px-3 py-1.5 bg-[#FF6B35]/20 hover:bg-[#FF6B35]/30 text-[#FF6B35] rounded text-sm transition-colors"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -511,7 +488,6 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
     reset,
   } = useTemplateEditor();
 
-  const [expandedColumns, setExpandedColumns] = useState<Set<string>>(new Set());
   const [aiSuggestions, setAiSuggestions] = useState<ColumnMappingSuggestion[]>([]);
   const [showMappingPanel, setShowMappingPanel] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -647,18 +623,6 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
       const newIndex = template.columns.findIndex(col => col.id === over.id);
       reorderColumns(oldIndex, newIndex);
     }
-  };
-
-  const toggleColumnExpand = (columnId: string) => {
-    setExpandedColumns(prev => {
-      const next = new Set(prev);
-      if (next.has(columnId)) {
-        next.delete(columnId);
-      } else {
-        next.add(columnId);
-      }
-      return next;
-    });
   };
 
   const handleSave = async () => {
@@ -925,15 +889,13 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                   items={template.columns.map(c => c.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     {template.columns.map(column => (
                       <SortableColumnRow
                         key={column.id}
                         column={column}
                         onUpdate={(updates) => updateColumn(column.id, updates)}
                         onDelete={() => deleteColumn(column.id)}
-                        onToggleExpand={() => toggleColumnExpand(column.id)}
-                        isExpanded={expandedColumns.has(column.id)}
                         onAddAlias={(alias) => addColumnAlias(column.id, alias)}
                         onRemoveAlias={(alias) => removeColumnAlias(column.id, alias)}
                         suggestion={columnSuggestions[column.id]}
