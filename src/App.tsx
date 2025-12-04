@@ -763,7 +763,13 @@ export default function App() {
       
       // Step 6: Navigate to workspace view
       console.log('[Capture Flow] Navigating to workspace view...');
-      setCurrentView('workspace');
+      console.log('[Capture Flow] Active workspace ID:', finalFolderId);
+      
+      // Set the active workspace before navigating
+      setActiveWorkspaceId(finalFolderId);
+      
+      // Use handleViewChange to properly update URL and view state
+      handleViewChange('workspace');
       setShowOptionsModal(false);
       
       // Clear captures after successful save
@@ -771,11 +777,14 @@ export default function App() {
       setUploadedFiles([]);
       setShareLinks([]);
       
-      toast.success(`${captureItems.length} item(s) saved to My Workspace!`);
+      console.log('[Capture Flow] Navigation complete, showing success toast');
+      toast.success(`${captureItems.length} item(s) saved to workspace!`);
       
     } catch (error) {
       console.error('[Capture Flow] Error:', error);
-      toast.error('Failed to save captures');
+      // Provide more specific error message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to save captures: ${errorMessage}`);
     }
   };
 
