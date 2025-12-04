@@ -855,17 +855,6 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
               </div>
             )}
             
-            {template.columns.length > 0 && (
-              <div className="mb-3 grid grid-cols-[40px_1fr_1fr_100px_100px_32px] gap-2 px-3 text-xs text-gray-500 font-medium">
-                <div></div>
-                <div>Canonical Name</div>
-                <div>Display Name</div>
-                <div>Data Type</div>
-                <div>Required</div>
-                <div></div>
-              </div>
-            )}
-            
             {suggestionsCount > 0 && !showMappingPanel && (
               <SuggestedMappingBanner
                 totalSuggestions={suggestionsCount}
