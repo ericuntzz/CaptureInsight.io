@@ -65,6 +65,19 @@ const cleaningStepLabels: Record<string, { name: string; description: string }> 
   fill_empty: { name: 'Fill Empty Values', description: 'Replace empty cells with default value' },
 };
 
+const formatValidationPresets = [
+  { value: 'none', label: 'None (any format accepted)', pattern: '' },
+  { value: 'us_currency', label: 'US Currency ($1,234.56)', pattern: '^\\$[\\d,]+(\\.\\d{2})?$' },
+  { value: 'percentage', label: 'Percentage (12.5% or 0.125)', pattern: '^\\d+(\\.\\d+)?%?$' },
+  { value: 'date_mdy', label: 'Date (MM/DD/YYYY)', pattern: '^\\d{2}/\\d{2}/\\d{4}$' },
+  { value: 'date_ymd', label: 'Date (YYYY-MM-DD)', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+  { value: 'integer', label: 'Integer (1234)', pattern: '^-?\\d+$' },
+  { value: 'decimal', label: 'Decimal (123.45)', pattern: '^-?\\d+(\\.\\d+)?$' },
+  { value: 'email', label: 'Email Address', pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$' },
+  { value: 'phone', label: 'Phone Number', pattern: '^[\\d\\s\\-\\(\\)\\+]+$' },
+  { value: 'custom', label: 'Custom pattern (advanced)', pattern: '' },
+];
+
 interface SortableColumnRowProps {
   column: TemplateColumn;
   onUpdate: (updates: Partial<TemplateColumn>) => void;
@@ -179,32 +192,55 @@ function SortableColumnRow({
       
       {/* Validation settings - always visible */}
       <div className="ml-8 p-4 bg-[#0A0E1A]/50 rounded-lg rounded-t-none border border-t-0 border-[#1A1F2E] space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs text-gray-400 mb-1.5">Format Validation (optional)</label>
+          <Select 
+            value={column.validationRules?.format || 'none'} 
+            onValueChange={(value: string) => {
+              const preset = formatValidationPresets.find(p => p.value === value);
+              if (value === 'none') {
+                onUpdate({ 
+                  validationRules: { ...column.validationRules, format: undefined, pattern: undefined } 
+                });
+              } else if (value === 'custom') {
+                onUpdate({ 
+                  validationRules: { ...column.validationRules, format: 'custom' } 
+                });
+              } else {
+                onUpdate({ 
+                  validationRules: { ...column.validationRules, format: value, pattern: preset?.pattern } 
+                });
+              }
+            }}
+          >
+            <SelectTrigger className="w-full h-9 bg-[#1A1F2E] border-transparent text-sm">
+              <SelectValue placeholder="Select format validation" />
+            </SelectTrigger>
+            <SelectContent className="bg-[#1A1F2E] border-[#FF6B35]/30">
+              {formatValidationPresets.map(preset => (
+                <SelectItem key={preset.value} value={preset.value} className="text-white hover:bg-[#FF6B35]/20">
+                  {preset.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {column.validationRules?.format === 'custom' && (
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Format Pattern</label>
-            <input
-              type="text"
-              value={column.validationRules?.format || ''}
-              onChange={(e) => onUpdate({ 
-                validationRules: { ...column.validationRules, format: e.target.value } 
-              })}
-              placeholder="e.g., $X.XX or MM/DD/YYYY"
-              className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Regex Pattern</label>
+            <label className="block text-xs text-gray-400 mb-1.5">Custom Regex Pattern</label>
             <input
               type="text"
               value={column.validationRules?.pattern || ''}
               onChange={(e) => onUpdate({ 
                 validationRules: { ...column.validationRules, pattern: e.target.value } 
               })}
-              placeholder="^[A-Z]+$"
-              className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
+              placeholder="e.g., ^[A-Z]{2}-\d{4}$"
+              className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none font-mono text-xs"
             />
+            <p className="text-xs text-gray-500 mt-1">Enter a regular expression pattern for advanced validation</p>
           </div>
-        </div>
+        )}
         
         {(column.dataType === 'integer' || column.dataType === 'decimal' || column.dataType === 'currency' || column.dataType === 'percentage') && (
           <div className="grid grid-cols-2 gap-4">
