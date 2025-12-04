@@ -46,6 +46,16 @@ export interface TemplateData {
   columnAliases: Record<string, string[]>;
 }
 
+export interface ColumnMappingSuggestion {
+  sourceColumn: string;
+  suggestedCanonicalName: string;
+  suggestedDisplayName: string;
+  suggestedDataType: 'currency' | 'percentage' | 'integer' | 'decimal' | 'date' | 'text' | 'boolean';
+  confidence: number;
+  reason: string;
+  alternativeNames?: string[];
+}
+
 interface ValidationError {
   field: string;
   message: string;
@@ -57,6 +67,8 @@ interface TemplateEditorContextValue {
   errors: ValidationError[];
   isOpen: boolean;
   isSaving: boolean;
+  columnSuggestions: Record<string, ColumnMappingSuggestion>;
+  isLoadingSuggestions: boolean;
   setTemplate: (template: TemplateData) => void;
   updateTemplate: (updates: Partial<TemplateData>) => void;
   addColumn: (column?: Partial<TemplateColumn>) => void;
@@ -67,6 +79,11 @@ interface TemplateEditorContextValue {
   removeColumnAlias: (columnId: string, alias: string) => void;
   updateCleaningStep: (stepId: string, updates: Partial<CleaningStep>) => void;
   toggleCleaningStep: (stepId: string) => void;
+  setColumnSuggestions: (suggestions: Record<string, ColumnMappingSuggestion>) => void;
+  setIsLoadingSuggestions: (loading: boolean) => void;
+  acceptSuggestion: (columnId: string) => void;
+  rejectSuggestion: (columnId: string) => void;
+  clearAllSuggestions: () => void;
   validate: () => boolean;
   openEditor: (initialData?: Partial<TemplateData>) => void;
   closeEditor: () => void;
@@ -103,6 +120,8 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [columnSuggestions, setColumnSuggestionsState] = useState<Record<string, ColumnMappingSuggestion>>({});
+  const [isLoadingSuggestions, setIsLoadingSuggestionsState] = useState(false);
 
   const isDirty = useMemo(() => {
     if (!originalTemplate) return false;
@@ -215,6 +234,52 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
     }));
   }, []);
 
+  const setColumnSuggestions = useCallback((suggestions: Record<string, ColumnMappingSuggestion>) => {
+    setColumnSuggestionsState(suggestions);
+  }, []);
+
+  const setIsLoadingSuggestions = useCallback((loading: boolean) => {
+    setIsLoadingSuggestionsState(loading);
+  }, []);
+
+  const acceptSuggestion = useCallback((columnId: string) => {
+    const suggestion = columnSuggestions[columnId];
+    if (!suggestion) return;
+
+    setTemplateState(prev => ({
+      ...prev,
+      columns: prev.columns.map(col =>
+        col.id === columnId
+          ? {
+              ...col,
+              canonicalName: suggestion.suggestedCanonicalName,
+              displayName: suggestion.suggestedDisplayName,
+              dataType: suggestion.suggestedDataType,
+              aliases: suggestion.sourceColumn !== suggestion.suggestedCanonicalName 
+                ? [...(col.aliases || []), suggestion.sourceColumn].filter((v, i, a) => a.indexOf(v) === i)
+                : col.aliases,
+            }
+          : col
+      ),
+    }));
+
+    setColumnSuggestionsState(prev => {
+      const { [columnId]: _, ...rest } = prev;
+      return rest;
+    });
+  }, [columnSuggestions]);
+
+  const rejectSuggestion = useCallback((columnId: string) => {
+    setColumnSuggestionsState(prev => {
+      const { [columnId]: _, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
+  const clearAllSuggestions = useCallback(() => {
+    setColumnSuggestionsState({});
+  }, []);
+
   const validate = useCallback((): boolean => {
     const newErrors: ValidationError[] = [];
     
@@ -300,6 +365,8 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
     errors,
     isOpen,
     isSaving,
+    columnSuggestions,
+    isLoadingSuggestions,
     setTemplate,
     updateTemplate,
     addColumn,
@@ -310,6 +377,11 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
     removeColumnAlias,
     updateCleaningStep,
     toggleCleaningStep,
+    setColumnSuggestions,
+    setIsLoadingSuggestions,
+    acceptSuggestion,
+    rejectSuggestion,
+    clearAllSuggestions,
     validate,
     openEditor,
     closeEditor,

@@ -21,11 +21,12 @@ import { Badge } from './ui/badge';
 
 export interface ColumnMappingSuggestion {
   sourceColumn: string;
-  suggestedMapping: string;
-  displayName: string;
+  suggestedCanonicalName: string;
+  suggestedDisplayName: string;
+  suggestedDataType: 'currency' | 'percentage' | 'integer' | 'decimal' | 'date' | 'text' | 'boolean';
   confidence: number;
   reason: string;
-  alternatives?: { name: string; displayName: string; confidence: number }[];
+  alternativeNames?: string[];
 }
 
 export interface ConfirmedMapping {
@@ -79,12 +80,17 @@ function MappingCard({
 }: MappingCardProps) {
   const [showAlternatives, setShowAlternatives] = useState(false);
   
+  const alternatives = (suggestion.alternativeNames || []).map(name => ({
+    name,
+    displayName: name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  }));
+  
   const options = [
-    { name: suggestion.suggestedMapping, displayName: suggestion.displayName },
-    ...(suggestion.alternatives || []).map(alt => ({ name: alt.name, displayName: alt.displayName })),
+    { name: suggestion.suggestedCanonicalName, displayName: suggestion.suggestedDisplayName },
+    ...alternatives,
     ...allOptions.filter(opt => 
-      opt.name !== suggestion.suggestedMapping && 
-      !suggestion.alternatives?.some(alt => alt.name === opt.name)
+      opt.name !== suggestion.suggestedCanonicalName && 
+      !alternatives.some(alt => alt.name === opt.name)
     ),
   ];
 
@@ -210,13 +216,15 @@ export function ColumnMappingPanel({
   const [mappingStates, setMappingStates] = useState<Record<string, {
     selectedMapping: string;
     displayName: string;
+    dataType: string;
     isConfirmed: boolean;
   }>>(() => {
     const initial: Record<string, any> = {};
     suggestions.forEach(s => {
       initial[s.sourceColumn] = {
-        selectedMapping: s.suggestedMapping,
-        displayName: s.displayName,
+        selectedMapping: s.suggestedCanonicalName,
+        displayName: s.suggestedDisplayName,
+        dataType: s.suggestedDataType,
         isConfirmed: false,
       };
     });
@@ -228,8 +236,9 @@ export function ColumnMappingPanel({
     suggestions.forEach(s => {
       if (!mappingStates[s.sourceColumn]) {
         newStates[s.sourceColumn] = {
-          selectedMapping: s.suggestedMapping,
-          displayName: s.displayName,
+          selectedMapping: s.suggestedCanonicalName,
+          displayName: s.suggestedDisplayName,
+          dataType: s.suggestedDataType,
           isConfirmed: false,
         };
       } else {
@@ -275,8 +284,8 @@ export function ColumnMappingPanel({
   const handleConfirmAll = () => {
     const confirmed: ConfirmedMapping[] = suggestions.map(s => ({
       sourceColumn: s.sourceColumn,
-      mappedTo: mappingStates[s.sourceColumn]?.selectedMapping || s.suggestedMapping,
-      displayName: mappingStates[s.sourceColumn]?.displayName || s.displayName,
+      mappedTo: mappingStates[s.sourceColumn]?.selectedMapping || s.suggestedCanonicalName,
+      displayName: mappingStates[s.sourceColumn]?.displayName || s.suggestedDisplayName,
       wasAISuggested: true,
       confidence: s.confidence,
     }));
@@ -288,18 +297,24 @@ export function ColumnMappingPanel({
       .filter(s => mappingStates[s.sourceColumn]?.isConfirmed)
       .map(s => ({
         sourceColumn: s.sourceColumn,
-        mappedTo: mappingStates[s.sourceColumn]?.selectedMapping || s.suggestedMapping,
-        displayName: mappingStates[s.sourceColumn]?.displayName || s.displayName,
+        mappedTo: mappingStates[s.sourceColumn]?.selectedMapping || s.suggestedCanonicalName,
+        displayName: mappingStates[s.sourceColumn]?.displayName || s.suggestedDisplayName,
         wasAISuggested: true,
         confidence: s.confidence,
       }));
     onConfirm(confirmed);
   };
 
-  const allOptions = suggestions.flatMap(s => [
-    { name: s.suggestedMapping, displayName: s.displayName },
-    ...(s.alternatives || []).map(alt => ({ name: alt.name, displayName: alt.displayName })),
-  ]).filter((v, i, a) => a.findIndex(t => t.name === v.name) === i);
+  const allOptions = suggestions.flatMap(s => {
+    const alternatives = (s.alternativeNames || []).map(name => ({
+      name,
+      displayName: name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    }));
+    return [
+      { name: s.suggestedCanonicalName, displayName: s.suggestedDisplayName },
+      ...alternatives,
+    ];
+  }).filter((v, i, a) => a.findIndex(t => t.name === v.name) === i);
 
   const confirmedCount = Object.values(mappingStates).filter(s => s.isConfirmed).length;
   const highConfidenceCount = suggestions.filter(s => s.confidence >= 80).length;
@@ -371,7 +386,7 @@ export function ColumnMappingPanel({
               key={suggestion.sourceColumn}
               suggestion={suggestion}
               isConfirmed={mappingStates[suggestion.sourceColumn]?.isConfirmed || false}
-              selectedMapping={mappingStates[suggestion.sourceColumn]?.selectedMapping || suggestion.suggestedMapping}
+              selectedMapping={mappingStates[suggestion.sourceColumn]?.selectedMapping || suggestion.suggestedCanonicalName}
               onSelect={(mapping, displayName) => handleSelect(suggestion.sourceColumn, mapping, displayName)}
               onConfirm={() => handleConfirmOne(suggestion.sourceColumn)}
               onReject={() => handleRejectOne(suggestion.sourceColumn)}

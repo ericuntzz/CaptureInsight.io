@@ -3479,6 +3479,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   /**
+   * Enhanced preview template application with detailed change tracking
+   * @route POST /api/templates/preview
+   * Body: { template: TemplateData, sampleData: any[] }
+   * Response: PreviewResult with detailed column stats
+   */
+  app.post('/api/templates/preview', isAuthenticated, async (req: any, res) => {
+    try {
+      const { template, sampleData } = req.body;
+
+      if (!template) {
+        return res.status(400).json({ message: "template configuration is required" });
+      }
+
+      if (!sampleData || !Array.isArray(sampleData)) {
+        return res.status(400).json({ message: "sampleData array is required" });
+      }
+
+      const { previewTemplateApplication } = await import('./ai/templatePreview');
+      
+      const templateData = {
+        ...template,
+        columns: template.columns || (template.columnSchema?.columns) || [],
+        cleaningPipeline: template.cleaningPipeline || (template.cleaningPipeline?.steps) || [],
+        columnAliases: template.columnAliases || {}
+      };
+
+      const result = await previewTemplateApplication(templateData, sampleData);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error previewing template application:", error);
+      res.status(500).json({ message: "Failed to preview template application" });
+    }
+  });
+
+  /**
    * Find matching template for sheet data
    * @route GET /api/templates/match
    * Query params: workspaceId, spaceId, sheetId (optional - to get data from existing sheet)

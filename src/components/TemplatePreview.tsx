@@ -2,31 +2,47 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X, AlertTriangle, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
-  Eye, ArrowRight, Loader2, RefreshCw
+  Eye, ArrowRight, Loader2, RefreshCw, Filter, BarChart3, Download
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Switch } from './ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select';
+
+type ChangeType = 'formatted' | 'type_converted' | 'cleaned' | 'filled' | 'unchanged';
+type ErrorType = 'validation_failed' | 'type_mismatch' | 'required_missing' | 'format_invalid';
 
 interface PreviewChange {
-  row: number;
-  column: string;
-  from: string;
-  to: string;
-  type: 'format' | 'transform' | 'error';
+  rowIndex: number;
+  columnName: string;
+  originalValue: any;
+  cleanedValue: any;
+  changeType: ChangeType;
 }
 
 interface PreviewError {
-  row: number;
-  column: string;
+  rowIndex: number;
+  columnName: string;
+  errorType: ErrorType;
   message: string;
-  severity: 'error' | 'warning';
+  originalValue: any;
+}
+
+interface ColumnStats {
+  changesCount: number;
+  errorsCount: number;
 }
 
 interface PreviewStats {
-  rowsProcessed: number;
-  changesCount: number;
-  errorsCount: number;
-  warningsCount: number;
+  totalRows: number;
+  totalChanges: number;
+  totalErrors: number;
+  columnStats: Record<string, ColumnStats>;
 }
 
 interface PreviewData {
@@ -35,6 +51,30 @@ interface PreviewData {
   changes: PreviewChange[];
   errors: PreviewError[];
   stats: PreviewStats;
+}
+
+interface LegacyPreviewData {
+  originalData: Record<string, any>[];
+  cleanedData: Record<string, any>[];
+  changes: Array<{
+    row: number;
+    column: string;
+    from: string;
+    to: string;
+    type: 'format' | 'transform' | 'error';
+  }>;
+  errors: Array<{
+    row: number;
+    column: string;
+    message: string;
+    severity: 'error' | 'warning';
+  }>;
+  stats: {
+    rowsProcessed: number;
+    changesCount: number;
+    errorsCount: number;
+    warningsCount: number;
+  };
 }
 
 interface TemplatePreviewProps {
@@ -46,6 +86,55 @@ interface TemplatePreviewProps {
   cleaningPipeline?: any;
   columnSchema?: any;
   sheetId?: string;
+}
+
+function convertLegacyToNewFormat(legacy: LegacyPreviewData): PreviewData {
+  const changes: PreviewChange[] = legacy.changes.map(c => ({
+    rowIndex: c.row,
+    columnName: c.column,
+    originalValue: c.from,
+    cleanedValue: c.to,
+    changeType: c.type === 'transform' ? 'type_converted' : 'formatted' as ChangeType
+  }));
+
+  const errors: PreviewError[] = legacy.errors.map(e => ({
+    rowIndex: e.row,
+    columnName: e.column,
+    errorType: 'validation_failed' as ErrorType,
+    message: e.message,
+    originalValue: legacy.originalData[e.row]?.[e.column]
+  }));
+
+  const columnStats: Record<string, ColumnStats> = {};
+  for (const change of changes) {
+    if (!columnStats[change.columnName]) {
+      columnStats[change.columnName] = { changesCount: 0, errorsCount: 0 };
+    }
+    columnStats[change.columnName].changesCount++;
+  }
+  for (const error of errors) {
+    if (!columnStats[error.columnName]) {
+      columnStats[error.columnName] = { changesCount: 0, errorsCount: 0 };
+    }
+    columnStats[error.columnName].errorsCount++;
+  }
+
+  return {
+    originalData: legacy.originalData,
+    cleanedData: legacy.cleanedData,
+    changes,
+    errors,
+    stats: {
+      totalRows: legacy.stats.rowsProcessed,
+      totalChanges: legacy.stats.changesCount,
+      totalErrors: legacy.stats.errorsCount,
+      columnStats
+    }
+  };
+}
+
+function isLegacyFormat(data: any): data is LegacyPreviewData {
+  return data.stats && 'rowsProcessed' in data.stats;
 }
 
 export function TemplatePreview({
@@ -64,7 +153,9 @@ export function TemplatePreview({
   const [showOnlyChanges, setShowOnlyChanges] = useState(false);
   const [showOnlyErrors, setShowOnlyErrors] = useState(false);
   const [expandedErrors, setExpandedErrors] = useState(true);
+  const [expandedStats, setExpandedStats] = useState(false);
   const [highlightedCell, setHighlightedCell] = useState<{ row: number; column: string } | null>(null);
+  const [selectedColumn, setSelectedColumn] = useState<string>('all');
   
   const leftScrollRef = useRef<HTMLDivElement>(null);
   const rightScrollRef = useRef<HTMLDivElement>(null);
@@ -83,15 +174,21 @@ export function TemplatePreview({
           credentials: 'include',
           body: JSON.stringify({ sheetId }),
         });
-      } else if (sampleData && sampleData.length > 0) {
-        response = await fetch('/api/templates/preview-with-config', {
+      } else if (sampleData && sampleData.length > 0 && (cleaningPipeline || columnSchema)) {
+        response = await fetch('/api/templates/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({
-            data: sampleData,
-            cleaningPipeline,
-            columnSchema,
+            template: {
+              name: templateName || 'Preview Template',
+              description: '',
+              scope: 'workspace',
+              columns: columnSchema?.columns || [],
+              cleaningPipeline: cleaningPipeline?.steps || [],
+              columnAliases: {}
+            },
+            sampleData,
           }),
         });
       } else {
@@ -106,13 +203,18 @@ export function TemplatePreview({
       }
 
       const data = await response.json();
-      setPreviewData(data);
+      
+      if (isLegacyFormat(data)) {
+        setPreviewData(convertLegacyToNewFormat(data));
+      } else {
+        setPreviewData(data as PreviewData);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate preview');
     } finally {
       setIsLoading(false);
     }
-  }, [templateId, sheetId, sampleData, cleaningPipeline, columnSchema]);
+  }, [templateId, sheetId, sampleData, cleaningPipeline, columnSchema, templateName]);
 
   useEffect(() => {
     if (isOpen) {
@@ -139,11 +241,16 @@ export function TemplatePreview({
     return Array.from(allColumns);
   }, [previewData]);
 
+  const filteredColumns = useMemo(() => {
+    if (selectedColumn === 'all') return columns;
+    return columns.filter(col => col === selectedColumn);
+  }, [columns, selectedColumn]);
+
   const changesMap = useMemo(() => {
     if (!previewData) return new Map<string, PreviewChange>();
     const map = new Map<string, PreviewChange>();
     previewData.changes.forEach(change => {
-      map.set(`${change.row}-${change.column}`, change);
+      map.set(`${change.rowIndex}-${change.columnName}`, change);
     });
     return map;
   }, [previewData]);
@@ -152,7 +259,7 @@ export function TemplatePreview({
     if (!previewData) return new Map<string, PreviewError[]>();
     const map = new Map<string, PreviewError[]>();
     previewData.errors.forEach(error => {
-      const key = `${error.row}-${error.column}`;
+      const key = `${error.rowIndex}-${error.columnName}`;
       const existing = map.get(key) || [];
       map.set(key, [...existing, error]);
     });
@@ -161,28 +268,25 @@ export function TemplatePreview({
 
   const rowsWithChanges = useMemo(() => {
     if (!previewData) return new Set<number>();
-    return new Set(previewData.changes.map(c => c.row));
-  }, [previewData]);
+    const rows = new Set<number>();
+    previewData.changes.forEach(c => {
+      if (selectedColumn === 'all' || c.columnName === selectedColumn) {
+        rows.add(c.rowIndex);
+      }
+    });
+    return rows;
+  }, [previewData, selectedColumn]);
 
   const rowsWithErrors = useMemo(() => {
     if (!previewData) return new Set<number>();
-    return new Set(previewData.errors.map(e => e.row));
-  }, [previewData]);
-
-  const columnErrors = useMemo(() => {
-    if (!previewData) return new Map<string, { errors: number; warnings: number }>();
-    const map = new Map<string, { errors: number; warnings: number }>();
-    previewData.errors.forEach(error => {
-      const existing = map.get(error.column) || { errors: 0, warnings: 0 };
-      if (error.severity === 'error') {
-        existing.errors++;
-      } else {
-        existing.warnings++;
+    const rows = new Set<number>();
+    previewData.errors.forEach(e => {
+      if (selectedColumn === 'all' || e.columnName === selectedColumn) {
+        rows.add(e.rowIndex);
       }
-      map.set(error.column, existing);
     });
-    return map;
-  }, [previewData]);
+    return rows;
+  }, [previewData, selectedColumn]);
 
   const filteredRows = useMemo(() => {
     if (!previewData) return [];
@@ -200,6 +304,26 @@ export function TemplatePreview({
     return rows;
   }, [previewData, showOnlyChanges, showOnlyErrors, rowsWithChanges, rowsWithErrors]);
 
+  const getChangeTypeLabel = (type: ChangeType): string => {
+    switch (type) {
+      case 'formatted': return 'Formatted';
+      case 'type_converted': return 'Type Converted';
+      case 'cleaned': return 'Cleaned';
+      case 'filled': return 'Filled';
+      default: return 'Unchanged';
+    }
+  };
+
+  const getErrorTypeLabel = (type: ErrorType): string => {
+    switch (type) {
+      case 'validation_failed': return 'Validation Failed';
+      case 'type_mismatch': return 'Type Mismatch';
+      case 'required_missing': return 'Required Missing';
+      case 'format_invalid': return 'Invalid Format';
+      default: return 'Error';
+    }
+  };
+
   const getCellClassName = (row: number, column: string, isCleanedSide: boolean) => {
     const changeKey = `${row}-${column}`;
     const change = changesMap.get(changeKey);
@@ -213,20 +337,19 @@ export function TemplatePreview({
       baseClass += ' ring-2 ring-[#FF6B35] ring-inset';
     }
     
-    if (errors.some(e => e.severity === 'error')) {
-      return `${baseClass} bg-red-500/20 text-red-300`;
-    }
-    
-    if (errors.some(e => e.severity === 'warning')) {
-      return `${baseClass} bg-yellow-500/20 text-yellow-300`;
+    if (errors.length > 0) {
+      return `${baseClass} bg-[#EF4444]/20 text-red-300`;
     }
     
     if (change && isCleanedSide) {
-      if (change.type === 'format') {
-        return `${baseClass} bg-green-500/20 text-green-300`;
+      if (change.changeType === 'formatted' || change.changeType === 'cleaned') {
+        return `${baseClass} bg-[#22C55E]/20 text-green-300`;
       }
-      if (change.type === 'transform') {
-        return `${baseClass} bg-yellow-500/20 text-yellow-300`;
+      if (change.changeType === 'type_converted') {
+        return `${baseClass} bg-[#EAB308]/20 text-yellow-300`;
+      }
+      if (change.changeType === 'filled') {
+        return `${baseClass} bg-purple-500/20 text-purple-300`;
       }
     }
     
@@ -247,6 +370,46 @@ export function TemplatePreview({
     
     setTimeout(() => setHighlightedCell(null), 2000);
   }, []);
+
+  const exportToCsv = useCallback(() => {
+    if (!previewData) return;
+    
+    const headers = columns;
+    const csvContent = [
+      headers.join(','),
+      ...previewData.cleanedData.map(row => 
+        headers.map(h => {
+          const value = row[h];
+          if (value === null || value === undefined) return '';
+          const strValue = String(value);
+          if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
+            return `"${strValue.replace(/"/g, '""')}"`;
+          }
+          return strValue;
+        }).join(',')
+      )
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `preview_${templateName || 'data'}_cleaned.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [previewData, columns, templateName]);
+
+  const errorsByColumn = useMemo(() => {
+    if (!previewData) return new Map<string, PreviewError[]>();
+    const map = new Map<string, PreviewError[]>();
+    previewData.errors.forEach(error => {
+      const existing = map.get(error.columnName) || [];
+      map.set(error.columnName, [...existing, error]);
+    });
+    return map;
+  }, [previewData]);
 
   if (!isOpen) return null;
 
@@ -285,6 +448,15 @@ export function TemplatePreview({
           
           <div className="flex items-center gap-4">
             <button
+              onClick={exportToCsv}
+              disabled={!previewData || isLoading}
+              className="flex items-center gap-2 px-3 py-2 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+              title="Export cleaned data as CSV"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+            <button
               onClick={fetchPreview}
               disabled={isLoading}
               className="flex items-center gap-2 px-3 py-2 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
@@ -306,44 +478,68 @@ export function TemplatePreview({
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-blue-400" />
               <span className="text-sm text-gray-300">
-                <span className="font-medium text-white">{previewData.stats.rowsProcessed}</span> rows processed
+                <span className="font-medium text-white">{previewData.stats.totalRows}</span> rows
               </span>
             </div>
             
             <div className="flex items-center gap-2">
-              <ArrowRight className="w-4 h-4 text-yellow-400" />
+              <ArrowRight className="w-4 h-4 text-[#22C55E]" />
               <span className="text-sm text-gray-300">
-                <span className="font-medium text-white">{previewData.stats.changesCount}</span> changes
+                <span className="font-medium text-[#22C55E]">{previewData.stats.totalChanges}</span> changes
               </span>
             </div>
             
-            {previewData.stats.errorsCount > 0 && (
+            {previewData.stats.totalErrors > 0 && (
               <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400" />
+                <AlertCircle className="w-4 h-4 text-[#EF4444]" />
                 <span className="text-sm text-gray-300">
-                  <span className="font-medium text-red-400">{previewData.stats.errorsCount}</span> errors
+                  <span className="font-medium text-[#EF4444]">{previewData.stats.totalErrors}</span> errors
                 </span>
               </div>
             )}
             
-            {previewData.stats.warningsCount > 0 && (
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                <span className="text-sm text-gray-300">
-                  <span className="font-medium text-yellow-400">{previewData.stats.warningsCount}</span> warnings
-                </span>
-              </div>
-            )}
+            <button
+              onClick={() => setExpandedStats(!expandedStats)}
+              className="flex items-center gap-2 px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-[#1A1F2E] rounded transition-colors"
+            >
+              <BarChart3 className="w-3 h-3" />
+              Column Stats
+              {expandedStats ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            </button>
 
             <div className="flex-1" />
 
             <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-gray-500" />
+                <Select value={selectedColumn} onValueChange={setSelectedColumn}>
+                  <SelectTrigger className="w-40 h-8 bg-[#1A1F2E] border-transparent text-sm">
+                    <SelectValue placeholder="Filter column" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1A1F2E] border-[#2A2F3E]">
+                    <SelectItem value="all" className="text-white hover:bg-[#FF6B35]/20">
+                      All columns
+                    </SelectItem>
+                    {columns.map(col => (
+                      <SelectItem key={col} value={col} className="text-white hover:bg-[#FF6B35]/20">
+                        {col}
+                        {previewData.stats.columnStats[col] && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            ({previewData.stats.columnStats[col].changesCount} changes)
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <label className="flex items-center gap-2 cursor-pointer">
                 <Switch
                   checked={showOnlyChanges}
                   onCheckedChange={setShowOnlyChanges}
                 />
-                <span className="text-sm text-gray-400">Show only changes</span>
+                <span className="text-sm text-gray-400">Changed only</span>
               </label>
               
               <label className="flex items-center gap-2 cursor-pointer">
@@ -351,10 +547,48 @@ export function TemplatePreview({
                   checked={showOnlyErrors}
                   onCheckedChange={setShowOnlyErrors}
                 />
-                <span className="text-sm text-gray-400">Show only errors</span>
+                <span className="text-sm text-gray-400">Errors only</span>
               </label>
             </div>
           </div>
+        )}
+
+        {expandedStats && previewData && Object.keys(previewData.stats.columnStats).length > 0 && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-b border-[#1A1F2E] overflow-hidden"
+          >
+            <div className="px-6 py-3 bg-[#0D1117]/50">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {Object.entries(previewData.stats.columnStats)
+                  .sort(([, a], [, b]) => (b.changesCount + b.errorsCount) - (a.changesCount + a.errorsCount))
+                  .map(([colName, stats]) => (
+                    <div
+                      key={colName}
+                      className={`p-2 rounded-lg bg-[#1A1F2E]/50 cursor-pointer hover:bg-[#1A1F2E] transition-colors ${
+                        selectedColumn === colName ? 'ring-1 ring-[#FF6B35]' : ''
+                      }`}
+                      onClick={() => setSelectedColumn(selectedColumn === colName ? 'all' : colName)}
+                    >
+                      <div className="text-xs text-gray-400 truncate" title={colName}>{colName}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {stats.changesCount > 0 && (
+                          <span className="text-xs text-[#22C55E]">{stats.changesCount} ✓</span>
+                        )}
+                        {stats.errorsCount > 0 && (
+                          <span className="text-xs text-[#EF4444]">{stats.errorsCount} ✗</span>
+                        )}
+                        {stats.changesCount === 0 && stats.errorsCount === 0 && (
+                          <span className="text-xs text-gray-500">No changes</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </motion.div>
         )}
 
         <div className="flex-1 flex overflow-hidden">
@@ -368,7 +602,7 @@ export function TemplatePreview({
           ) : error ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="flex flex-col items-center gap-3 text-center">
-                <AlertCircle className="w-12 h-12 text-red-400" />
+                <AlertCircle className="w-12 h-12 text-[#EF4444]" />
                 <p className="text-lg text-white font-medium">Preview Error</p>
                 <p className="text-gray-400 max-w-md">{error}</p>
                 <button
@@ -396,7 +630,7 @@ export function TemplatePreview({
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 border-r border-b border-[#1A1F2E] bg-[#0D1117] sticky left-0 z-20 w-12">
                           #
                         </th>
-                        {columns.map(column => (
+                        {filteredColumns.map(column => (
                           <th 
                             key={column}
                             className="px-3 py-2 text-left text-xs font-medium text-gray-400 border-r border-b border-[#1A1F2E] bg-[#0D1117] whitespace-nowrap"
@@ -414,17 +648,18 @@ export function TemplatePreview({
                         return (
                           <tr 
                             key={rowIndex}
-                            className={`hover:bg-[#1A1F2E]/50 ${hasError ? 'bg-red-500/5' : ''}`}
+                            className={`hover:bg-[#1A1F2E]/50 ${hasError ? 'bg-[#EF4444]/5' : ''}`}
                           >
                             <td className="px-3 py-2 text-xs text-gray-500 border-r border-b border-[#1A1F2E] bg-[#0A0E1A] sticky left-0 z-10">
                               {rowIndex + 1}
                               {hasError && (
-                                <AlertCircle className="inline-block ml-1 w-3 h-3 text-red-400" />
+                                <AlertCircle className="inline-block ml-1 w-3 h-3 text-[#EF4444]" />
                               )}
                             </td>
-                            {columns.map(column => {
+                            {filteredColumns.map(column => {
                               const value = row[column];
                               const displayValue = value === null || value === undefined ? '' : String(value);
+                              const change = changesMap.get(`${rowIndex}-${column}`);
                               
                               return (
                                 <TooltipProvider key={column}>
@@ -434,13 +669,16 @@ export function TemplatePreview({
                                         {displayValue}
                                       </td>
                                     </TooltipTrigger>
-                                    {changesMap.has(`${rowIndex}-${column}`) && (
+                                    {change && (
                                       <TooltipContent side="bottom" className="bg-[#1A1F2E] border-[#2A2F3E] text-white">
                                         <div className="text-xs">
-                                          <div className="text-gray-400">Before:</div>
-                                          <div className="font-mono">{changesMap.get(`${rowIndex}-${column}`)?.from || '(empty)'}</div>
-                                          <div className="text-gray-400 mt-1">After:</div>
-                                          <div className="font-mono text-green-400">{changesMap.get(`${rowIndex}-${column}`)?.to || '(empty)'}</div>
+                                          <div className="text-gray-400">Original value:</div>
+                                          <div className="font-mono">{String(change.originalValue) || '(empty)'}</div>
+                                          <div className="text-gray-400 mt-1">Will become:</div>
+                                          <div className="font-mono text-[#22C55E]">{String(change.cleanedValue) || '(empty)'}</div>
+                                          <div className="text-[#EAB308] mt-1 text-[10px]">
+                                            {getChangeTypeLabel(change.changeType)}
+                                          </div>
                                         </div>
                                       </TooltipContent>
                                     )}
@@ -477,8 +715,8 @@ export function TemplatePreview({
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 border-r border-b border-[#1A1F2E] bg-[#0D1117] sticky left-0 z-20 w-12">
                           #
                         </th>
-                        {columns.map(column => {
-                          const colErrors = columnErrors.get(column);
+                        {filteredColumns.map(column => {
+                          const colStats = previewData.stats.columnStats[column];
                           return (
                             <th 
                               key={column}
@@ -486,14 +724,14 @@ export function TemplatePreview({
                             >
                               <div className="flex items-center gap-2">
                                 {column}
-                                {colErrors && colErrors.errors > 0 && (
-                                  <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded text-[10px]">
-                                    {colErrors.errors}
+                                {colStats && colStats.errorsCount > 0 && (
+                                  <span className="px-1.5 py-0.5 bg-[#EF4444]/20 text-[#EF4444] rounded text-[10px]">
+                                    {colStats.errorsCount}
                                   </span>
                                 )}
-                                {colErrors && colErrors.warnings > 0 && (
-                                  <span className="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-[10px]">
-                                    {colErrors.warnings}
+                                {colStats && colStats.changesCount > 0 && colStats.errorsCount === 0 && (
+                                  <span className="px-1.5 py-0.5 bg-[#22C55E]/20 text-[#22C55E] rounded text-[10px]">
+                                    {colStats.changesCount}
                                   </span>
                                 )}
                               </div>
@@ -510,15 +748,16 @@ export function TemplatePreview({
                         return (
                           <tr 
                             key={rowIndex}
-                            className={`hover:bg-[#1A1F2E]/50 ${hasError ? 'bg-red-500/5' : ''}`}
+                            className={`hover:bg-[#1A1F2E]/50 ${hasError ? 'bg-[#EF4444]/5' : ''}`}
                           >
                             <td className="px-3 py-2 text-xs text-gray-500 border-r border-b border-[#1A1F2E] bg-[#0A0E1A] sticky left-0 z-10">
                               {rowIndex + 1}
                             </td>
-                            {columns.map(column => {
+                            {filteredColumns.map(column => {
                               const value = row[column];
                               const displayValue = value === null || value === undefined ? '' : String(value);
                               const cellErrors = errorsMap.get(`${rowIndex}-${column}`) || [];
+                              const change = changesMap.get(`${rowIndex}-${column}`);
                               
                               return (
                                 <TooltipProvider key={column}>
@@ -528,17 +767,23 @@ export function TemplatePreview({
                                         {displayValue}
                                       </td>
                                     </TooltipTrigger>
-                                    {(cellErrors.length > 0 || changesMap.has(`${rowIndex}-${column}`)) && (
+                                    {(cellErrors.length > 0 || change) && (
                                       <TooltipContent side="bottom" className="bg-[#1A1F2E] border-[#2A2F3E] text-white max-w-xs">
                                         <div className="text-xs space-y-2">
-                                          {changesMap.has(`${rowIndex}-${column}`) && (
+                                          {change && (
                                             <div>
                                               <div className="text-gray-400">Changed from:</div>
-                                              <div className="font-mono">{changesMap.get(`${rowIndex}-${column}`)?.from || '(empty)'}</div>
+                                              <div className="font-mono">{String(change.originalValue) || '(empty)'}</div>
+                                              <div className="text-[#22C55E] text-[10px] mt-0.5">
+                                                {getChangeTypeLabel(change.changeType)}
+                                              </div>
                                             </div>
                                           )}
                                           {cellErrors.map((err, i) => (
-                                            <div key={i} className={err.severity === 'error' ? 'text-red-400' : 'text-yellow-400'}>
+                                            <div key={i} className="text-[#EF4444]">
+                                              <span className="text-[10px] text-[#EAB308] mr-1">
+                                                [{getErrorTypeLabel(err.errorType)}]
+                                              </span>
                                               {err.message}
                                             </div>
                                           ))}
@@ -581,9 +826,9 @@ export function TemplatePreview({
               ) : (
                 <ChevronRight className="w-4 h-4 text-gray-400" />
               )}
-              <AlertCircle className="w-4 h-4 text-red-400" />
+              <AlertCircle className="w-4 h-4 text-[#EF4444]" />
               <span className="text-sm font-medium text-white">
-                Error Details ({previewData.errors.length} issues)
+                Error Details ({previewData.errors.length} issues in {errorsByColumn.size} columns)
               </span>
             </button>
             
@@ -596,44 +841,48 @@ export function TemplatePreview({
                   className="overflow-hidden"
                 >
                   <div className="px-6 pb-4 max-h-48 overflow-y-auto">
-                    <div className="space-y-2">
-                      {Object.entries(
-                        previewData.errors.reduce((acc, error) => {
-                          const key = `${error.column}: ${error.message}`;
-                          if (!acc[key]) {
-                            acc[key] = { ...error, count: 0, rows: [] as number[] };
-                          }
-                          acc[key].count++;
-                          acc[key].rows.push(error.row);
-                          return acc;
-                        }, {} as Record<string, PreviewError & { count: number; rows: number[] }>)
-                      ).map(([key, groupedError]) => (
-                        <div 
-                          key={key}
-                          className={`flex items-center justify-between p-3 rounded-lg cursor-pointer hover:bg-[#1A1F2E]/50 transition-colors ${
-                            groupedError.severity === 'error' ? 'bg-red-500/10' : 'bg-yellow-500/10'
-                          }`}
-                          onClick={() => scrollToCell(groupedError.rows[0], groupedError.column)}
-                        >
-                          <div className="flex items-center gap-3">
-                            {groupedError.severity === 'error' ? (
-                              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                            ) : (
-                              <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-                            )}
-                            <div>
-                              <p className={`text-sm ${groupedError.severity === 'error' ? 'text-red-300' : 'text-yellow-300'}`}>
-                                Column "{groupedError.column}": {groupedError.message}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {groupedError.count} occurrence{groupedError.count > 1 ? 's' : ''} 
-                                {groupedError.count <= 5 && ` (rows: ${groupedError.rows.map(r => r + 1).join(', ')})`}
-                              </p>
-                            </div>
+                    <div className="space-y-3">
+                      {Array.from(errorsByColumn.entries()).map(([columnName, errors]) => (
+                        <div key={columnName} className="bg-[#1A1F2E]/50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-white">{columnName}</span>
+                            <span className="text-xs text-[#EF4444]">{errors.length} errors</span>
                           </div>
-                          <button className="text-xs text-[#FF6B35] hover:text-[#FF8F35]">
-                            Go to first
-                          </button>
+                          <div className="space-y-1">
+                            {Object.entries(
+                              errors.reduce((acc, error) => {
+                                const key = `${error.errorType}: ${error.message}`;
+                                if (!acc[key]) {
+                                  acc[key] = { ...error, count: 0, rows: [] as number[] };
+                                }
+                                acc[key].count++;
+                                acc[key].rows.push(error.rowIndex);
+                                return acc;
+                              }, {} as Record<string, PreviewError & { count: number; rows: number[] }>)
+                            ).map(([key, groupedError]) => (
+                              <div 
+                                key={key}
+                                className="flex items-center justify-between p-2 rounded bg-[#EF4444]/10 cursor-pointer hover:bg-[#EF4444]/20 transition-colors"
+                                onClick={() => scrollToCell(groupedError.rows[0], columnName)}
+                              >
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-[#EAB308]/20 text-[#EAB308] rounded">
+                                    {getErrorTypeLabel(groupedError.errorType)}
+                                  </span>
+                                  <span className="text-xs text-red-300 truncate">{groupedError.message}</span>
+                                </div>
+                                <div className="flex items-center gap-2 ml-2">
+                                  <span className="text-xs text-gray-500">
+                                    {groupedError.count}× 
+                                    {groupedError.count <= 3 && ` (rows: ${groupedError.rows.map(r => r + 1).join(', ')})`}
+                                  </span>
+                                  <button className="text-xs text-[#FF6B35] hover:text-[#FF8F35] whitespace-nowrap">
+                                    Go to first
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -647,15 +896,19 @@ export function TemplatePreview({
         <div className="flex items-center justify-between px-6 py-3 bg-[#0D1117] border-t border-[#1A1F2E]">
           <div className="flex items-center gap-6 text-xs text-gray-500">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-green-500/30" />
-              <span>Formatted (trimmed, cleaned)</span>
+              <div className="w-3 h-3 rounded bg-[#22C55E]/30" />
+              <span>Formatted/Cleaned</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-yellow-500/30" />
-              <span>Transformed (type conversion)</span>
+              <div className="w-3 h-3 rounded bg-[#EAB308]/30" />
+              <span>Type converted</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-red-500/30" />
+              <div className="w-3 h-3 rounded bg-purple-500/30" />
+              <span>Filled empty</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-[#EF4444]/30" />
               <span>Validation error</span>
             </div>
           </div>

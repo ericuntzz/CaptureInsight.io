@@ -15,9 +15,10 @@ import {
 } from './ui/select';
 import { Checkbox } from './ui/checkbox';
 import { toast } from 'sonner';
-import { useTemplateEditor, TemplateColumn, CleaningStep } from '../contexts/TemplateEditorContext';
-import { ColumnMappingPanel, ColumnMappingSuggestion, ConfirmedMapping } from './ColumnMappingPanel';
+import { useTemplateEditor, TemplateColumn, CleaningStep, ColumnMappingSuggestion } from '../contexts/TemplateEditorContext';
+import { ColumnMappingPanel, ConfirmedMapping } from './ColumnMappingPanel';
 import { TemplatePreview } from './TemplatePreview';
+import { SuggestedMapping, SuggestedMappingBanner } from './SuggestedMapping';
 import {
   DndContext,
   closestCenter,
@@ -73,6 +74,9 @@ interface SortableColumnRowProps {
   isExpanded: boolean;
   onAddAlias: (alias: string) => void;
   onRemoveAlias: (alias: string) => void;
+  suggestion?: ColumnMappingSuggestion;
+  onAcceptSuggestion?: () => void;
+  onRejectSuggestion?: () => void;
 }
 
 function SortableColumnRow({ 
@@ -83,6 +87,9 @@ function SortableColumnRow({
   isExpanded,
   onAddAlias,
   onRemoveAlias,
+  suggestion,
+  onAcceptSuggestion,
+  onRejectSuggestion,
 }: SortableColumnRowProps) {
   const [newAliasValue, setNewAliasValue] = useState('');
   
@@ -109,7 +116,14 @@ function SortableColumnRow({
   };
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} className="space-y-2">
+      {suggestion && onAcceptSuggestion && onRejectSuggestion && (
+        <SuggestedMapping
+          suggestion={suggestion}
+          onAccept={onAcceptSuggestion}
+          onReject={onRejectSuggestion}
+        />
+      )}
       <div className={`flex items-center gap-2 p-3 bg-[#0A0E1A] rounded-lg border ${isExpanded ? 'border-[#FF6B35]/50' : 'border-[#1A1F2E]'} hover:border-[#FF6B35]/30 transition-colors group`}>
         <button
           {...attributes}
@@ -477,6 +491,8 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
     errors,
     isOpen,
     isSaving,
+    columnSuggestions,
+    isLoadingSuggestions,
     updateTemplate,
     addColumn,
     updateColumn,
@@ -486,6 +502,11 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
     removeColumnAlias,
     updateCleaningStep,
     toggleCleaningStep,
+    setColumnSuggestions,
+    setIsLoadingSuggestions,
+    acceptSuggestion,
+    rejectSuggestion,
+    clearAllSuggestions,
     closeEditor,
     save,
     reset,
@@ -493,7 +514,6 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
 
   const [expandedColumns, setExpandedColumns] = useState<Set<string>>(new Set());
   const [aiSuggestions, setAiSuggestions] = useState<ColumnMappingSuggestion[]>([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [showMappingPanel, setShowMappingPanel] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -535,7 +555,29 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
       }
 
       const data = await response.json();
-      setAiSuggestions(data.suggestions || []);
+      const suggestions = data.suggestions || [];
+      setAiSuggestions(suggestions);
+      
+      const suggestionsMap: Record<string, ColumnMappingSuggestion> = {};
+      template.columns.forEach((col, index) => {
+        const suggestion = suggestions.find((s: ColumnMappingSuggestion) => 
+          s.sourceColumn === col.canonicalName || 
+          (col.aliases || []).includes(s.sourceColumn) ||
+          suggestions[index]
+        );
+        if (suggestion || suggestions[index]) {
+          suggestionsMap[col.id] = suggestion || suggestions[index];
+        }
+      });
+      
+      if (suggestions.length > 0 && template.columns.length === 0) {
+        suggestions.forEach((s: ColumnMappingSuggestion, idx: number) => {
+          const colId = `col-${Date.now()}-${idx}`;
+          suggestionsMap[colId] = s;
+        });
+      }
+      
+      setColumnSuggestions(suggestionsMap);
       
       if (data.summary?.highConfidence > 0) {
         toast.success(`Found ${data.summary.highConfidence} high-confidence mappings`);
@@ -547,7 +589,7 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
     } finally {
       setIsLoadingSuggestions(false);
     }
-  }, [currentData, template.columns, spaceId]);
+  }, [currentData, template.columns, spaceId, setColumnSuggestions, setIsLoadingSuggestions]);
 
   const handleConfirmMappings = useCallback((mappings: ConfirmedMapping[]) => {
     mappings.forEach(mapping => {
@@ -579,7 +621,18 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
   const handleDismissMappings = useCallback(() => {
     setShowMappingPanel(false);
     setAiSuggestions([]);
-  }, []);
+    clearAllSuggestions();
+  }, [clearAllSuggestions]);
+
+  const handleAcceptAllSuggestions = useCallback(() => {
+    Object.keys(columnSuggestions).forEach(colId => {
+      acceptSuggestion(colId);
+    });
+    toast.success('Applied all AI suggestions');
+  }, [columnSuggestions, acceptSuggestion]);
+
+  const suggestionsCount = Object.keys(columnSuggestions).length;
+  const highConfidenceCount = Object.values(columnSuggestions).filter(s => s.confidence >= 85).length;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -846,6 +899,16 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
               <div></div>
             </div>
             
+            {suggestionsCount > 0 && !showMappingPanel && (
+              <SuggestedMappingBanner
+                totalSuggestions={suggestionsCount}
+                highConfidenceCount={highConfidenceCount}
+                onApplyAll={handleAcceptAllSuggestions}
+                onDismissAll={clearAllSuggestions}
+                isLoading={isLoadingSuggestions}
+              />
+            )}
+            
             {template.columns.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-500">
                 <Columns3 className="w-12 h-12 mb-3 opacity-50" />
@@ -873,6 +936,9 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                         isExpanded={expandedColumns.has(column.id)}
                         onAddAlias={(alias) => addColumnAlias(column.id, alias)}
                         onRemoveAlias={(alias) => removeColumnAlias(column.id, alias)}
+                        suggestion={columnSuggestions[column.id]}
+                        onAcceptSuggestion={() => acceptSuggestion(column.id)}
+                        onRejectSuggestion={() => rejectSuggestion(column.id)}
                       />
                     ))}
                   </div>
