@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Plus, Trash2, GripVertical, ChevronDown, ChevronRight, 
@@ -29,7 +29,6 @@ import {
   DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
@@ -812,7 +811,7 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                 <label className="block text-xs text-gray-400 mb-1.5">Source Type Lock (optional)</label>
                 <Select 
                   value={template.sourceType || ''} 
-                  onValueChange={(value) => updateTemplate({ sourceType: value as any || null })}
+                  onValueChange={(value: string) => updateTemplate({ sourceType: (value || null) as 'google_ads' | 'meta_ads' | 'ga4' | 'google_sheets' | 'csv' | 'custom' | null })}
                 >
                   <SelectTrigger className="w-full bg-[#1A1F2E] border-transparent">
                     <SelectValue placeholder="Any source type" />

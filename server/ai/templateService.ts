@@ -533,9 +533,9 @@ function inferDataType(values: unknown[]): string {
  */
 function calculateTypeMatchScore(
   sourceData: Record<string, unknown>[],
-  templateColumns: ColumnSchema['columns']
+  templateColumns: ColumnSchema['columns'] | undefined | null
 ): number {
-  if (sourceData.length === 0 || templateColumns.length === 0) return 0;
+  if (!templateColumns || templateColumns.length === 0 || sourceData.length === 0) return 0;
 
   const sourceColumns = Object.keys(sourceData[0] || {});
   if (sourceColumns.length === 0) return 0;
@@ -597,26 +597,46 @@ export function scoreTemplateMatch(
     fileNamePatterns?: string[];
   } | null;
 
-  const mergedAliases: { [key: string]: string[] } = { ...(templateAliases || {}) };
+  // Merge and deduplicate aliases (normalize to lowercase for comparison)
+  const mergedAliases: { [key: string]: string[] } = {};
+  
+  // First, add template aliases
+  if (templateAliases) {
+    for (const [key, aliases] of Object.entries(templateAliases)) {
+      if (!mergedAliases[key]) {
+        mergedAliases[key] = [];
+      }
+      mergedAliases[key].push(...aliases);
+    }
+  }
+  
+  // Then, add system aliases (deduplicating)
   for (const sysAlias of systemAliases) {
     if (!mergedAliases[sysAlias.canonicalName]) {
       mergedAliases[sysAlias.canonicalName] = [];
     }
-    mergedAliases[sysAlias.canonicalName].push(
-      ...(sysAlias.aliases as string[]),
-      sysAlias.displayName
-    );
+    const existingLower = new Set(mergedAliases[sysAlias.canonicalName].map(a => a.toLowerCase()));
+    const sysAliases = sysAlias.aliases as string[];
+    for (const alias of [...sysAliases, sysAlias.displayName]) {
+      if (!existingLower.has(alias.toLowerCase())) {
+        mergedAliases[sysAlias.canonicalName].push(alias);
+        existingLower.add(alias.toLowerCase());
+      }
+    }
   }
 
   const sourceFingerprint = calculateSourceFingerprint(sheetData.sourceUrl, sheetData.fileName);
   const fingerprintScore = calculateFingerprintScore(sourceFingerprint, templateFingerprint);
 
-  const columnSimilarity = columnSchema 
-    ? calculateColumnSimilarity(sheetData.columns, columnSchema.columns, mergedAliases)
+  // Guard against null/undefined columnSchema.columns
+  const templateColumns = columnSchema?.columns || [];
+  
+  const columnSimilarity = templateColumns.length > 0
+    ? calculateColumnSimilarity(sheetData.columns, templateColumns, mergedAliases)
     : 0;
 
-  const typeMatchScore = columnSchema
-    ? calculateTypeMatchScore(sheetData.data, columnSchema.columns)
+  const typeMatchScore = templateColumns.length > 0
+    ? calculateTypeMatchScore(sheetData.data, templateColumns)
     : 0;
 
   const statisticalProfileScore = 0;
