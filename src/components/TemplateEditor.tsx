@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Plus, Trash2, GripVertical, ChevronDown, ChevronRight, 
   Settings, Columns3, Sparkles, FileText, Save, RotateCcw,
-  AlertCircle, Wand2, Loader2, Eye, Lightbulb, Tag, HelpCircle, ArrowRight, CheckCircle2, Calculator
+  AlertCircle, Wand2, Loader2, Eye, Lightbulb, Tag, HelpCircle, ArrowRight, CheckCircle2, Calculator, Check, Keyboard
 } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { 
@@ -449,6 +449,19 @@ function SortableColumnRow({
   );
 }
 
+function getCleaningStepTooltip(type: string): string {
+  const tooltips: Record<string, string> = {
+    remove_commas: "Converts '1,234' to '1234' for numeric calculations",
+    strip_currency: "Removes currency symbols ($, €, £) so values can be used in math",
+    convert_percentage: "Converts '12.5%' to 0.125 (or 12.5) for calculations",
+    trim_whitespace: "Removes leading/trailing spaces that can cause matching issues",
+    convert_date_format: "Standardizes dates to a consistent format (e.g., YYYY-MM-DD)",
+    remove_duplicates: "Keeps only unique rows based on all column values",
+    fill_empty: "Replaces empty cells with a default value to prevent errors",
+  };
+  return tooltips[type] || `Enable or disable this cleaning step`;
+}
+
 interface CleaningStepItemProps {
   step: CleaningStep;
   onToggle: () => void;
@@ -465,14 +478,25 @@ function CleaningStepItem({ step, onToggle, onUpdate, columns }: CleaningStepIte
   const targetColumns = step.config?.targetColumns || [];
   const isAllColumns = targetColumns.length === 0 && !showColumnPicker;
 
+  const tooltipDescription = getCleaningStepTooltip(step.type);
+  
   return (
     <div className={`rounded-lg border transition-colors ${step.enabled ? 'border-[#FF6B35]/30 bg-[#FF6B35]/5' : 'border-[#1A1F2E] bg-[#0A0E1A]'}`}>
       <div className="flex items-center gap-3 p-3">
-        <Switch
-          checked={step.enabled}
-          onCheckedChange={onToggle}
-          className="data-[state=checked]:bg-[#FF6B35]"
-        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <Switch
+                checked={step.enabled}
+                onCheckedChange={onToggle}
+                className="data-[state=checked]:bg-[#FF6B35]"
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="bg-[#1A1F2E] border border-[#FF6B35]/30 text-white p-2 max-w-xs">
+            <p className="text-xs">{tooltipDescription}</p>
+          </TooltipContent>
+        </Tooltip>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm text-white font-medium">{label.name}</span>
@@ -487,12 +511,19 @@ function CleaningStepItem({ step, onToggle, onUpdate, columns }: CleaningStepIte
           <div className="text-xs text-gray-500">{label.description}</div>
         </div>
         {step.enabled && hasExpandableOptions && (
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 text-gray-400 hover:text-white flex-shrink-0"
-          >
-            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="p-1 text-gray-400 hover:text-white flex-shrink-0"
+              >
+                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="bg-[#1A1F2E] border border-[#FF6B35]/30 text-white p-2">
+              <p className="text-xs">{isExpanded ? 'Collapse options' : 'Configure options'}</p>
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
       
@@ -820,16 +851,83 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
     }
   };
 
+  // Track save success state for animated feedback
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const hasErrors = errors.length > 0;
+
   const handleSave = async () => {
     try {
       await save();
+      setSaveSuccess(true);
+      // Reset success state after 2 seconds
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => setSaveSuccess(false), 2000);
       toast.success('Template saved successfully');
     } catch (error) {
       toast.error('Failed to save template');
     }
   };
 
-  const hasErrors = errors.length > 0;
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
+
+  // Keyboard shortcuts: Cmd/Ctrl+S save, Cmd/Ctrl+P preview, Cmd/Ctrl+K add column, Esc close
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMod = e.metaKey || e.ctrlKey;
+
+      // Cmd/Ctrl + S: Save template
+      if (isMod && e.key === 's') {
+        e.preventDefault();
+        if (!isSaving && !hasErrors) {
+          handleSave();
+        }
+      }
+
+      // Cmd/Ctrl + P: Preview template
+      if (isMod && e.key === 'p') {
+        e.preventDefault();
+        if ((currentData && currentData.length > 0) || template.id) {
+          setShowPreview(true);
+        }
+      }
+
+      // Cmd/Ctrl + K: Add column (quick add)
+      if (isMod && e.key === 'k') {
+        e.preventDefault();
+        if (schemaTab === 'columns') {
+          addColumn();
+        } else if (schemaTab === 'calculated') {
+          setEditingField(null);
+          setShowFieldEditor(true);
+        }
+      }
+
+      // Esc: Close modal (only if no other modals are open)
+      if (e.key === 'Escape') {
+        if (showPreview) {
+          setShowPreview(false);
+        } else if (showResetConfirm) {
+          setShowResetConfirm(false);
+        } else if (showFieldEditor) {
+          setShowFieldEditor(false);
+          setEditingField(null);
+        } else {
+          closeEditor();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSaving, hasErrors, currentData, template.id, schemaTab, showPreview, showResetConfirm, showFieldEditor]);
 
   if (!isOpen) return null;
 
@@ -869,13 +967,20 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
           
           <div className="flex items-center gap-3">
             {isDirty && (
-              <button
-                onClick={() => setShowResetConfirm(true)}
-                className="flex items-center gap-2 px-3 py-2 text-gray-400 hover:text-white transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Reset
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setShowResetConfirm(true)}
+                    className="flex items-center gap-2 px-3 py-2 text-gray-400 hover:text-white transition-colors"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Reset
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-red-500/30 text-white p-2">
+                  <p className="text-xs">Discard all unsaved changes and restore the original template</p>
+                </TooltipContent>
+              </Tooltip>
             )}
             {(currentData && currentData.length > 0) || template.id ? (
               <Tooltip>
@@ -889,11 +994,17 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-purple-500/30 text-white p-2 max-w-xs">
-                  <p className="text-xs">
+                  <p className="text-xs mb-1">
                     {currentData && currentData.length > 0 
                       ? "See exactly how your data will be transformed before saving. Recommended!"
                       : "Preview how this template transforms data"}
                   </p>
+                  <div className="flex items-center gap-2 text-xs border-t border-purple-500/20 pt-1 mt-1">
+                    <Keyboard className="w-3 h-3 text-gray-400" />
+                    <span className="text-gray-400">
+                      {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+P
+                    </span>
+                  </div>
                 </TooltipContent>
               </Tooltip>
             ) : (
@@ -908,24 +1019,72 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-[#FF6B35]/30 text-white p-2 max-w-xs">
-                  <p className="text-xs">Upload data first to see a live preview of your template transformations</p>
+                  <p className="text-xs mb-1">Upload data first to see a live preview of your template transformations</p>
+                  <div className="flex items-center gap-2 text-xs border-t border-[#FF6B35]/20 pt-1 mt-1">
+                    <Keyboard className="w-3 h-3 text-gray-400" />
+                    <span className="text-gray-400">
+                      {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+P
+                    </span>
+                  </div>
                 </TooltipContent>
               </Tooltip>
             )}
-            <button
-              onClick={handleSave}
-              disabled={isSaving || hasErrors}
-              className="flex items-center gap-2 px-4 py-2 bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-            >
-              <Save className="w-4 h-4" />
-              {isSaving ? 'Saving...' : 'Save Template'}
-            </button>
-            <button
-              onClick={closeEditor}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving || hasErrors}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                    saveSuccess 
+                      ? 'bg-[#22C55E] text-white' 
+                      : isSaving
+                        ? 'bg-[#22C55E]/70 text-white cursor-wait'
+                        : 'bg-[#22C55E] hover:bg-[#16A34A] text-white'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {saveSuccess ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Saved!
+                    </>
+                  ) : isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Template
+                    </>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-[#22C55E]/30 text-white p-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <Keyboard className="w-3 h-3 text-gray-400" />
+                  <span className="text-gray-400">
+                    {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+S
+                  </span>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={closeEditor}
+                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-[#1A1F2E] text-white p-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <span>Close editor</span>
+                  <span className="text-gray-400 border border-gray-600 rounded px-1.5 py-0.5">Esc</span>
+                </div>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -1085,41 +1244,82 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
               {schemaTab === 'columns' && template.columns.length > 0 && (
                 <div className="flex items-center gap-2">
                   {currentData && currentData.length > 0 && (
-                    <button
-                      onClick={fetchAISuggestions}
-                      disabled={isLoadingSuggestions}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-[#FF6B35]/20 hover:from-purple-500/30 hover:to-[#FF6B35]/30 text-purple-300 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Use AI to suggest column mappings from your data"
-                    >
-                      {isLoadingSuggestions ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Wand2 className="w-4 h-4" />
-                      )}
-                      AI Suggest
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={fetchAISuggestions}
+                          disabled={isLoadingSuggestions}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-[#FF6B35]/20 hover:from-purple-500/30 hover:to-[#FF6B35]/30 text-purple-300 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isLoadingSuggestions ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <Wand2 className="w-4 h-4" />
+                              AI Suggest
+                            </>
+                          )}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-purple-500/30 text-white p-2 max-w-xs">
+                        <p className="text-xs">
+                          {isLoadingSuggestions 
+                            ? "AI is analyzing your data structure... 🧠"
+                            : "Use AI to suggest column types and standardized names based on your data"}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
                   )}
-                  <button
-                    onClick={() => addColumn()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF6B35]/20 hover:bg-[#FF6B35]/30 text-[#FF6B35] rounded-lg text-sm transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Column
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => addColumn()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF6B35]/20 hover:bg-[#FF6B35]/30 text-[#FF6B35] rounded-lg text-sm transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Column
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-[#FF6B35]/30 text-white p-2">
+                      <p className="text-xs mb-1">Add a new column to your schema</p>
+                      <div className="flex items-center gap-2 text-xs border-t border-[#FF6B35]/20 pt-1 mt-1">
+                        <Keyboard className="w-3 h-3 text-gray-400" />
+                        <span className="text-gray-400">
+                          {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+K
+                        </span>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               )}
               
               {schemaTab === 'calculated' && (
-                <button
-                  onClick={() => {
-                    setEditingField(null);
-                    setShowFieldEditor(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-sm transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Calculated Field
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => {
+                        setEditingField(null);
+                        setShowFieldEditor(true);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-sm transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Calculated Field
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-purple-500/30 text-white p-2">
+                    <p className="text-xs mb-1">Create a formula to auto-calculate KPIs like CPA, CTR, ROAS</p>
+                    <div className="flex items-center gap-2 text-xs border-t border-purple-500/20 pt-1 mt-1">
+                      <Keyboard className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-400">
+                        {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+K
+                      </span>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
               )}
             </div>
             
@@ -1223,20 +1423,37 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                   </>
                 ) : (
                   <>
-                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#FF6B35]/20 to-[#FF8F35]/10 flex items-center justify-center mb-4">
-                      <Columns3 className="w-10 h-10 text-[#FF6B35]/60" />
+                    <div className="relative mb-4">
+                      <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-[#FF6B35]/20 to-[#FF8F35]/10 flex items-center justify-center">
+                        <Columns3 className="w-12 h-12 text-[#FF6B35]/60" />
+                      </div>
+                      <div className="absolute -right-2 -bottom-2 w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-[#FF6B35]/10 flex items-center justify-center border border-purple-500/30">
+                        <Plus className="w-5 h-5 text-purple-400" />
+                      </div>
                     </div>
                     <p className="text-base text-white font-medium mb-1">No columns defined yet</p>
                     <p className="text-sm text-gray-400 mb-6 text-center max-w-md">
                       Add your first column to start building your data schema, or upload data first to use AI auto-detection.
                     </p>
-                    <button
-                      onClick={() => addColumn()}
-                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#FF6B35] to-[#FF8F35] hover:from-[#FF7B45] hover:to-[#FF9F45] text-white rounded-xl text-base font-medium transition-all shadow-lg shadow-[#FF6B35]/25 hover:shadow-[#FF6B35]/40 hover:scale-105"
-                    >
-                      <Plus className="w-5 h-5" />
-                      Add Column
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => addColumn()}
+                          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#FF6B35] to-[#FF8F35] hover:from-[#FF7B45] hover:to-[#FF9F45] text-white rounded-xl text-base font-medium transition-all shadow-lg shadow-[#FF6B35]/25 hover:shadow-[#FF6B35]/40 hover:scale-105"
+                        >
+                          <Plus className="w-5 h-5" />
+                          Add Column
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-[#FF6B35]/30 text-white p-2">
+                        <div className="flex items-center gap-2 text-xs">
+                          <Keyboard className="w-3 h-3 text-gray-400" />
+                          <span className="text-gray-400">
+                            {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+K
+                          </span>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </>
                 )}
               </div>
@@ -1389,6 +1606,33 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                 <ArrowRight className="w-3 h-3" />
               </button>
             )}
+            
+            {/* Keyboard Shortcuts Hint */}
+            <div className="flex items-center gap-4 text-xs text-gray-500 ml-auto">
+              <Keyboard className="w-3 h-3" />
+              <span className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 bg-[#1A1F2E] rounded border border-[#2A2F3E]">
+                  {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+S
+                </kbd>
+                <span>Save</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 bg-[#1A1F2E] rounded border border-[#2A2F3E]">
+                  {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+P
+                </kbd>
+                <span>Preview</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 bg-[#1A1F2E] rounded border border-[#2A2F3E]">
+                  {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+K
+                </kbd>
+                <span>Add</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 bg-[#1A1F2E] rounded border border-[#2A2F3E]">Esc</kbd>
+                <span>Close</span>
+              </span>
+            </div>
           </div>
         </div>
       </motion.div>
