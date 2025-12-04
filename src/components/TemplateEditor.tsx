@@ -676,22 +676,23 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
 
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
-        onClick={closeEditor}
-      />
-      
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        className="fixed inset-4 z-50 bg-[#0A0E1A] rounded-xl border border-[#1A1F2E] overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+          onClick={closeEditor}
+        />
+        
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.2 }}
+          className="relative w-full h-full max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] bg-[#0A0E1A] rounded-xl border border-[#1A1F2E] overflow-hidden flex flex-col z-10"
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1F2E]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#FF6B35] to-[#FF8F35] flex items-center justify-center">
@@ -970,6 +971,7 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
           </div>
         </div>
       </motion.div>
+      </div>
 
       <TemplatePreview
         isOpen={showPreview}
