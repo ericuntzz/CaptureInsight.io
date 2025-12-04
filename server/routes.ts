@@ -21,6 +21,7 @@ import {
 } from "./ai/embeddings";
 import { ingestOnCreate, isGoogleSheetsUrl } from "./ai/dataIngestion";
 import { triggerDataCleaning } from "./ai/dataCleaning";
+import * as templateService from "./ai/templateService";
 import { serverEncryption } from "./encryption";
 import { db } from "./db";
 import { userEncryptionKeys, serverEncryptionKeys, users, aiFeedback, chatMessages } from "../shared/schema";
@@ -2817,6 +2818,379 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching company members:", error);
       res.status(500).json({ message: "Failed to fetch company members" });
+    }
+  });
+
+  // ==================== DATA TEMPLATES ====================
+
+  /**
+   * Get all templates for a workspace
+   * @route GET /api/workspaces/:workspaceId/templates
+   */
+  app.get('/api/workspaces/:workspaceId/templates', isAuthenticated, requireEntityOwner('workspace', 'workspaceId'), async (req: any, res) => {
+    try {
+      const templates = await templateService.getTemplatesByWorkspace(req.params.workspaceId);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching workspace templates:", error);
+      res.status(500).json({ message: "Failed to fetch templates" });
+    }
+  });
+
+  /**
+   * Get all space-level templates
+   * @route GET /api/spaces/:spaceId/templates
+   */
+  app.get('/api/spaces/:spaceId/templates', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
+    try {
+      const templates = await templateService.getTemplatesBySpace(req.params.spaceId);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching space templates:", error);
+      res.status(500).json({ message: "Failed to fetch templates" });
+    }
+  });
+
+  /**
+   * Create a new template in a workspace
+   * @route POST /api/workspaces/:workspaceId/templates
+   */
+  app.post('/api/workspaces/:workspaceId/templates', isAuthenticated, requireEntityOwner('workspace', 'workspaceId'), async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const workspace = req.entity;
+      
+      const templateData = {
+        ...req.body,
+        workspaceId: req.params.workspaceId,
+        spaceId: workspace.spaceId,
+        createdBy: userId,
+        scope: req.body.scope || 'workspace',
+      };
+
+      const template = await templateService.createTemplate(templateData);
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error creating template:", error);
+      res.status(500).json({ message: "Failed to create template" });
+    }
+  });
+
+  /**
+   * Get a template by ID
+   * @route GET /api/templates/:id
+   */
+  app.get('/api/templates/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const template = await templateService.getTemplate(req.params.id);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+
+      const space = await storage.getSpace(template.spaceId!);
+      if (!space || space.ownerId !== userId) {
+        return res.status(403).json({ message: "Forbidden: you do not have access to this template" });
+      }
+
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching template:", error);
+      res.status(500).json({ message: "Failed to fetch template" });
+    }
+  });
+
+  /**
+   * Update a template
+   * @route PUT /api/templates/:id
+   */
+  app.put('/api/templates/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const template = await templateService.getTemplate(req.params.id);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+
+      const space = await storage.getSpace(template.spaceId!);
+      if (!space || space.ownerId !== userId) {
+        return res.status(403).json({ message: "Forbidden: you do not have access to this template" });
+      }
+
+      const updated = await templateService.updateTemplate(req.params.id, req.body);
+      if (!updated) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating template:", error);
+      res.status(500).json({ message: "Failed to update template" });
+    }
+  });
+
+  /**
+   * Delete a template
+   * @route DELETE /api/templates/:id
+   */
+  app.delete('/api/templates/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const template = await templateService.getTemplate(req.params.id);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+
+      const space = await storage.getSpace(template.spaceId!);
+      if (!space || space.ownerId !== userId) {
+        return res.status(403).json({ message: "Forbidden: you do not have access to this template" });
+      }
+
+      const deleted = await templateService.deleteTemplate(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      res.status(500).json({ message: "Failed to delete template" });
+    }
+  });
+
+  /**
+   * Apply a template to a sheet
+   * @route POST /api/templates/:id/apply
+   */
+  app.post('/api/templates/:id/apply', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sheetId, columnMappings } = req.body;
+
+      if (!sheetId) {
+        return res.status(400).json({ message: "sheetId is required" });
+      }
+
+      const template = await templateService.getTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+
+      const space = await storage.getSpace(template.spaceId!);
+      if (!space || space.ownerId !== userId) {
+        return res.status(403).json({ message: "Forbidden: you do not have access to this template" });
+      }
+
+      const sheet = await storage.getSheet(sheetId);
+      if (!sheet) {
+        return res.status(404).json({ message: "Sheet not found" });
+      }
+
+      const sheetSpace = await storage.getSpace(sheet.spaceId);
+      if (!sheetSpace || sheetSpace.ownerId !== userId) {
+        return res.status(403).json({ message: "Forbidden: you do not have access to this sheet" });
+      }
+
+      const application = await templateService.applyTemplateToSheet(
+        sheetId,
+        req.params.id,
+        false,
+        columnMappings
+      );
+
+      if (!application) {
+        return res.status(500).json({ message: "Failed to apply template" });
+      }
+
+      res.json({ 
+        success: true, 
+        application,
+        message: `Template "${template.name}" applied successfully`
+      });
+    } catch (error) {
+      console.error("Error applying template:", error);
+      res.status(500).json({ message: "Failed to apply template" });
+    }
+  });
+
+  /**
+   * Find matching template for sheet data
+   * @route GET /api/templates/match
+   * Query params: workspaceId, spaceId, sheetId (optional - to get data from existing sheet)
+   * OR body: { columns, data, sourceUrl?, fileName? }
+   */
+  app.get('/api/templates/match', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { workspaceId, spaceId, sheetId } = req.query;
+
+      if (!workspaceId || !spaceId) {
+        return res.status(400).json({ message: "workspaceId and spaceId are required" });
+      }
+
+      const space = await storage.getSpace(spaceId as string);
+      if (!space || space.ownerId !== userId) {
+        return res.status(403).json({ message: "Forbidden: you do not have access to this space" });
+      }
+
+      let sheetData: {
+        columns: string[];
+        data: Record<string, unknown>[];
+        sourceUrl?: string;
+        fileName?: string;
+      };
+
+      if (sheetId) {
+        const sheet = await storage.getSheet(sheetId as string);
+        if (!sheet) {
+          return res.status(404).json({ message: "Sheet not found" });
+        }
+
+        const cleanedData = sheet.cleanedData as any;
+        const rawData = sheet.data as any;
+        const dataToUse = cleanedData?.data || rawData || [];
+        
+        const columns = dataToUse.length > 0 
+          ? Object.keys(dataToUse[0] || {})
+          : [];
+
+        sheetData = {
+          columns,
+          data: Array.isArray(dataToUse) ? dataToUse : [],
+          sourceUrl: (sheet.dataSourceMeta as any)?.url,
+          fileName: sheet.name,
+        };
+      } else {
+        return res.status(400).json({ 
+          message: "sheetId is required. For custom data, use POST /api/templates/match" 
+        });
+      }
+
+      const match = await templateService.findMatchingTemplate(
+        sheetData,
+        workspaceId as string,
+        spaceId as string
+      );
+
+      if (!match) {
+        return res.json({ 
+          found: false, 
+          message: "No matching template found" 
+        });
+      }
+
+      res.json({
+        found: true,
+        templateId: match.template.id,
+        templateName: match.template.name,
+        confidence: match.confidence,
+        recommendation: match.recommendation,
+        matchDetails: match.matchDetails,
+      });
+    } catch (error) {
+      console.error("Error finding matching template:", error);
+      res.status(500).json({ message: "Failed to find matching template" });
+    }
+  });
+
+  /**
+   * Find matching template for provided sheet data (POST version for custom data)
+   * @route POST /api/templates/match
+   */
+  app.post('/api/templates/match', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { workspaceId, spaceId, columns, data, sourceUrl, fileName } = req.body;
+
+      if (!workspaceId || !spaceId) {
+        return res.status(400).json({ message: "workspaceId and spaceId are required" });
+      }
+
+      if (!columns || !Array.isArray(columns)) {
+        return res.status(400).json({ message: "columns array is required" });
+      }
+
+      const space = await storage.getSpace(spaceId);
+      if (!space || space.ownerId !== userId) {
+        return res.status(403).json({ message: "Forbidden: you do not have access to this space" });
+      }
+
+      const sheetData = {
+        columns,
+        data: data || [],
+        sourceUrl,
+        fileName,
+      };
+
+      const match = await templateService.findMatchingTemplate(
+        sheetData,
+        workspaceId,
+        spaceId
+      );
+
+      if (!match) {
+        return res.json({ 
+          found: false, 
+          message: "No matching template found" 
+        });
+      }
+
+      res.json({
+        found: true,
+        templateId: match.template.id,
+        templateName: match.template.name,
+        confidence: match.confidence,
+        recommendation: match.recommendation,
+        matchDetails: match.matchDetails,
+      });
+    } catch (error) {
+      console.error("Error finding matching template:", error);
+      res.status(500).json({ message: "Failed to find matching template" });
+    }
+  });
+
+  /**
+   * Get all available templates for a context (workspace + space-level combined)
+   * @route GET /api/templates/available
+   */
+  app.get('/api/templates/available', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { workspaceId, spaceId } = req.query;
+
+      if (!workspaceId || !spaceId) {
+        return res.status(400).json({ message: "workspaceId and spaceId are required" });
+      }
+
+      const space = await storage.getSpace(spaceId as string);
+      if (!space || space.ownerId !== userId) {
+        return res.status(403).json({ message: "Forbidden: you do not have access to this space" });
+      }
+
+      const templates = await templateService.getAvailableTemplates(
+        workspaceId as string,
+        spaceId as string
+      );
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching available templates:", error);
+      res.status(500).json({ message: "Failed to fetch available templates" });
+    }
+  });
+
+  /**
+   * Get system column aliases
+   * @route GET /api/templates/system-aliases
+   */
+  app.get('/api/templates/system-aliases', isAuthenticated, async (req: any, res) => {
+    try {
+      const { category } = req.query;
+      const aliases = await templateService.getSystemColumnAliases(category as string | undefined);
+      res.json(aliases);
+    } catch (error) {
+      console.error("Error fetching system column aliases:", error);
+      res.status(500).json({ message: "Failed to fetch system column aliases" });
     }
   });
 
