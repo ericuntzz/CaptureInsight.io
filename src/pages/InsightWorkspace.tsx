@@ -1662,6 +1662,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
       onEditData={handleEditData}
       onRemoveSource={handleRemoveSource}
       onAddData={onBack}
+      openTemplateEditor={openTemplateEditor}
     />
   );
 
@@ -1842,6 +1843,7 @@ interface DataSourcesPanelProps {
   onEditData: (sourceId: string, newData: any) => void;
   onRemoveSource: (sourceId: string) => void;
   onAddData: () => void;
+  openTemplateEditor: (initialData?: { name?: string; description?: string; scope?: 'workspace' | 'space'; columns?: any[] }) => void;
 }
 
 interface DisplayableSheet {
@@ -1927,7 +1929,7 @@ const DATA_SOURCES_VIEW_MODE_KEY = 'captureinsight_data_sources_view_mode';
 const SELECTED_SHEET_KEY = 'captureinsight_selected_sheet_id';
 const SOURCES_LIST_COLLAPSED_KEY = 'captureinsight_sources_list_collapsed';
 
-function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource, onAddData }: DataSourcesPanelProps) {
+function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, onToggle, onEditData: _onEditData, onRemoveSource: _onRemoveSource, onAddData, openTemplateEditor }: DataSourcesPanelProps) {
   void _sources; void _sheetsData; void _onEditData; void _onRemoveSource;
   
   // Initialize view mode from localStorage, defaulting to 'data'
