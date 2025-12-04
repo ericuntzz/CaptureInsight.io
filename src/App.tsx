@@ -209,7 +209,22 @@ export default function App() {
     return null;
   });
   
+  // Track the URL user was on before entering settings (to restore on back)
+  // On initial load, if we're on a settings page, get the previous URL from localStorage
+  const previousUrlRef = useRef<string | null>(
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/settings')
+      ? localStorage.getItem('captureinsight_pre_settings_url') || '/'
+      : null
+  );
+  
   const handleNavigateToSettings = (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security' | 'templates') => {
+    // Save current URL before navigating to settings (only if not already in settings)
+    if (!window.location.pathname.startsWith('/settings')) {
+      const currentUrl = window.location.pathname + window.location.search + window.location.hash;
+      previousUrlRef.current = currentUrl;
+      localStorage.setItem('captureinsight_pre_settings_url', currentUrl);
+    }
+    
     setActiveSettingsPage(page);
     if (page === 'settings') {
       router.push('/settings');
@@ -223,7 +238,12 @@ export default function App() {
   const handleCloseSettings = () => {
     setActiveSettingsPage(null);
     if (window.location.pathname.startsWith('/settings')) {
-      router.push('/');
+      // Restore the URL the user was on before entering settings
+      const previousUrl = previousUrlRef.current || localStorage.getItem('captureinsight_pre_settings_url') || '/';
+      router.push(previousUrl);
+      // Clear the saved pre-settings URL
+      localStorage.removeItem('captureinsight_pre_settings_url');
+      previousUrlRef.current = null;
     }
   };
   
