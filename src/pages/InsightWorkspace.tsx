@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Eraser,
   FileDigit,
+  FilePlus2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -41,6 +42,7 @@ import {
 } from '../hooks/useChatConversations';
 import { useWorkspaceSheets, useUpdateSheetCleanedData, useRetrySheetProcessing, type Sheet } from '../hooks/useSheets';
 import { useUpdateSheet, useDeleteSheet } from '../hooks/useSpaces';
+import { useTemplateEditor } from '../contexts/TemplateEditorContext';
 import { RichTextEditor, type RichTextEditorRef, type SelectionInfo } from '../components/RichTextEditor';
 import { copyToClipboard } from '../utils/clipboard';
 import {
@@ -226,6 +228,7 @@ const getStorageKey = (baseKey: string, workspaceId?: string | null) => {
 
 export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse, workspaceId }: InsightWorkspaceProps) {
   const { aiLearningConsent } = useAuth();
+  const { openEditor: openTemplateEditor } = useTemplateEditor();
   
   // Panel refs for imperative control
   const chatPanelRef = useRef<ImperativePanelHandle>(null);
@@ -3201,6 +3204,42 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         >
                           Raw JSON
                         </button>
+                        
+                        {/* Add Template button */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => {
+                                // Open template editor with current data context
+                                const columns = editableTableData && editableTableData.length > 0 
+                                  ? Object.keys(editableTableData[0]).map((key, index) => ({
+                                      id: `col-${index}`,
+                                      canonicalName: key.toLowerCase().replace(/\s+/g, '_'),
+                                      displayName: key,
+                                      position: index,
+                                      dataType: 'text' as const,
+                                      isRequired: false,
+                                    }))
+                                  : [];
+                                
+                                openTemplateEditor({
+                                  name: selectedSheet?.name ? `${selectedSheet.name} Template` : 'New Template',
+                                  description: `Template created from ${selectedSheet?.name || 'data'}`,
+                                  scope: 'workspace',
+                                  columns,
+                                });
+                                toast.success('Template editor opened');
+                              }}
+                              className="px-2.5 py-1.5 text-xs rounded-lg transition-colors bg-[#2A2A2A] text-gray-400 hover:text-white hover:bg-[#FF6B35]/20 hover:text-[#FF6B35] flex items-center gap-1.5"
+                            >
+                              <FilePlus2 className="w-3.5 h-3.5" />
+                              Add Template
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                            <p className="text-xs">Create a template from this data</p>
+                          </TooltipContent>
+                        </Tooltip>
                         
                         {/* Undo/Redo buttons - always visible */}
                         <div className="flex items-center gap-1 border-l border-[#2A2A2A] pl-2">
