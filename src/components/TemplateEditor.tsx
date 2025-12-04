@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Plus, Trash2, GripVertical, ChevronDown, ChevronRight, 
   Settings, Columns3, Sparkles, FileText, Save, RotateCcw,
-  AlertCircle, Wand2, Loader2, Eye, Lightbulb, Tag, HelpCircle, ArrowRight
+  AlertCircle, Wand2, Loader2, Eye, Lightbulb, Tag, HelpCircle, ArrowRight, CheckCircle2
 } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { 
@@ -862,19 +862,45 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                 Reset
               </button>
             )}
-            {currentData && currentData.length > 0 && (
-              <button
-                onClick={() => setShowPreview(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg transition-colors"
-              >
-                <Eye className="w-4 h-4" />
-                Preview
-              </button>
+            {(currentData && currentData.length > 0) || template.id ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setShowPreview(true)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-[#FF6B35] hover:from-purple-600 hover:to-[#FF7B45] text-white rounded-lg transition-all shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Preview Template
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-purple-500/30 text-white p-2 max-w-xs">
+                  <p className="text-xs">
+                    {currentData && currentData.length > 0 
+                      ? "See exactly how your data will be transformed before saving. Recommended!"
+                      : "Preview how this template transforms data"}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    disabled
+                    className="flex items-center gap-2 px-4 py-2 bg-[#1A1F2E] text-gray-500 rounded-lg cursor-not-allowed"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Preview
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="bg-[#1A1F2E] border border-[#FF6B35]/30 text-white p-2 max-w-xs">
+                  <p className="text-xs">Upload data first to see a live preview of your template transformations</p>
+                </TooltipContent>
+              </Tooltip>
             )}
             <button
               onClick={handleSave}
               disabled={isSaving || hasErrors}
-              className="flex items-center gap-2 px-4 py-2 bg-[#FF6B35] hover:bg-[#FF8F35] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
               <Save className="w-4 h-4" />
               {isSaving ? 'Saving...' : 'Save Template'}
@@ -1127,6 +1153,69 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                 />
               ))}
             </div>
+          </div>
+        </div>
+        
+        {/* Template Summary Bar */}
+        <div className="px-6 py-3 bg-[#0D1117] border-t border-[#1A1F2E]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Columns Status */}
+              <div className="flex items-center gap-2">
+                {template.columns.length > 0 ? (
+                  <div className="w-5 h-5 rounded-full bg-[#22C55E]/20 flex items-center justify-center">
+                    <CheckCircle2 className="w-3 h-3 text-[#22C55E]" />
+                  </div>
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                    <AlertCircle className="w-3 h-3 text-yellow-500" />
+                  </div>
+                )}
+                <span className="text-sm text-gray-400">
+                  <span className="font-medium text-white">{template.columns.length}</span> columns
+                </span>
+              </div>
+              
+              {/* Cleaning Rules Status */}
+              <div className="flex items-center gap-2">
+                {template.cleaningPipeline.filter(s => s.enabled).length > 0 ? (
+                  <div className="w-5 h-5 rounded-full bg-[#22C55E]/20 flex items-center justify-center">
+                    <CheckCircle2 className="w-3 h-3 text-[#22C55E]" />
+                  </div>
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-gray-500/20 flex items-center justify-center">
+                    <span className="w-2 h-2 rounded-full bg-gray-500" />
+                  </div>
+                )}
+                <span className="text-sm text-gray-400">
+                  <span className="font-medium text-white">{template.cleaningPipeline.filter(s => s.enabled).length}</span> cleaning rules
+                </span>
+              </div>
+              
+              {/* Required Columns */}
+              {template.columns.filter(c => c.isRequired).length > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-[#FF6B35]/20 flex items-center justify-center">
+                    <span className="text-xs font-bold text-[#FF6B35]">!</span>
+                  </div>
+                  <span className="text-sm text-gray-400">
+                    <span className="font-medium text-white">{template.columns.filter(c => c.isRequired).length}</span> required
+                  </span>
+                </div>
+              )}
+            </div>
+            
+            {/* Preview Prompt */}
+            {((currentData && currentData.length > 0) || template.id) && template.columns.length > 0 && (
+              <button
+                onClick={() => setShowPreview(true)}
+                className="flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                <Eye className="w-4 h-4" />
+                <span>Preview to see how your data will be transformed</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
           </div>
         </div>
       </motion.div>
