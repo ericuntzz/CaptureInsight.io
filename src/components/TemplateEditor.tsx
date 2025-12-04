@@ -810,14 +810,14 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">Source Type Lock (optional)</label>
                 <Select 
-                  value={template.sourceType || ''} 
-                  onValueChange={(value: string) => updateTemplate({ sourceType: (value || null) as 'google_ads' | 'meta_ads' | 'ga4' | 'google_sheets' | 'csv' | 'custom' | null })}
+                  value={template.sourceType || 'any'} 
+                  onValueChange={(value: string) => updateTemplate({ sourceType: (value === 'any' ? null : value) as 'google_ads' | 'meta_ads' | 'ga4' | 'google_sheets' | 'csv' | 'custom' | null })}
                 >
                   <SelectTrigger className="w-full bg-[#1A1F2E] border-transparent">
                     <SelectValue placeholder="Any source type" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#1A1F2E] border-[#FF6B35]/30">
-                    <SelectItem value="" className="text-white hover:bg-[#FF6B35]/20">
+                    <SelectItem value="any" className="text-white hover:bg-[#FF6B35]/20">
                       Any source type
                     </SelectItem>
                     {sourceTypeOptions.map(opt => (
