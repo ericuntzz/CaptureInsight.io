@@ -815,30 +815,32 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                 <span className="text-xs text-gray-500">({template.columns.length} columns)</span>
               </div>
               
-              <div className="flex items-center gap-2">
-                {currentData && currentData.length > 0 && (
+              {template.columns.length > 0 && (
+                <div className="flex items-center gap-2">
+                  {currentData && currentData.length > 0 && (
+                    <button
+                      onClick={fetchAISuggestions}
+                      disabled={isLoadingSuggestions}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-[#FF6B35]/20 hover:from-purple-500/30 hover:to-[#FF6B35]/30 text-purple-300 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Use AI to suggest column mappings from your data"
+                    >
+                      {isLoadingSuggestions ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Wand2 className="w-4 h-4" />
+                      )}
+                      AI Suggest
+                    </button>
+                  )}
                   <button
-                    onClick={fetchAISuggestions}
-                    disabled={isLoadingSuggestions}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-[#FF6B35]/20 hover:from-purple-500/30 hover:to-[#FF6B35]/30 text-purple-300 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Use AI to suggest column mappings from your data"
+                    onClick={() => addColumn()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF6B35]/20 hover:bg-[#FF6B35]/30 text-[#FF6B35] rounded-lg text-sm transition-colors"
                   >
-                    {isLoadingSuggestions ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Wand2 className="w-4 h-4" />
-                    )}
-                    AI Suggest
+                    <Plus className="w-4 h-4" />
+                    Add Column
                   </button>
-                )}
-                <button
-                  onClick={() => addColumn()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF6B35]/20 hover:bg-[#FF6B35]/30 text-[#FF6B35] rounded-lg text-sm transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Column
-                </button>
-              </div>
+                </div>
+              )}
             </div>
             
             {showMappingPanel && (
@@ -853,15 +855,16 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
               </div>
             )}
             
-            <div className="mb-3 grid grid-cols-[40px_1fr_1fr_100px_100px_32px_32px] gap-2 px-3 text-xs text-gray-500 font-medium">
-              <div></div>
-              <div>Canonical Name</div>
-              <div>Display Name</div>
-              <div>Data Type</div>
-              <div>Required</div>
-              <div></div>
-              <div></div>
-            </div>
+            {template.columns.length > 0 && (
+              <div className="mb-3 grid grid-cols-[40px_1fr_1fr_100px_100px_32px] gap-2 px-3 text-xs text-gray-500 font-medium">
+                <div></div>
+                <div>Canonical Name</div>
+                <div>Display Name</div>
+                <div>Data Type</div>
+                <div>Required</div>
+                <div></div>
+              </div>
+            )}
             
             {suggestionsCount > 0 && !showMappingPanel && (
               <SuggestedMappingBanner
@@ -874,10 +877,19 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
             )}
             
             {template.columns.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                <Columns3 className="w-12 h-12 mb-3 opacity-50" />
-                <p className="text-sm">No columns defined yet</p>
-                <p className="text-xs">Click "Add Column" to start building your schema</p>
+              <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#FF6B35]/20 to-[#FF8F35]/10 flex items-center justify-center mb-4">
+                  <Columns3 className="w-10 h-10 text-[#FF6B35]/60" />
+                </div>
+                <p className="text-base text-white font-medium mb-1">No columns defined yet</p>
+                <p className="text-sm text-gray-400 mb-6">Add your first column to start building your data schema</p>
+                <button
+                  onClick={() => addColumn()}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#FF6B35] to-[#FF8F35] hover:from-[#FF7B45] hover:to-[#FF9F45] text-white rounded-xl text-base font-medium transition-all shadow-lg shadow-[#FF6B35]/25 hover:shadow-[#FF6B35]/40 hover:scale-105"
+                >
+                  <Plus className="w-5 h-5" />
+                  Add Column
+                </button>
               </div>
             ) : (
               <DndContext
