@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Plus, Trash2, GripVertical, ChevronDown, ChevronRight, 
   Settings, Columns3, Sparkles, FileText, Save, RotateCcw,
-  AlertCircle, Wand2, Loader2, Eye, Lightbulb, Tag
+  AlertCircle, Wand2, Loader2, Eye, Lightbulb, Tag, HelpCircle, ArrowRight
 } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { 
@@ -14,6 +14,7 @@ import {
   SelectValue 
 } from './ui/select';
 import { Checkbox } from './ui/checkbox';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { toast } from 'sonner';
 import { useTemplateEditor, TemplateColumn, CleaningStep, ColumnMappingSuggestion } from '../contexts/TemplateEditorContext';
 import { ColumnMappingPanel, ConfirmedMapping } from './ColumnMappingPanel';
@@ -55,14 +56,14 @@ const dataTypeOptions = [
   { value: 'boolean', label: 'Boolean' },
 ];
 
-const cleaningStepLabels: Record<string, { name: string; description: string }> = {
-  remove_commas: { name: 'Remove Commas', description: 'Strip commas from numbers (e.g., 1,000 → 1000)' },
-  strip_currency: { name: 'Strip Currency Symbols', description: 'Remove $, €, £, etc. from values' },
-  convert_percentage: { name: 'Convert Percentages', description: 'Convert percentage strings to numbers' },
-  trim_whitespace: { name: 'Trim Whitespace', description: 'Remove leading/trailing spaces' },
-  convert_date_format: { name: 'Convert Date Format', description: 'Transform date formats' },
-  remove_duplicates: { name: 'Remove Duplicates', description: 'Eliminate duplicate rows' },
-  fill_empty: { name: 'Fill Empty Values', description: 'Replace empty cells with default value' },
+const cleaningStepLabels: Record<string, { name: string; description: string; before: string; after: string; columnBased: boolean }> = {
+  remove_commas: { name: 'Remove Commas', description: 'Strip commas from numbers', before: '1,234,567', after: '1234567', columnBased: true },
+  strip_currency: { name: 'Strip Currency Symbols', description: 'Remove $, €, £ from values', before: '$1,234.56', after: '1,234.56', columnBased: true },
+  convert_percentage: { name: 'Convert Percentages', description: 'Convert % strings to decimals', before: '12.5%', after: '0.125', columnBased: true },
+  trim_whitespace: { name: 'Trim Whitespace', description: 'Remove extra spaces', before: '  Hello World  ', after: 'Hello World', columnBased: true },
+  convert_date_format: { name: 'Convert Date Format', description: 'Standardize date formats', before: '12/25/2024', after: '2024-12-25', columnBased: true },
+  remove_duplicates: { name: 'Remove Duplicates', description: 'Eliminate duplicate rows', before: '3 rows', after: '2 unique rows', columnBased: false },
+  fill_empty: { name: 'Fill Empty Values', description: 'Replace empty cells with default', before: '(empty)', after: 'N/A', columnBased: true },
 };
 
 const formatValidationPresets = [
@@ -446,7 +447,12 @@ interface CleaningStepItemProps {
 
 function CleaningStepItem({ step, onToggle, onUpdate, columns }: CleaningStepItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const label = cleaningStepLabels[step.type] || { name: step.type, description: '' };
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const label = cleaningStepLabels[step.type] || { name: step.type, description: '', before: '', after: '', columnBased: true };
+  
+  const hasExpandableOptions = step.type === 'convert_percentage' || step.type === 'convert_date_format' || step.type === 'fill_empty' || (label.columnBased && columns.length > 0);
+  const targetColumns = step.config?.targetColumns || [];
+  const isAllColumns = targetColumns.length === 0 && !showColumnPicker;
 
   return (
     <div className={`rounded-lg border transition-colors ${step.enabled ? 'border-[#FF6B35]/30 bg-[#FF6B35]/5' : 'border-[#1A1F2E] bg-[#0A0E1A]'}`}>
@@ -456,14 +462,23 @@ function CleaningStepItem({ step, onToggle, onUpdate, columns }: CleaningStepIte
           onCheckedChange={onToggle}
           className="data-[state=checked]:bg-[#FF6B35]"
         />
-        <div className="flex-1">
-          <div className="text-sm text-white font-medium">{label.name}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white font-medium">{label.name}</span>
+            {step.enabled && label.before && label.after && (
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-gray-500 font-mono bg-[#0A0E1A] px-1.5 py-0.5 rounded">{label.before}</span>
+                <ArrowRight className="w-3 h-3 text-[#FF6B35]" />
+                <span className="text-green-400 font-mono bg-[#0A0E1A] px-1.5 py-0.5 rounded">{label.after}</span>
+              </div>
+            )}
+          </div>
           <div className="text-xs text-gray-500">{label.description}</div>
         </div>
-        {step.enabled && (step.type === 'convert_percentage' || step.type === 'convert_date_format' || step.type === 'fill_empty') && (
+        {step.enabled && hasExpandableOptions && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 text-gray-400 hover:text-white"
+            className="p-1 text-gray-400 hover:text-white flex-shrink-0"
           >
             {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
@@ -547,33 +562,69 @@ function CleaningStepItem({ step, onToggle, onUpdate, columns }: CleaningStepIte
                 </div>
               )}
               
-              {columns.length > 0 && (
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">Apply to Columns (leave empty for all)</label>
-                  <div className="flex flex-wrap gap-1">
-                    {columns.map(col => {
-                      const isSelected = step.config?.targetColumns?.includes(col.canonicalName);
-                      return (
-                        <button
-                          key={col.id}
-                          onClick={() => {
-                            const current = step.config?.targetColumns || [];
-                            const newTargets = isSelected
-                              ? current.filter(c => c !== col.canonicalName)
-                              : [...current, col.canonicalName];
-                            onUpdate({ config: { ...step.config, targetColumns: newTargets.length ? newTargets : undefined } });
-                          }}
-                          className={`px-2 py-1 rounded text-xs transition-colors ${
-                            isSelected 
-                              ? 'bg-[#FF6B35] text-white' 
-                              : 'bg-[#1A1F2E] text-gray-400 hover:text-white'
-                          }`}
-                        >
-                          {col.displayName || col.canonicalName}
-                        </button>
-                      );
-                    })}
+              {label.columnBased && columns.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-400">Apply to:</label>
+                    <Select 
+                      value={targetColumns.length > 0 || showColumnPicker ? 'specific' : 'all'} 
+                      onValueChange={(value: string) => {
+                        if (value === 'all') {
+                          setShowColumnPicker(false);
+                          onUpdate({ config: { ...step.config, targetColumns: undefined } });
+                        } else {
+                          setShowColumnPicker(true);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-40 h-7 bg-[#1A1F2E] border-transparent text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1A1F2E] border-[#FF6B35]/30">
+                        <SelectItem value="all" className="text-white hover:bg-[#FF6B35]/20 text-xs">
+                          All Columns
+                        </SelectItem>
+                        <SelectItem value="specific" className="text-white hover:bg-[#FF6B35]/20 text-xs">
+                          Specific Columns...
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+                  
+                  {(targetColumns.length > 0 || showColumnPicker) ? (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-gray-500">Click columns to select:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {columns.map(col => {
+                          const isSelected = step.config?.targetColumns?.includes(col.canonicalName);
+                          return (
+                            <button
+                              key={col.id}
+                              onClick={() => {
+                                const current = step.config?.targetColumns || [];
+                                const newTargets = isSelected
+                                  ? current.filter(c => c !== col.canonicalName)
+                                  : [...current, col.canonicalName];
+                                onUpdate({ config: { ...step.config, targetColumns: newTargets.length ? newTargets : undefined } });
+                                if (newTargets.length === 0) {
+                                  setShowColumnPicker(false);
+                                }
+                              }}
+                              className={`px-2 py-1 rounded text-xs transition-colors ${
+                                isSelected 
+                                  ? 'bg-[#FF6B35] text-white' 
+                                  : 'bg-[#1A1F2E] text-gray-400 hover:text-white hover:bg-[#1A1F2E]/80'
+                              }`}
+                            >
+                              {col.displayName || col.canonicalName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 italic">Rule will be applied to all columns</p>
+                  )}
                 </div>
               )}
             </div>
@@ -902,17 +953,33 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
               </div>
               
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Source Type Lock (optional)</label>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <label className="block text-xs text-gray-400">Data Source</label>
+                  <span className="text-xs text-gray-500">(Optional)</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="text-gray-500 hover:text-gray-400 transition-colors">
+                        <HelpCircle className="w-3.5 h-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs bg-[#1A1F2E] border border-[#FF6B35]/30 text-white p-3">
+                      <p className="font-medium text-[#FF6B35] mb-1">Lock to a specific platform</p>
+                      <p className="text-xs text-gray-300">
+                        When set, CaptureInsight will auto-detect your data source and only apply this template to matching data (e.g., Google Ads, Meta Ads). This prevents accidentally applying the wrong template.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <Select 
                   value={template.sourceType || 'any'} 
                   onValueChange={(value: string) => updateTemplate({ sourceType: (value === 'any' ? null : value) as 'google_ads' | 'meta_ads' | 'ga4' | 'google_sheets' | 'csv' | 'custom' | null })}
                 >
                   <SelectTrigger className="w-full bg-[#1A1F2E] border-transparent">
-                    <SelectValue placeholder="Any source type" />
+                    <SelectValue placeholder="Any data source" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#1A1F2E] border-[#FF6B35]/30">
                     <SelectItem value="any" className="text-white hover:bg-[#FF6B35]/20">
-                      Any source type
+                      Any data source
                     </SelectItem>
                     {sourceTypeOptions.map(opt => (
                       <SelectItem key={opt.value} value={opt.value} className="text-white hover:bg-[#FF6B35]/20">
