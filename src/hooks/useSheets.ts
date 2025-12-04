@@ -21,6 +21,19 @@ export interface ValidationResult {
   };
 }
 
+export interface ProcessingProgress {
+  currentStep: 'ingesting' | 'matching_templates' | 'cleaning' | 'validating' | 'finalizing' | 'complete' | 'failed';
+  stepDetails?: string;
+  percentComplete?: number;
+  startedAt?: string;
+  templateMatch?: {
+    templateId: string;
+    templateName: string;
+    confidence: number;
+    wasAutoApplied: boolean;
+  };
+}
+
 export interface Sheet {
   id: string;
   name: string;
@@ -50,8 +63,8 @@ export interface Sheet {
   } | null;
   cleanedAt: string | null;
   cleaningStatus: 'pending' | 'processing' | 'completed' | 'failed' | null;
-  // Quality scoring fields
-  qualityScore: number | null; // 0-100 overall quality
+  processingProgress: ProcessingProgress | null;
+  qualityScore: number | null;
   qualityDetails: QualityDetails | null;
   validationResult: ValidationResult | null;
   encryptedData: string | null;

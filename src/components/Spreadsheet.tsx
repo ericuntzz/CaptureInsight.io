@@ -1,6 +1,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Share2, Download, Settings, Copy, Eye, EyeOff, WrapText, ArrowUpAZ, ArrowDownAZ, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'motion/react';
+import { ProcessingOverlay } from './ProcessingOverlay';
+import type { ProcessingProgress } from '../hooks/useSheets';
 
 interface Sheet {
   id: string;
@@ -14,12 +17,14 @@ interface SpreadsheetProps {
   demoSelection: { startRow: number; startCol: number; endRow: number; endCol: number } | null;
   scrollRef: React.RefObject<HTMLDivElement>;
   tableContainerRef?: React.RefObject<HTMLDivElement>;
-  sheets?: Sheet[]; // All files in the current folder
-  currentSheetId?: string | null; // Currently selected file
-  onSheetChange?: (sheetId: string) => void; // Callback when switching files
-  onAddDataCapture?: (spaceId: string, folderId: string) => void; // Callback to add data capture
-  spaceId?: string; // Space ID for data capture
-  folderId?: string; // Folder ID for data capture
+  sheets?: Sheet[];
+  currentSheetId?: string | null;
+  onSheetChange?: (sheetId: string) => void;
+  onAddDataCapture?: (spaceId: string, folderId: string) => void;
+  spaceId?: string;
+  folderId?: string;
+  onConfirmTemplate?: (sheetId: string, templateId: string) => void;
+  onDismissTemplate?: (sheetId: string) => void;
 }
 
 interface ContextMenuState {
@@ -51,8 +56,9 @@ export function Spreadsheet({
   onAddDataCapture,
   spaceId,
   folderId,
+  onConfirmTemplate,
+  onDismissTemplate,
 }: SpreadsheetProps) {
-  // Define initialColumns first before any state that references it
   const initialColumns = [
     { key: 'account_id', label: 'account_id', width: 120, align: 'left' as const },
     { key: 'account_name', label: 'account_name', width: 280, align: 'left' as const },
@@ -103,37 +109,83 @@ export function Spreadsheet({
   const [dropTarget, setDropTarget] = useState<{ type: 'row' | 'column'; index: number | string } | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const [sortState, setSortState] = useState<Record<string, 'asc' | 'desc' | null>>({});
+  
+  const [cleaningStatus, setCleaningStatus] = useState<'pending' | 'processing' | 'completed' | 'failed' | null>(null);
+  const [processingProgress, setProcessingProgress] = useState<ProcessingProgress | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | undefined>();
 
-  // Fetch sheet data when currentSheetId changes
+  const isProcessing = cleaningStatus === 'processing' || cleaningStatus === 'pending';
+  const shouldShowOverlay = isProcessing || cleaningStatus === 'failed';
+
+  const fetchSheetData = useCallback(async (sheetId: string) => {
+    try {
+      const res = await fetch(`/api/sheets/${sheetId}`, { credentials: 'include' });
+      if (!res.ok) {
+        throw new Error('Failed to fetch sheet data');
+      }
+      const sheet = await res.json();
+      
+      if (sheet.data && Array.isArray(sheet.data)) {
+        setData(sheet.data);
+      } else {
+        setData([]);
+      }
+      
+      setCleaningStatus(sheet.cleaningStatus || null);
+      setProcessingProgress(sheet.processingProgress || null);
+      
+      if (sheet.cleaningStatus === 'failed' && sheet.validationResult?.message) {
+        setErrorMessage(sheet.validationResult.message);
+      } else {
+        setErrorMessage(undefined);
+      }
+      
+      return sheet;
+    } catch (err) {
+      console.error('Error fetching sheet data:', err);
+      setData([]);
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     if (!currentSheetId) {
       setData([]);
+      setCleaningStatus(null);
+      setProcessingProgress(null);
       return;
     }
     
     setIsLoading(true);
-    fetch(`/api/sheets/${currentSheetId}`, { credentials: 'include' })
-      .then(res => {
-        if (!res.ok) {
-          throw new Error('Failed to fetch sheet data');
-        }
-        return res.json();
-      })
-      .then(sheet => {
-        if (sheet.data && Array.isArray(sheet.data)) {
-          setData(sheet.data);
-        } else {
-          setData([]);
-        }
-      })
-      .catch(err => {
-        console.error('Error fetching sheet data:', err);
-        setData([]);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, [currentSheetId]);
+    fetchSheetData(currentSheetId).finally(() => {
+      setIsLoading(false);
+    });
+  }, [currentSheetId, fetchSheetData]);
+
+  useEffect(() => {
+    if (!currentSheetId || !isProcessing) return;
+    
+    const pollInterval = setInterval(async () => {
+      const sheet = await fetchSheetData(currentSheetId);
+      if (sheet && (sheet.cleaningStatus === 'completed' || sheet.cleaningStatus === 'failed')) {
+        clearInterval(pollInterval);
+      }
+    }, 1500);
+    
+    return () => clearInterval(pollInterval);
+  }, [currentSheetId, isProcessing, fetchSheetData]);
+
+  const handleConfirmTemplate = useCallback(() => {
+    if (currentSheetId && processingProgress?.templateMatch?.templateId) {
+      onConfirmTemplate?.(currentSheetId, processingProgress.templateMatch.templateId);
+    }
+  }, [currentSheetId, processingProgress, onConfirmTemplate]);
+
+  const handleDismissTemplate = useCallback(() => {
+    if (currentSheetId) {
+      onDismissTemplate?.(currentSheetId);
+    }
+  }, [currentSheetId, onDismissTemplate]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -779,7 +831,31 @@ export function Spreadsheet({
       {/* File Header with Actions - REMOVED */}
       
       {/* Spreadsheet Container with Border */}
-      <div className="flex-1 flex flex-col overflow-hidden border border-[rgba(255,107,53,0.06)] rounded-tr-xl">
+      <div className="flex-1 flex flex-col overflow-hidden border border-[rgba(255,107,53,0.06)] rounded-tr-xl relative">
+        {/* Processing Overlay */}
+        <AnimatePresence>
+          {shouldShowOverlay && (
+            <ProcessingOverlay
+              currentStep={processingProgress?.currentStep || (cleaningStatus === 'pending' ? 'ingesting' : 'processing') as any}
+              stepDetails={processingProgress?.stepDetails}
+              percentComplete={processingProgress?.percentComplete}
+              templateMatch={processingProgress?.templateMatch}
+              onConfirmTemplate={handleConfirmTemplate}
+              onDismissTemplate={handleDismissTemplate}
+              errorMessage={errorMessage}
+            />
+          )}
+        </AnimatePresence>
+        
+        {/* Blur wrapper for content when processing */}
+        <motion.div
+          className="flex-1 flex flex-col overflow-hidden"
+          animate={{
+            filter: isProcessing ? 'blur(8px)' : 'blur(0px)',
+            opacity: isProcessing ? 0.4 : 1,
+          }}
+          transition={{ duration: 0.3, ease: 'easeInOut' }}
+        >
         {/* Fixed Header */}
         <div 
           ref={headerScrollRef}
@@ -964,6 +1040,7 @@ export function Spreadsheet({
             </tbody>
           </table>
         </div>
+        </motion.div>
       </div>
 
       {/* Context Menu */}

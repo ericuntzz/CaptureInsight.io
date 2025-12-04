@@ -34,6 +34,32 @@ import {
   type PIIFilterResult,
 } from "./piiFilter";
 
+import {
+  detectColumnTypes,
+  detectCurrency,
+  detectPercentage,
+  detectDate,
+  detectInteger,
+  generateColumnTypeSummary,
+  type ColumnTypeHeuristic,
+  type CurrencyDetectionResult,
+  type PercentageDetectionResult,
+  type DateDetectionResult,
+  type IntegerDetectionResult,
+} from "./columnHeuristics";
+
+import {
+  cleanSheetData,
+  cleanScreenshotData,
+  cleanTabularData,
+  cleanDocumentData,
+  triggerDataCleaning,
+  isGeminiConfigured as isDataCleaningConfigured,
+  type CleanedDataResult,
+  type SourceType,
+  type ProcessingProgress,
+} from "./dataCleaning";
+
 import { storage } from "../storage";
 
 export {
@@ -51,9 +77,35 @@ export {
   filterPIIFromData,
   filterPIIFromMessages,
   getAvailablePIIPatterns,
+  detectColumnTypes,
+  detectCurrency,
+  detectPercentage,
+  detectDate,
+  detectInteger,
+  generateColumnTypeSummary,
+  cleanSheetData,
+  cleanScreenshotData,
+  cleanTabularData,
+  cleanDocumentData,
+  triggerDataCleaning,
+  isDataCleaningConfigured,
 };
 
 export type { PIIFilterOptions, PIIFilterResult };
+
+export type {
+  ColumnTypeHeuristic,
+  CurrencyDetectionResult,
+  PercentageDetectionResult,
+  DateDetectionResult,
+  IntegerDetectionResult,
+};
+
+export type {
+  CleanedDataResult,
+  SourceType,
+  ProcessingProgress,
+};
 
 export type {
   ScreenshotAnalysisResult,

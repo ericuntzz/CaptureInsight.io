@@ -23,6 +23,18 @@ import {
   type ValidationResult,
   type QualityScore 
 } from "./dataValidation";
+import {
+  findMatchingTemplate,
+  applyTemplateToSheet,
+  createTemplateApplication,
+  type TemplateMatchResult,
+} from "./templateService";
+import {
+  detectColumnTypes,
+  generateColumnTypeSummary,
+  type ColumnTypeHeuristic,
+} from "./columnHeuristics";
+import type { DataTemplate, Sheet } from "../../shared/schema";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
@@ -95,18 +107,99 @@ export interface CleanedDataResult {
       rowCount?: number;
       extractedAt: string;
       aiModel: string;
+      templateApplied?: string;
+      templateConfidence?: number;
     };
   };
   error?: string;
-  // Quality scoring
   qualityScore?: QualityScore;
-  // Validation results
   validationResult?: ValidationResult;
-  // Specific failure type for user-friendly messaging
   failureType?: 'empty_image' | 'low_quality' | 'unsupported_format' | 'no_data_found' | 'ai_error' | 'parse_error';
+  templateMatch?: TemplateMatchResult;
 }
 
-const DATA_CLEANING_SYSTEM_PROMPT = `You are a data extraction and cleaning expert. Your job is to transform raw data into clean, structured JSON format that can be easily queried and analyzed.
+export type SourceType = 'google_sheets' | 'csv' | 'google_ads' | 'meta_ads' | 'ga4' | 'custom' | 'screenshot' | 'file';
+
+export interface ProcessingProgress {
+  currentStep: 'ingesting' | 'matching_templates' | 'cleaning' | 'validating' | 'finalizing' | 'complete' | 'failed';
+  stepDetails?: string;
+  percentComplete?: number;
+  startedAt?: string;
+  templateMatch?: {
+    templateId: string;
+    templateName: string;
+    confidence: number;
+    wasAutoApplied: boolean;
+  };
+}
+
+const SOURCE_SPECIFIC_GUIDANCE: Record<SourceType, string> = {
+  google_sheets: `
+SOURCE: Google Sheets
+- Preserve cell formatting hints (merged cells may appear as empty)
+- Handle formula results (numbers may be formatted as text)
+- Watch for locale-specific number formats (1.000,00 vs 1,000.00)
+- Date formats vary by user locale settings`,
+
+  csv: `
+SOURCE: CSV File
+- First row typically contains headers
+- Quoted fields may contain commas or newlines
+- Empty fields should be preserved as null
+- Encoding may affect special characters`,
+
+  google_ads: `
+SOURCE: Google Ads Export
+- Cost/Revenue columns are typically in micros (divide by 1,000,000)
+- CTR and conversion rates are percentages
+- Date columns follow YYYY-MM-DD format
+- Segment columns contain dimension values
+- Metrics columns: Impressions, Clicks, Cost, Conversions, etc.`,
+
+  meta_ads: `
+SOURCE: Meta Ads Export
+- Spend values may include currency symbols
+- Reach and Frequency are key metrics
+- CPM, CPC, CTR are standard ad metrics
+- Date ranges may be in breakdowns
+- Action columns contain conversion data`,
+
+  ga4: `
+SOURCE: Google Analytics 4 Export
+- Dimensions vs Metrics distinction is important
+- Date/DateTime in various formats
+- Session-based vs User-based metrics
+- Event parameters may be nested
+- Null values for untracked dimensions`,
+
+  custom: `
+SOURCE: Custom/Unknown
+- Infer structure from data patterns
+- Be flexible with column naming
+- Detect data types from content
+- Preserve original structure when unclear`,
+
+  screenshot: `
+SOURCE: Screenshot/Image
+- Extract visible text and numbers
+- Infer table structure from visual layout
+- Note any truncated or partially visible data
+- Capture chart data points if visible`,
+
+  file: `
+SOURCE: Uploaded File
+- Extract structured content
+- Preserve document hierarchy
+- Handle mixed content types
+- Identify tables within documents`,
+};
+
+function buildSourceAwarePrompt(
+  sourceType: SourceType,
+  columnHeuristics: ColumnTypeHeuristic[],
+  templateHints?: string
+): string {
+  const basePrompt = `You are a data extraction and cleaning expert. Your job is to transform raw data into clean, structured JSON format that can be easily queried and analyzed.
 
 RULES:
 1. Always output valid JSON that can be parsed
@@ -116,6 +209,20 @@ RULES:
 5. Handle missing values consistently (use null)
 6. Preserve the semantic meaning of the data
 7. Extract ALL data, not just a sample
+
+${SOURCE_SPECIFIC_GUIDANCE[sourceType] || SOURCE_SPECIFIC_GUIDANCE.custom}
+
+${columnHeuristics.length > 0 ? `
+PRE-DETECTED COLUMN TYPES:
+${generateColumnTypeSummary(columnHeuristics)}
+
+Use these detected types to guide your cleaning. Override only if clearly incorrect.
+` : ''}
+
+${templateHints ? `
+TEMPLATE HINTS:
+${templateHints}
+` : ''}
 
 OUTPUT FORMAT:
 {
@@ -130,6 +237,9 @@ OUTPUT FORMAT:
     {"name": "column_name", "type": "string|number|date|boolean", "description": "brief description"}
   ]
 }`;
+
+  return basePrompt;
+}
 
 const SCREENSHOT_CLEANING_PROMPT = `Analyze this screenshot and extract ALL visible data into structured JSON format.
 
@@ -173,9 +283,154 @@ Tasks:
 
 Return comprehensive structured JSON with all extracted data.`;
 
-/**
- * Fetch image from URL and convert to base64
- */
+async function updateSheetProgress(
+  sheetId: string,
+  progress: ProcessingProgress
+): Promise<void> {
+  try {
+    await storage.updateSheet(sheetId, {
+      processingProgress: progress,
+    } as any);
+  } catch (error) {
+    console.warn(`[DataCleaning] Failed to update progress for sheet ${sheetId}:`, error);
+  }
+}
+
+interface CleaningPipelineStep {
+  id: string;
+  type: 'remove_commas' | 'strip_currency' | 'convert_percentage' | 'trim_whitespace' | 'convert_date_format' | 'remove_duplicates' | 'fill_empty' | 'custom';
+  enabled: boolean;
+  config?: {
+    targetColumns?: string[];
+    fromFormat?: string;
+    toFormat?: string;
+    percentageMode?: 'decimal' | 'whole';
+    fillValue?: string;
+    customRule?: string;
+  };
+}
+
+function applyCleaningPipelineStep(
+  data: Record<string, any>[],
+  step: CleaningPipelineStep
+): Record<string, any>[] {
+  if (!step.enabled) return data;
+
+  const targetColumns = step.config?.targetColumns;
+
+  switch (step.type) {
+    case 'remove_commas':
+      return data.map(row => {
+        const newRow = { ...row };
+        for (const [key, value] of Object.entries(newRow)) {
+          if (targetColumns && !targetColumns.includes(key)) continue;
+          if (typeof value === 'string') {
+            const cleaned = value.replace(/,/g, '');
+            const num = parseFloat(cleaned);
+            newRow[key] = isNaN(num) ? value : num;
+          }
+        }
+        return newRow;
+      });
+
+    case 'strip_currency':
+      return data.map(row => {
+        const newRow = { ...row };
+        for (const [key, value] of Object.entries(newRow)) {
+          if (targetColumns && !targetColumns.includes(key)) continue;
+          if (typeof value === 'string') {
+            const cleaned = value.replace(/[$€£¥₹₽₩฿]/g, '').replace(/,/g, '').trim();
+            const num = parseFloat(cleaned);
+            newRow[key] = isNaN(num) ? value : num;
+          }
+        }
+        return newRow;
+      });
+
+    case 'convert_percentage':
+      const mode = step.config?.percentageMode || 'decimal';
+      return data.map(row => {
+        const newRow = { ...row };
+        for (const [key, value] of Object.entries(newRow)) {
+          if (targetColumns && !targetColumns.includes(key)) continue;
+          if (typeof value === 'string' && value.includes('%')) {
+            const cleaned = value.replace(/%/g, '').trim();
+            const num = parseFloat(cleaned);
+            if (!isNaN(num)) {
+              newRow[key] = mode === 'decimal' ? num / 100 : num;
+            }
+          }
+        }
+        return newRow;
+      });
+
+    case 'trim_whitespace':
+      return data.map(row => {
+        const newRow = { ...row };
+        for (const [key, value] of Object.entries(newRow)) {
+          if (targetColumns && !targetColumns.includes(key)) continue;
+          if (typeof value === 'string') {
+            newRow[key] = value.trim();
+          }
+        }
+        return newRow;
+      });
+
+    case 'convert_date_format':
+      return data.map(row => {
+        const newRow = { ...row };
+        for (const [key, value] of Object.entries(newRow)) {
+          if (targetColumns && !targetColumns.includes(key)) continue;
+          if (typeof value === 'string' && value) {
+            const parsed = new Date(value);
+            if (!isNaN(parsed.getTime())) {
+              newRow[key] = parsed.toISOString();
+            }
+          }
+        }
+        return newRow;
+      });
+
+    case 'remove_duplicates':
+      const seen = new Set<string>();
+      return data.filter(row => {
+        const key = JSON.stringify(row);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+    case 'fill_empty':
+      const fillValue = step.config?.fillValue ?? null;
+      return data.map(row => {
+        const newRow = { ...row };
+        for (const [key, value] of Object.entries(newRow)) {
+          if (targetColumns && !targetColumns.includes(key)) continue;
+          if (value === null || value === undefined || value === '') {
+            newRow[key] = fillValue;
+          }
+        }
+        return newRow;
+      });
+
+    default:
+      return data;
+  }
+}
+
+function applyCleaningPipeline(
+  data: Record<string, any>[],
+  pipeline: { steps: CleaningPipelineStep[] }
+): Record<string, any>[] {
+  let result = [...data];
+  
+  for (const step of pipeline.steps) {
+    result = applyCleaningPipelineStep(result, step);
+  }
+  
+  return result;
+}
+
 async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeType: string } | null> {
   try {
     const response = await fetch(url);
@@ -195,19 +450,17 @@ async function fetchImageAsBase64(url: string): Promise<{ base64: string; mimeTy
   }
 }
 
-/**
- * Clean screenshot data using Gemini Vision
- * Accepts: base64 string, data URL (data:image/...), or https URL
- */
-export async function cleanScreenshotData(imageInput: string, sourceName?: string): Promise<CleanedDataResult> {
+export async function cleanScreenshotData(
+  imageInput: string, 
+  sourceName?: string,
+  templateHints?: string
+): Promise<CleanedDataResult> {
   return rateLimiter(async () => {
     try {
       let base64Data: string;
       let mimeType = "image/png";
       
-      // Handle different input formats
       if (imageInput.startsWith("http://") || imageInput.startsWith("https://")) {
-        // Fetch image from URL
         const fetched = await fetchImageAsBase64(imageInput);
         if (!fetched) {
           return { success: false, error: "Failed to fetch image from URL" };
@@ -215,7 +468,6 @@ export async function cleanScreenshotData(imageInput: string, sourceName?: strin
         base64Data = fetched.base64;
         mimeType = fetched.mimeType;
       } else if (imageInput.startsWith("data:image")) {
-        // Extract base64 from data URL
         const parts = imageInput.split(",");
         base64Data = parts[1] || "";
         const mimeMatch = parts[0]?.match(/data:(image\/[^;]+)/);
@@ -223,13 +475,14 @@ export async function cleanScreenshotData(imageInput: string, sourceName?: strin
           mimeType = mimeMatch[1];
         }
       } else {
-        // Assume it's already base64
         base64Data = imageInput;
       }
       
       if (!base64Data) {
         return { success: false, error: "No valid image data found" };
       }
+
+      const systemPrompt = buildSourceAwarePrompt('screenshot', [], templateHints);
       
       const contents = [
         {
@@ -246,7 +499,7 @@ export async function cleanScreenshotData(imageInput: string, sourceName?: strin
         },
       ];
 
-      const response = await generateWithRetry(PRO_MODEL, contents, DATA_CLEANING_SYSTEM_PROMPT);
+      const response = await generateWithRetry(PRO_MODEL, contents, systemPrompt);
       
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -276,18 +529,20 @@ export async function cleanScreenshotData(imageInput: string, sourceName?: strin
   });
 }
 
-/**
- * Clean tabular data (from Google Sheets, CSV, etc.)
- */
 export async function cleanTabularData(
   rows: Record<string, string>[],
   headers?: string[],
-  sourceName?: string
+  sourceName?: string,
+  sourceType: SourceType = 'csv',
+  templateHints?: string
 ): Promise<CleanedDataResult> {
   return rateLimiter(async () => {
     try {
+      const columnHeuristics = detectColumnTypes(rows);
       const dataPreview = JSON.stringify({ headers, rows: rows.slice(0, 100) }, null, 2);
       const isLargeDataset = rows.length > 100;
+      
+      const systemPrompt = buildSourceAwarePrompt(sourceType, columnHeuristics, templateHints);
       
       const prompt = `${TABULAR_CLEANING_PROMPT}
 
@@ -298,7 +553,7 @@ ${dataPreview}
 
 ${isLargeDataset ? `Full row count: ${rows.length}` : ''}`;
 
-      const response = await generateWithRetry(FLASH_MODEL, prompt, DATA_CLEANING_SYSTEM_PROMPT);
+      const response = await generateWithRetry(FLASH_MODEL, prompt, systemPrompt);
       
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -318,7 +573,7 @@ ${isLargeDataset ? `Full row count: ${rows.length}` : ''}`;
             description: parsed.description || "Cleaned tabular data",
             data: cleanedRows,
             metadata: {
-              sourceType: "link",
+              sourceType: sourceType,
               columnCount: headers?.length || Object.keys(rows[0] || {}).length,
               rowCount: cleanedRows.length,
               extractedAt: new Date().toISOString(),
@@ -336,23 +591,23 @@ ${isLargeDataset ? `Full row count: ${rows.length}` : ''}`;
   });
 }
 
-/**
- * Clean document/text content
- */
 export async function cleanDocumentData(
   content: string,
   contentType?: string,
-  sourceName?: string
+  sourceName?: string,
+  templateHints?: string
 ): Promise<CleanedDataResult> {
   return rateLimiter(async () => {
     try {
+      const systemPrompt = buildSourceAwarePrompt('file', [], templateHints);
+      
       const prompt = `${DOCUMENT_CLEANING_PROMPT}
 
 Content type: ${contentType || "unknown"}
 Content:
 ${content.slice(0, 50000)}`;
 
-      const response = await generateWithRetry(FLASH_MODEL, prompt, DATA_CLEANING_SYSTEM_PROMPT);
+      const response = await generateWithRetry(FLASH_MODEL, prompt, systemPrompt);
       
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -436,34 +691,191 @@ function applyCleaningRules(
 
 function isDateString(value: string): boolean {
   const datePatterns = [
-    /^\d{4}-\d{2}-\d{2}/, // ISO format
-    /^\d{1,2}\/\d{1,2}\/\d{2,4}/, // US format
-    /^\d{1,2}-\d{1,2}-\d{2,4}/, // Common format
-    /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i, // Month name
+    /^\d{4}-\d{2}-\d{2}/,
+    /^\d{1,2}\/\d{1,2}\/\d{2,4}/,
+    /^\d{1,2}-\d{1,2}-\d{2,4}/,
+    /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i,
   ];
   return datePatterns.some(p => p.test(value.trim()));
 }
 
-/**
- * Main entry point: Clean data for a sheet based on its source type
- * Includes pre-validation to detect empty/invalid content before expensive AI processing
- */
+function determineSourceType(sheet: Sheet): SourceType {
+  const dataSourceType = sheet.dataSourceType;
+  const meta = sheet.dataSourceMeta as Record<string, any> | null;
+  
+  if (dataSourceType === 'screenshot' || dataSourceType === 'capture') {
+    return 'screenshot';
+  }
+  
+  if (dataSourceType === 'file') {
+    return 'file';
+  }
+  
+  if (dataSourceType === 'link') {
+    const sourceUrl = meta?.sourceUrl || meta?.url || '';
+    
+    if (sourceUrl.includes('docs.google.com/spreadsheets')) {
+      return 'google_sheets';
+    }
+    if (sourceUrl.includes('ads.google.com') || meta?.source === 'google_ads') {
+      return 'google_ads';
+    }
+    if (sourceUrl.includes('facebook.com') || sourceUrl.includes('meta.com') || meta?.source === 'meta_ads') {
+      return 'meta_ads';
+    }
+    if (sourceUrl.includes('analytics.google.com') || meta?.source === 'ga4') {
+      return 'ga4';
+    }
+    
+    return 'csv';
+  }
+  
+  return 'custom';
+}
+
+async function cleanWithTemplate(
+  data: Record<string, any>[],
+  template: DataTemplate,
+  templateMatch: TemplateMatchResult
+): Promise<{ cleanedData: Record<string, any>[]; pipelineApplied: boolean }> {
+  const pipeline = template.cleaningPipeline as { steps: CleaningPipelineStep[] } | null;
+  
+  if (!pipeline || !pipeline.steps || pipeline.steps.length === 0) {
+    return { cleanedData: data, pipelineApplied: false };
+  }
+  
+  console.log(`[DataCleaning] Applying template pipeline with ${pipeline.steps.length} steps`);
+  const cleanedData = applyCleaningPipeline(data, pipeline);
+  
+  return { cleanedData, pipelineApplied: true };
+}
+
 export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult> {
+  const startTime = new Date().toISOString();
+  
   try {
     const sheet = await storage.getSheet(sheetId);
     if (!sheet) {
       return { success: false, error: "Sheet not found", failureType: 'no_data_found' };
     }
 
+    await updateSheetProgress(sheetId, {
+      currentStep: 'ingesting',
+      stepDetails: 'Loading data...',
+      percentComplete: 5,
+      startedAt: startTime,
+    });
+
     await storage.updateSheet(sheetId, { cleaningStatus: "processing" });
 
     let result: CleanedDataResult;
     let validationResult: ValidationResult | undefined;
-    const sourceType = sheet.dataSourceType;
+    const sourceType = determineSourceType(sheet);
     const meta = sheet.dataSourceMeta as Record<string, any> | null;
 
-    if (sourceType === "screenshot" || sourceType === "capture") {
-      // Support multiple possible locations for screenshot data
+    await updateSheetProgress(sheetId, {
+      currentStep: 'matching_templates',
+      stepDetails: 'Looking for matching templates...',
+      percentComplete: 15,
+      startedAt: startTime,
+    });
+
+    let templateMatch: TemplateMatchResult | null = null;
+    let templateHints: string | undefined;
+    
+    if (sheet.workspaceId && sheet.spaceId && sourceType !== 'screenshot') {
+      try {
+        const sheetData = sheet.data as Record<string, unknown>[] | Record<string, unknown>;
+        let dataArray: Record<string, unknown>[] = [];
+        let columns: string[] = [];
+        
+        if (Array.isArray(sheetData)) {
+          dataArray = sheetData;
+          columns = Object.keys(sheetData[0] || {});
+        } else if (sheetData && typeof sheetData === 'object') {
+          dataArray = [sheetData];
+          columns = Object.keys(sheetData);
+        }
+        
+        if (dataArray.length > 0 && columns.length > 0) {
+          templateMatch = await findMatchingTemplate(
+            {
+              columns,
+              data: dataArray,
+              sourceUrl: meta?.sourceUrl || meta?.url,
+              fileName: meta?.fileName,
+            },
+            sheet.workspaceId,
+            sheet.spaceId
+          );
+          
+          if (templateMatch) {
+            const template = templateMatch.template;
+            console.log(`[DataCleaning] Template match found: ${template.name} (confidence: ${templateMatch.confidence}%)`);
+            
+            if (templateMatch.recommendation === 'auto-apply') {
+              await updateSheetProgress(sheetId, {
+                currentStep: 'matching_templates',
+                stepDetails: `Auto-applying template: ${template.name}`,
+                percentComplete: 20,
+                startedAt: startTime,
+                templateMatch: {
+                  templateId: template.id,
+                  templateName: template.name,
+                  confidence: templateMatch.confidence,
+                  wasAutoApplied: true,
+                },
+              });
+              
+              templateHints = template.aiPromptHints || undefined;
+              
+              const pipelineResult = await cleanWithTemplate(dataArray as Record<string, any>[], template, templateMatch);
+              if (pipelineResult.pipelineApplied) {
+                await storage.updateSheet(sheetId, {
+                  data: pipelineResult.cleanedData,
+                } as any);
+              }
+              
+              await applyTemplateToSheet(sheetId, template.id, true);
+            } else if (templateMatch.recommendation === 'suggest') {
+              await updateSheetProgress(sheetId, {
+                currentStep: 'matching_templates',
+                stepDetails: `Template suggested: ${template.name} (${templateMatch.confidence}% match) - awaiting confirmation`,
+                percentComplete: 20,
+                startedAt: startTime,
+                templateMatch: {
+                  templateId: template.id,
+                  templateName: template.name,
+                  confidence: templateMatch.confidence,
+                  wasAutoApplied: false,
+                },
+              });
+              
+              templateHints = template.aiPromptHints || undefined;
+            }
+          }
+        }
+      } catch (templateError) {
+        console.warn(`[DataCleaning] Template matching failed for sheet ${sheetId}:`, templateError);
+      }
+    }
+
+    await updateSheetProgress(sheetId, {
+      currentStep: 'cleaning',
+      stepDetails: templateMatch?.recommendation === 'auto-apply' 
+        ? `Cleaning with template: ${templateMatch.template.name}`
+        : 'AI-powered data cleaning...',
+      percentComplete: 30,
+      startedAt: startTime,
+      templateMatch: templateMatch ? {
+        templateId: templateMatch.template.id,
+        templateName: templateMatch.template.name,
+        confidence: templateMatch.confidence,
+        wasAutoApplied: templateMatch.recommendation === 'auto-apply',
+      } : undefined,
+    });
+
+    if (sourceType === 'screenshot') {
       const imageData = (sheet.data as any)?.screenshot || 
                        (sheet.data as any)?.screenshotUrl ||
                        meta?.screenshotUrl ||
@@ -476,12 +888,10 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
           failureType: 'no_data_found',
         };
       } else {
-        // PRE-VALIDATION: Check image quality before expensive AI processing
         console.log(`[DataCleaning] Running pre-validation for screenshot ${sheetId}`);
         validationResult = await validateScreenshot(imageData);
         
         if (!validationResult.isValid) {
-          // Block processing for invalid/empty screenshots
           const errorMessage = getValidationErrorMessage(validationResult, sheet.name);
           console.log(`[DataCleaning] Validation failed for ${sheetId}: ${errorMessage}`);
           
@@ -492,24 +902,26 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
             validationResult,
           };
           
-          // Store validation result and mark as validation_failed
           await storage.updateSheet(sheetId, {
             cleaningStatus: "failed",
             validationResult: validationResult,
+            processingProgress: {
+              currentStep: 'failed',
+              stepDetails: errorMessage,
+              startedAt: startTime,
+            },
           } as any);
           
           return result;
         }
         
-        // Validation passed - proceed with AI processing
         console.log(`[DataCleaning] Validation passed for ${sheetId}, proceeding with AI cleaning`);
-        result = await cleanScreenshotData(imageData, sheet.name);
+        result = await cleanScreenshotData(imageData, sheet.name, templateHints);
         result.validationResult = validationResult;
       }
-    } else if (sourceType === "link") {
+    } else if (sourceType === 'google_sheets' || sourceType === 'csv' || sourceType === 'google_ads' || sourceType === 'meta_ads' || sourceType === 'ga4' || sourceType === 'custom') {
       const sheetData = sheet.data as any;
       
-      // PRE-VALIDATION: Check tabular data
       validationResult = validateTabularData(sheetData);
       
       if (!validationResult.isValid) {
@@ -523,25 +935,29 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
         await storage.updateSheet(sheetId, {
           cleaningStatus: "failed",
           validationResult: validationResult,
+          processingProgress: {
+            currentStep: 'failed',
+            stepDetails: validationResult.message || "Validation failed",
+            startedAt: startTime,
+          },
         } as any);
         
         return result;
       }
       
       if (Array.isArray(sheetData)) {
-        result = await cleanTabularData(sheetData, undefined, sheet.name);
+        result = await cleanTabularData(sheetData, undefined, sheet.name, sourceType, templateHints);
       } else if (sheetData && typeof sheetData === "object") {
-        result = await cleanTabularData([sheetData], Object.keys(sheetData), sheet.name);
+        result = await cleanTabularData([sheetData], Object.keys(sheetData), sheet.name, sourceType, templateHints);
       } else {
         result = { success: false, error: "No link data found to clean", failureType: 'no_data_found' };
       }
       result.validationResult = validationResult;
-    } else if (sourceType === "file") {
+    } else if (sourceType === 'file') {
       const content = typeof sheet.data === "string" 
         ? sheet.data 
         : JSON.stringify(sheet.data);
       
-      // PRE-VALIDATION: Check document content
       validationResult = validateDocumentData(content, meta?.mimeType);
       
       if (!validationResult.isValid) {
@@ -555,12 +971,17 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
         await storage.updateSheet(sheetId, {
           cleaningStatus: "failed",
           validationResult: validationResult,
+          processingProgress: {
+            currentStep: 'failed',
+            stepDetails: validationResult.message || "Validation failed",
+            startedAt: startTime,
+          },
         } as any);
         
         return result;
       }
       
-      result = await cleanDocumentData(content, meta?.mimeType, sheet.name);
+      result = await cleanDocumentData(content, meta?.mimeType, sheet.name, templateHints);
       result.validationResult = validationResult;
     } else {
       const content = typeof sheet.data === "string"
@@ -579,23 +1000,61 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
         await storage.updateSheet(sheetId, {
           cleaningStatus: "failed",
           validationResult: validationResult,
+          processingProgress: {
+            currentStep: 'failed',
+            stepDetails: validationResult.message || "Validation failed",
+            startedAt: startTime,
+          },
         } as any);
         
         return result;
       }
       
-      result = await cleanDocumentData(content, undefined, sheet.name);
+      result = await cleanDocumentData(content, undefined, sheet.name, templateHints);
       result.validationResult = validationResult;
     }
 
+    if (templateMatch) {
+      result.templateMatch = templateMatch;
+    }
+
+    await updateSheetProgress(sheetId, {
+      currentStep: 'validating',
+      stepDetails: 'Validating cleaned data...',
+      percentComplete: 70,
+      startedAt: startTime,
+      templateMatch: templateMatch ? {
+        templateId: templateMatch.template.id,
+        templateName: templateMatch.template.name,
+        confidence: templateMatch.confidence,
+        wasAutoApplied: templateMatch.recommendation === 'auto-apply',
+      } : undefined,
+    });
+
     if (result.success && result.cleanedData) {
-      // Calculate quality score
       const qualityScore = calculateQualityScore(result.cleanedData, validationResult?.details);
       result.qualityScore = qualityScore;
       
       console.log(`[DataCleaning] Quality score for ${sheetId}: ${qualityScore.overall} (confidence: ${qualityScore.confidence}, completeness: ${qualityScore.completeness}, richness: ${qualityScore.dataRichness})`);
+
+      await updateSheetProgress(sheetId, {
+        currentStep: 'finalizing',
+        stepDetails: 'Storing cleaned data and generating embeddings...',
+        percentComplete: 85,
+        startedAt: startTime,
+        templateMatch: templateMatch ? {
+          templateId: templateMatch.template.id,
+          templateName: templateMatch.template.name,
+          confidence: templateMatch.confidence,
+          wasAutoApplied: templateMatch.recommendation === 'auto-apply',
+        } : undefined,
+      });
+
+      if (templateMatch && result.cleanedData.metadata) {
+        result.cleanedData.metadata.templateApplied = templateMatch.template.name;
+        result.cleanedData.metadata.templateConfidence = templateMatch.confidence;
+      }
       
-      // Store cleaned data with quality metrics
       await storage.updateSheet(sheetId, {
         cleanedData: result.cleanedData,
         cleanedAt: new Date(),
@@ -610,7 +1069,6 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
         validationResult: validationResult || null,
       } as any);
       
-      // Regenerate embeddings with cleaned data for better RAG results
       try {
         const updatedSheet = await storage.getSheet(sheetId);
         if (updatedSheet && updatedSheet.spaceId) {
@@ -627,14 +1085,31 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
       } catch (embeddingError) {
         console.warn(`[DataCleaning] Failed to regenerate embeddings for sheet ${sheetId}:`, embeddingError);
       }
+
+      await updateSheetProgress(sheetId, {
+        currentStep: 'complete',
+        stepDetails: `Successfully cleaned ${result.cleanedData.data?.length || 0} records`,
+        percentComplete: 100,
+        startedAt: startTime,
+        templateMatch: templateMatch ? {
+          templateId: templateMatch.template.id,
+          templateName: templateMatch.template.name,
+          confidence: templateMatch.confidence,
+          wasAutoApplied: templateMatch.recommendation === 'auto-apply',
+        } : undefined,
+      });
     } else {
-      // Store failure details
       await storage.updateSheet(sheetId, {
         cleaningStatus: "failed",
         validationResult: validationResult || {
           isValid: false,
           failureType: result.failureType || 'ai_error',
           message: result.error,
+        },
+        processingProgress: {
+          currentStep: 'failed',
+          stepDetails: result.error || 'Data cleaning failed',
+          startedAt: startTime,
         },
       } as any);
     }
@@ -644,7 +1119,6 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
     console.error(`Error cleaning sheet ${sheetId}:`, error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     
-    // Determine failure type from error
     let failureType: CleanedDataResult['failureType'] = 'ai_error';
     if (errorMessage.includes('parse') || errorMessage.includes('JSON')) {
       failureType = 'parse_error';
@@ -657,15 +1131,17 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
         failureType,
         message: errorMessage,
       },
+      processingProgress: {
+        currentStep: 'failed',
+        stepDetails: errorMessage,
+        startedAt: startTime,
+      },
     } as any);
     
     return { success: false, error: errorMessage, failureType };
   }
 }
 
-/**
- * Trigger data cleaning after sheet creation (non-blocking)
- */
 export async function triggerDataCleaning(sheetId: string): Promise<void> {
   console.log(`[DataCleaning] Starting background cleaning for sheet ${sheetId}`);
   
@@ -673,6 +1149,9 @@ export async function triggerDataCleaning(sheetId: string): Promise<void> {
     .then(result => {
       if (result.success) {
         console.log(`[DataCleaning] Completed cleaning for sheet ${sheetId}`);
+        if (result.templateMatch) {
+          console.log(`[DataCleaning] Template used: ${result.templateMatch.template.name} (${result.templateMatch.confidence}% confidence)`);
+        }
       } else {
         console.warn(`[DataCleaning] Failed to clean sheet ${sheetId}: ${result.error}`);
       }
