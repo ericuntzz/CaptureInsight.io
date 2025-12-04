@@ -404,8 +404,11 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
     
     setIsSaving(true);
     try {
-      const response = await fetch('/api/templates', {
-        method: template.id ? 'PUT' : 'POST',
+      const isUpdate = !!template.id;
+      const url = isUpdate ? `/api/templates/${template.id}` : '/api/templates';
+      
+      const response = await fetch(url, {
+        method: isUpdate ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
@@ -416,7 +419,8 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
       });
       
       if (!response.ok) {
-        throw new Error('Failed to save template');
+        const error = await response.json().catch(() => ({ message: 'Failed to save template' }));
+        throw new Error(error.message || 'Failed to save template');
       }
       
       closeEditor();

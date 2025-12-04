@@ -3211,6 +3211,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   /**
+   * Create a new template
+   * @route POST /api/templates
+   */
+  app.post('/api/templates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { name, description, scope, sourceType, aiPromptHints, columnSchema, cleaningPipeline, spaceId, workspaceId } = req.body;
+
+      if (!name) {
+        return res.status(400).json({ message: "Template name is required" });
+      }
+
+      // Verify user has access to the space if provided
+      if (spaceId) {
+        const space = await storage.getSpace(spaceId);
+        if (!space || space.ownerId !== userId) {
+          return res.status(403).json({ message: "Forbidden: you do not have access to this space" });
+        }
+      }
+
+      const template = await templateService.createTemplate({
+        name,
+        description: description || null,
+        scope: scope || 'workspace',
+        sourceType: sourceType || null,
+        aiPromptHints: aiPromptHints || null,
+        columnSchema: columnSchema || { columns: [] },
+        cleaningPipeline: cleaningPipeline || { steps: [] },
+        spaceId: spaceId || null,
+        workspaceId: workspaceId || null,
+        createdBy: userId,
+      });
+
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error creating template:", error);
+      res.status(500).json({ message: "Failed to create template" });
+    }
+  });
+
+  /**
    * Get a template by ID
    * @route GET /api/templates/:id
    */
