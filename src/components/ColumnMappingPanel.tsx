@@ -33,6 +33,7 @@ export interface ConfirmedMapping {
   sourceColumn: string;
   mappedTo: string;
   displayName: string;
+  dataType: 'currency' | 'percentage' | 'integer' | 'decimal' | 'date' | 'text' | 'boolean';
   wasAISuggested: boolean;
   confidence: number;
 }
@@ -286,6 +287,7 @@ export function ColumnMappingPanel({
       sourceColumn: s.sourceColumn,
       mappedTo: mappingStates[s.sourceColumn]?.selectedMapping || s.suggestedCanonicalName,
       displayName: mappingStates[s.sourceColumn]?.displayName || s.suggestedDisplayName,
+      dataType: s.suggestedDataType,
       wasAISuggested: true,
       confidence: s.confidence,
     }));
@@ -299,6 +301,7 @@ export function ColumnMappingPanel({
         sourceColumn: s.sourceColumn,
         mappedTo: mappingStates[s.sourceColumn]?.selectedMapping || s.suggestedCanonicalName,
         displayName: mappingStates[s.sourceColumn]?.displayName || s.suggestedDisplayName,
+        dataType: s.suggestedDataType,
         wasAISuggested: true,
         confidence: s.confidence,
       }));

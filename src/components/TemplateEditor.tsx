@@ -756,7 +756,7 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
         addColumn({
           canonicalName: mapping.mappedTo,
           displayName: mapping.displayName,
-          dataType: 'text',
+          dataType: mapping.dataType || 'text',
           isRequired: false,
           aliases: mapping.sourceColumn !== mapping.mappedTo ? [mapping.sourceColumn] : [],
         });
@@ -1088,19 +1088,96 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
             )}
             
             {template.columns.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#FF6B35]/20 to-[#FF8F35]/10 flex items-center justify-center mb-4">
-                  <Columns3 className="w-10 h-10 text-[#FF6B35]/60" />
-                </div>
-                <p className="text-base text-white font-medium mb-1">No columns defined yet</p>
-                <p className="text-sm text-gray-400 mb-6">Add your first column to start building your data schema</p>
-                <button
-                  onClick={() => addColumn()}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#FF6B35] to-[#FF8F35] hover:from-[#FF7B45] hover:to-[#FF9F45] text-white rounded-xl text-base font-medium transition-all shadow-lg shadow-[#FF6B35]/25 hover:shadow-[#FF6B35]/40 hover:scale-105"
-                >
-                  <Plus className="w-5 h-5" />
-                  Add Column
-                </button>
+              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                {currentData && currentData.length > 0 ? (
+                  <>
+                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500/20 to-[#FF6B35]/10 flex items-center justify-center mb-4">
+                      <Wand2 className="w-10 h-10 text-purple-400" />
+                    </div>
+                    <p className="text-lg text-white font-medium mb-2">Let AI detect your columns</p>
+                    <p className="text-sm text-gray-400 mb-4 text-center max-w-md">
+                      We found {Object.keys(currentData[0] || {}).length} columns in your data. 
+                      AI can automatically detect column types and suggest standardized names.
+                    </p>
+                    
+                    {/* Sample data preview */}
+                    <div className="w-full max-w-lg mb-6 bg-[#0D1117] rounded-xl border border-[#1A1F2E] overflow-hidden">
+                      <div className="px-3 py-2 bg-[#1A1F2E]/50 border-b border-[#1A1F2E] flex items-center gap-2">
+                        <FileText className="w-3.5 h-3.5 text-gray-400" />
+                        <span className="text-xs text-gray-400">Sample from your data</span>
+                      </div>
+                      <div className="p-3 overflow-x-auto">
+                        <div className="flex gap-2 flex-wrap">
+                          {Object.keys(currentData[0] || {}).slice(0, 6).map((colName, idx) => (
+                            <div key={idx} className="px-3 py-1.5 bg-[#1A1F2E] rounded-lg border border-[#2A2F3E]">
+                              <div className="text-xs font-medium text-white mb-0.5">{colName}</div>
+                              <div className="text-xs text-gray-500 truncate max-w-[100px]">
+                                {String(currentData[0][colName] || '—')}
+                              </div>
+                            </div>
+                          ))}
+                          {Object.keys(currentData[0] || {}).length > 6 && (
+                            <div className="px-3 py-1.5 bg-[#1A1F2E]/50 rounded-lg border border-dashed border-[#2A2F3E] flex items-center">
+                              <span className="text-xs text-gray-500">
+                                +{Object.keys(currentData[0] || {}).length - 6} more
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={fetchAISuggestions}
+                        disabled={isLoadingSuggestions}
+                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-[#FF6B35] hover:from-purple-600 hover:to-[#FF7B45] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-base font-medium transition-all shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-105"
+                      >
+                        {isLoadingSuggestions ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-5 h-5" />
+                            Auto-Detect Columns
+                          </>
+                        )}
+                      </button>
+                      <span className="text-gray-500 text-sm">or</span>
+                      <button
+                        onClick={() => addColumn()}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-[#1A1F2E] hover:bg-[#252A3A] text-gray-300 rounded-xl text-sm font-medium transition-colors border border-[#2A2F3E]"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add manually
+                      </button>
+                    </div>
+                    
+                    <p className="text-xs text-gray-500 mt-4 flex items-center gap-1">
+                      <Lightbulb className="w-3 h-3" />
+                      Tip: AI will suggest data types like currency, percentage, date based on your data values
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#FF6B35]/20 to-[#FF8F35]/10 flex items-center justify-center mb-4">
+                      <Columns3 className="w-10 h-10 text-[#FF6B35]/60" />
+                    </div>
+                    <p className="text-base text-white font-medium mb-1">No columns defined yet</p>
+                    <p className="text-sm text-gray-400 mb-6 text-center max-w-md">
+                      Add your first column to start building your data schema, or upload data first to use AI auto-detection.
+                    </p>
+                    <button
+                      onClick={() => addColumn()}
+                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#FF6B35] to-[#FF8F35] hover:from-[#FF7B45] hover:to-[#FF9F45] text-white rounded-xl text-base font-medium transition-all shadow-lg shadow-[#FF6B35]/25 hover:shadow-[#FF6B35]/40 hover:scale-105"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Add Column
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               <DndContext
