@@ -51,6 +51,27 @@ The Insight Workspace features AI-powered canvas editing similar to ChatGPT's Ca
 **Data Ingestion Pipeline:**
 Supports Google Sheets import, parsing CSV data, generating text embeddings for RAG, and background processing for asynchronous ingestion.
 
+**Intelligent Template System:**
+A comprehensive template system for automated data cleaning and structuring:
+-   **Template Matching**: Auto-detects when uploaded data matches a saved template using:
+    -   Column name similarity (exact, case-insensitive, fuzzy matching)
+    -   Column aliases (user-defined + 25 pre-built marketing aliases)
+    -   Source fingerprinting (Google Sheet ID, URL patterns)
+    -   Confidence thresholds (≥85% auto-apply, 60-85% suggest, <60% ignore)
+-   **Template Editor**: Full-screen editor with:
+    -   Column schema definition (name, type, validation rules)
+    -   Cleaning pipeline configuration (remove commas, strip currency, convert %, dates, etc.)
+    -   AI-suggested column mappings with confirm/reject UI
+    -   Preview before save (side-by-side original vs cleaned data)
+    -   Column aliases management per column
+-   **Template Management**: Settings page to list, edit, delete templates with search/filter
+-   **Manual Template Selection**: Card-based picker when auto-match fails
+-   **Source-Aware Cleaning**: Different AI prompts for Google Sheets, CSV, Google Ads, Meta Ads, GA4
+-   **Column Type Heuristics**: Pre-detect dates, currencies, percentages before AI cleaning
+-   **Processing Progress UI**: Blurred data preview with step-by-step progress overlay during processing
+-   **Database Tables**: `data_templates`, `template_applications`, `system_column_aliases`
+-   **Key Files**: `server/ai/templateService.ts`, `server/ai/columnMapping.ts`, `server/ai/templatePreview.ts`, `src/components/TemplateEditor.tsx`
+
 **Data Quality Scoring & Validation:**
 Includes a pre-validation layer with a quality score (Confidence, Completeness, Data Richness), failure type classification, user data correction via JSON and inline table editing, and a retry mechanism.
 

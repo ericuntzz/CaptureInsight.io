@@ -1,4 +1,32 @@
-import type { TemplateColumn, CleaningStep } from '../../src/contexts/TemplateEditorContext';
+// Define types locally to avoid importing from frontend context
+export interface TemplateColumn {
+  id: string;
+  canonicalName: string;
+  displayName: string;
+  dataType: 'currency' | 'percentage' | 'integer' | 'decimal' | 'date' | 'text' | 'boolean';
+  isRequired: boolean;
+  validationRules?: {
+    format?: string;
+    min?: number;
+    max?: number;
+    maxLength?: number;
+    allowedValues?: string[];
+  };
+}
+
+export interface CleaningStep {
+  id: string;
+  type: 'remove_commas' | 'strip_currency' | 'convert_percentage' | 'trim_whitespace' | 'convert_date_format' | 'remove_duplicates' | 'fill_empty' | 'custom';
+  enabled: boolean;
+  config?: {
+    targetColumns?: string[];
+    fromFormat?: string;
+    toFormat?: string;
+    percentageMode?: 'decimal' | 'whole';
+    fillValue?: string;
+    customRule?: string;
+  };
+}
 
 export interface TemplateData {
   id?: string;
