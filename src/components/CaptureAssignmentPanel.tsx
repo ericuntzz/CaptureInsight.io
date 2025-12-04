@@ -22,9 +22,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Image, File, Link as LinkIcon, FolderOpen, Clock, Brain, ChevronDown, ChevronRight, Check, Plus } from 'lucide-react';
+import { X, Image, File, Link as LinkIcon, FolderOpen, Clock, Brain, ChevronDown, ChevronRight, Check, Plus, AlertCircle, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { Project } from './ProjectBrowser';
 import { Badge } from './ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import type { ValidationStatus, ValidationResult } from './CaptureOptionsModal';
 
 interface CaptureItem {
   id: string;
@@ -33,6 +35,8 @@ interface CaptureItem {
   timestamp: Date;
   preview?: string;
   url?: string;
+  validationStatus?: ValidationStatus;
+  validationResult?: ValidationResult;
 }
 
 interface AssignmentSettings {
@@ -324,6 +328,45 @@ export function CaptureAssignmentPanel({
                       )}
                     </div>
                   </button>
+                  
+                  {/* Validation Status Indicator */}
+                  {capture.validationStatus && capture.validationStatus !== 'pending' && (
+                    <TooltipProvider delayDuration={0}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex-shrink-0 cursor-help">
+                            {capture.validationStatus === 'validating' && (
+                              <Loader2 className="w-3 h-3 text-[#9CA3AF] animate-spin" />
+                            )}
+                            {capture.validationStatus === 'valid' && (
+                              <CheckCircle className="w-3 h-3 text-[#22C55E]" />
+                            )}
+                            {capture.validationStatus === 'warning' && (
+                              <AlertTriangle className="w-3 h-3 text-[#F59E0B]" />
+                            )}
+                            {capture.validationStatus === 'error' && (
+                              <AlertCircle className="w-3 h-3 text-[#EF4444]" />
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent 
+                          side="right" 
+                          className="max-w-[250px] bg-[#1A1F2E] border border-[rgba(255,107,53,0.3)] text-white"
+                        >
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium">
+                              {capture.validationResult?.message || 'Validating...'}
+                            </p>
+                            {capture.validationResult?.solution && (
+                              <p className="text-[10px] text-[#9CA3AF]">
+                                {capture.validationResult.solution}
+                              </p>
+                            )}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                   
                   {/* Info */}
                   <div className="flex-1 text-left min-w-0 m-[0px]">

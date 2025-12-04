@@ -22,7 +22,7 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { X, Square, Scan, Link2, Upload, Camera, FolderOpen, ArrowLeft, ChevronDown, Brain, Clock, Zap, Calendar, Check, Plus, Trash2, EyeOff, Database, Tag as TagIcon, Sparkles } from 'lucide-react';
+import { X, Square, Scan, Link2, Upload, Camera, FolderOpen, ArrowLeft, ChevronDown, Brain, Clock, Zap, Calendar, Check, Plus, Trash2, EyeOff, Database, Tag as TagIcon, Sparkles, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Project } from './ProjectBrowser';
 import { Badge } from './ui/badge';
@@ -31,11 +31,20 @@ import { TagBadge } from './TagBadge';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { useTags, useCreateTag } from '../hooks/useTags';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 
 interface LLMProvider {
   id: string;
   name: string;
   connected: boolean;
+}
+
+interface ValidationInfo {
+  hasWarnings: boolean;
+  hasErrors: boolean;
+  warningCount: number;
+  errorCount: number;
+  message: string;
 }
 
 interface FloatingCaptureToolbarProps {
@@ -68,6 +77,7 @@ interface FloatingCaptureToolbarProps {
   onSelectedLlmChange?: (id: string | null) => void;
   onViewDashboard?: () => void;
   forceOpenPopup?: 'destination' | 'llm' | 'schedule' | null;
+  validationInfo?: ValidationInfo;
 }
 
 export interface CaptureSettings {
@@ -103,10 +113,13 @@ export function FloatingCaptureToolbar({
   onAnalysisTimeChange,
   onSelectedLlmChange,
   onViewDashboard,
-  forceOpenPopup
+  forceOpenPopup,
+  validationInfo
 }: FloatingCaptureToolbarProps) {
   const { user } = useAuth();
   const toolbarRef = useRef<HTMLDivElement>(null);
+  
+  const [showValidationWarningDialog, setShowValidationWarningDialog] = useState(false);
   
   // Individual popup states
   const [showDestinationPopup, setShowDestinationPopup] = useState(false);
@@ -258,7 +271,7 @@ export function FloatingCaptureToolbar({
     }
   ];
 
-  const handleFinalCapture = () => {
+  const executeFinalCapture = () => {
     // Check if user has any spaces and workspaces
     const currentSpace = spaces.find(s => s.id === defaultDestination?.spaceId) || spaces[0];
     const hasNoSpaces = spaces.length === 0;
@@ -285,6 +298,14 @@ export function FloatingCaptureToolbar({
     };
 
     onFinalCapture(settings);
+  };
+
+  const handleFinalCapture = () => {
+    if (validationInfo?.hasWarnings || validationInfo?.hasErrors) {
+      setShowValidationWarningDialog(true);
+    } else {
+      executeFinalCapture();
+    }
   };
 
   return (
@@ -522,15 +543,62 @@ export function FloatingCaptureToolbar({
 
         {/* Capture Button - Only show when content exists */}
         {showSettingButtons && (
-          <TooltipButton
-            icon={Brain}
-            label="Capture Data"
-            onClick={handleFinalCapture}
-            variant="primary"
-            count={captureCount}
-          />
+          <div className="relative">
+            <TooltipButton
+              icon={Brain}
+              label="Capture Data"
+              onClick={handleFinalCapture}
+              variant="primary"
+              count={captureCount}
+            />
+            {/* Validation Warning Indicator */}
+            {(validationInfo?.hasWarnings || validationInfo?.hasErrors) && (
+              <div className="absolute -top-1 -right-1 flex items-center justify-center">
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                  validationInfo.hasErrors 
+                    ? 'bg-red-500' 
+                    : 'bg-amber-500'
+                }`}>
+                  <AlertTriangle className="w-2.5 h-2.5 text-white" />
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </motion.div>
+
+      {/* Validation Warning Dialog */}
+      <AlertDialog open={showValidationWarningDialog} onOpenChange={setShowValidationWarningDialog}>
+        <AlertDialogContent className="bg-[#1A1F2E] border border-[rgba(255,107,53,0.3)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white flex items-center gap-2">
+              <AlertTriangle className={`w-5 h-5 ${validationInfo?.hasErrors ? 'text-red-500' : 'text-amber-500'}`} />
+              {validationInfo?.hasErrors ? 'Validation Errors' : 'Validation Warnings'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[#9CA3AF]">
+              {validationInfo?.message || 'Some items may have issues that could affect processing.'}
+              <br /><br />
+              {validationInfo?.hasErrors 
+                ? 'Items with errors may fail to process. Check the indicators next to each item for details.'
+                : 'Items with warnings may not process correctly. Hover over the warning icons for more details.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-[#0A0D12] text-white border-[rgba(255,107,53,0.3)] hover:bg-[rgba(255,107,53,0.1)]">
+              Go Back
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                setShowValidationWarningDialog(false);
+                executeFinalCapture();
+              }}
+              className="bg-[#FF6B35] text-white hover:bg-[#E55A2B]"
+            >
+              Proceed Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

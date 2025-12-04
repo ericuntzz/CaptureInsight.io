@@ -63,11 +63,22 @@ interface CaptureData extends Selection {
   timestamp: Date;
 }
 
+type ValidationStatus = 'pending' | 'validating' | 'valid' | 'warning' | 'error';
+
+interface ValidationResult {
+  status: ValidationStatus;
+  message: string;
+  solution?: string;
+  canProceed: boolean;
+}
+
 interface ShareLinkData {
   id: string;
   url: string;
   name: string;
   timestamp: Date;
+  validationStatus?: ValidationStatus;
+  validationResult?: ValidationResult;
 }
 
 interface FileData {
@@ -75,6 +86,8 @@ interface FileData {
   name: string;
   file: File;
   timestamp: Date;
+  validationStatus?: ValidationStatus;
+  validationResult?: ValidationResult;
 }
 
 export default function App() {
@@ -502,40 +515,68 @@ export default function App() {
   const captureItems = useMemo<CaptureItem[]>(() => {
     const items: CaptureItem[] = [];
     
-    // Add screen captures
     captures.forEach(capture => {
       items.push({
         id: capture.id,
         type: 'screen',
         name: capture.title,
-        timestamp: capture.timestamp
+        timestamp: capture.timestamp,
       });
     });
     
-    // Add share links
+    // Add share links with validation status
     shareLinks.forEach(link => {
       items.push({
         id: link.id,
         type: 'link',
         name: link.name,
         timestamp: link.timestamp,
-        url: link.url
+        url: link.url,
+        validationStatus: link.validationStatus,
+        validationResult: link.validationResult,
       });
     });
     
-    // Add uploaded files
+    // Add uploaded files with validation status
     uploadedFiles.forEach(file => {
       items.push({
         id: file.id,
         type: 'file',
         name: file.name,
-        timestamp: file.timestamp
+        timestamp: file.timestamp,
+        validationStatus: file.validationStatus,
+        validationResult: file.validationResult,
       });
     });
     
     // Sort by timestamp
     return items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   }, [captures, shareLinks, uploadedFiles]);
+
+  const validationInfo = useMemo(() => {
+    let errorCount = 0;
+    let warningCount = 0;
+    
+    captureItems.forEach(item => {
+      if (item.validationStatus === 'error') errorCount++;
+      if (item.validationStatus === 'warning') warningCount++;
+    });
+    
+    let message = '';
+    if (errorCount > 0) {
+      message = `${errorCount} item${errorCount > 1 ? 's' : ''} cannot be processed`;
+    } else if (warningCount > 0) {
+      message = `${warningCount} item${warningCount > 1 ? 's' : ''} may have issues`;
+    }
+    
+    return {
+      hasErrors: errorCount > 0,
+      hasWarnings: warningCount > 0,
+      errorCount,
+      warningCount,
+      message,
+    };
+  }, [captureItems]);
 
   const handleCapture = (selection: Selection) => {
     // Generate title with capture number and timestamp
@@ -788,17 +829,115 @@ export default function App() {
     }
   };
 
-  const handleShareLink = (url: string) => {
+  const validateGoogleSheet = async (url: string): Promise<ValidationResult> => {
+    const isGoogleSheet = /docs\.google\.com\/spreadsheets|sheets\.google\.com/.test(url);
+    
+    if (!isGoogleSheet) {
+      return { status: 'valid', message: 'Link is ready for capture', canProceed: true };
+    }
+    
+    try {
+      const response = await fetch('/api/validate-google-sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ url }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.isPublic) {
+        return {
+          status: 'valid',
+          message: 'Google Sheet is publicly accessible',
+          canProceed: true,
+        };
+      } else {
+        return {
+          status: 'warning',
+          message: data.message || 'Google Sheet may not be publicly accessible',
+          solution: data.solution || 'Open your Google Sheet, click "Share", then change access to "Anyone with the link can view"',
+          canProceed: true,
+        };
+      }
+    } catch (error) {
+      console.error('Error validating Google Sheet:', error);
+      return {
+        status: 'warning',
+        message: 'Could not verify Google Sheet accessibility',
+        solution: 'Make sure the sheet is shared publicly: Open the sheet, click "Share", then set "Anyone with the link" to "Viewer"',
+        canProceed: true,
+      };
+    }
+  };
+
+  const validateFile = (file: File): ValidationResult => {
+    const supportedTypes = [
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/png',
+      'image/jpeg',
+      'image/gif',
+      'image/webp',
+      'application/pdf',
+    ];
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    
+    if (!supportedTypes.includes(file.type)) {
+      return {
+        status: 'error',
+        message: 'Unsupported file type',
+        solution: 'Supported formats: CSV, Excel, PNG, JPEG, GIF, WebP, PDF',
+        canProceed: false,
+      };
+    }
+    
+    if (file.size > maxSize) {
+      return {
+        status: 'error',
+        message: 'File too large',
+        solution: `Maximum file size is 50MB. Your file is ${(file.size / (1024 * 1024)).toFixed(1)}MB`,
+        canProceed: false,
+      };
+    }
+    
+    return {
+      status: 'valid',
+      message: 'File is ready for upload',
+      canProceed: true,
+    };
+  };
+
+  const handleShareLink = async (url: string) => {
     const now = new Date();
+    const linkId = `link-${Date.now()}-${Math.random()}`;
+    
     const linkData: ShareLinkData = {
-      id: `link-${Date.now()}-${Math.random()}`,
+      id: linkId,
       url,
       name: url.length > 40 ? url.substring(0, 37) + '...' : url,
-      timestamp: now
+      timestamp: now,
+      validationStatus: 'validating',
     };
+    
     setShareLinks(prev => [...prev, linkData]);
-    toast.success('Share link added successfully!');
+    toast.success('Link added - validating...');
     console.log('Share link:', url);
+    
+    const validationResult = await validateGoogleSheet(url);
+    
+    setShareLinks(prev => prev.map(link => 
+      link.id === linkId
+        ? { ...link, validationStatus: validationResult.status, validationResult }
+        : link
+    ));
+    
+    if (validationResult.status === 'warning') {
+      toast.warning(validationResult.message);
+    } else if (validationResult.status === 'error') {
+      toast.error(validationResult.message);
+    }
   };
 
   const handleUploadFile = () => {
@@ -809,15 +948,28 @@ export default function App() {
     const file = e.target.files?.[0];
     if (file) {
       const now = new Date();
+      const validationResult = validateFile(file);
+      
       const fileData: FileData = {
         id: `file-${Date.now()}-${Math.random()}`,
         name: file.name,
         file,
-        timestamp: now
+        timestamp: now,
+        validationStatus: validationResult.status,
+        validationResult,
       };
+      
       setUploadedFiles(prev => [...prev, fileData]);
-      toast.success(`File uploaded: ${file.name}`);
-      console.log('Uploaded file:', file);
+      
+      if (validationResult.status === 'valid') {
+        toast.success(`File uploaded: ${file.name}`);
+      } else if (validationResult.status === 'warning') {
+        toast.warning(validationResult.message);
+      } else if (validationResult.status === 'error') {
+        toast.error(validationResult.message);
+      }
+      
+      console.log('Uploaded file:', file, 'Validation:', validationResult.status);
     }
   };
 
@@ -1841,6 +1993,7 @@ export default function App() {
           onSelectedLlmChange={handleSelectedLlmChange}
           onViewDashboard={() => handleViewChange('workspace')}
           forceOpenPopup={forceOpenPopup}
+          validationInfo={validationInfo}
         />
       )}
 

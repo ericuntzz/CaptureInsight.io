@@ -458,6 +458,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== DATA SOURCE VALIDATION ====================
+  
+  // Validate Google Sheet accessibility (check if publicly shared)
+  app.post('/api/validate-google-sheet', isAuthenticated, async (req: any, res) => {
+    try {
+      const { url } = req.body;
+      
+      if (!url || typeof url !== 'string') {
+        return res.status(400).json({ message: 'URL is required' });
+      }
+      
+      // Check if it's a Google Sheets URL
+      if (!isGoogleSheetsUrl(url)) {
+        return res.json({ isPublic: true, message: 'Not a Google Sheets URL' });
+      }
+      
+      // Extract spreadsheet ID from URL
+      const spreadsheetIdMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (!spreadsheetIdMatch) {
+        return res.json({ 
+          isPublic: false, 
+          message: 'Could not extract spreadsheet ID from URL' 
+        });
+      }
+      
+      const spreadsheetId = spreadsheetIdMatch[1];
+      
+      // Try to fetch the sheet's CSV export (only works if publicly accessible)
+      const exportUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
+      
+      try {
+        const response = await fetch(exportUrl, {
+          method: 'HEAD',
+          redirect: 'manual',
+        });
+        
+        // If we get a 200 or redirect to the actual file, it's public
+        // If we get a 302 to accounts.google.com, it's private
+        const isPublic = response.status === 200 || 
+          (response.status === 302 && 
+           !response.headers.get('location')?.includes('accounts.google.com'));
+        
+        return res.json({
+          isPublic,
+          message: isPublic 
+            ? 'Google Sheet is publicly accessible' 
+            : 'Google Sheet is not publicly shared',
+          solution: isPublic 
+            ? null 
+            : 'Open your Google Sheet, click "Share", then change access to "Anyone with the link can view"',
+        });
+      } catch (fetchError) {
+        console.error('Error checking Google Sheet accessibility:', fetchError);
+        return res.json({
+          isPublic: false,
+          message: 'Could not verify Google Sheet accessibility',
+          solution: 'Make sure the sheet is shared publicly: Open the sheet, click "Share", then set "Anyone with the link" to "Viewer"',
+        });
+      }
+    } catch (error) {
+      console.error('Error validating Google Sheet:', error);
+      res.status(500).json({ message: 'Failed to validate Google Sheet' });
+    }
+  });
+
   // ==================== SECURITY ====================
   
   // Get user's current security status

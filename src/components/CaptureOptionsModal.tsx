@@ -54,6 +54,15 @@ interface LLMProvider {
   connected: boolean;
 }
 
+export type ValidationStatus = 'pending' | 'validating' | 'valid' | 'warning' | 'error';
+
+export interface ValidationResult {
+  status: ValidationStatus;
+  message: string;
+  solution?: string;
+  canProceed: boolean;
+}
+
 export interface CaptureItem {
   id: string;
   type: 'screen' | 'file' | 'link';
@@ -61,6 +70,8 @@ export interface CaptureItem {
   timestamp: Date;
   preview?: string;
   url?: string;
+  validationStatus?: ValidationStatus;
+  validationResult?: ValidationResult;
 }
 
 interface CaptureOptionsModalProps {

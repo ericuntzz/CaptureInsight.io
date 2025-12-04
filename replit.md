@@ -77,6 +77,17 @@ A comprehensive template system for automated data cleaning and structuring:
 **Data Quality Scoring & Validation:**
 Includes a pre-validation layer with a quality score (Confidence, Completeness, Data Richness), failure type classification, user data correction via JSON and inline table editing, and a retry mechanism.
 
+**Pre-Upload Validation System:**
+Validates data sources before capturing to prevent upload failures:
+-   **Google Sheets Validation**: Checks if Google Sheets are publicly accessible before capture. Server-side endpoint (`/api/validate-google-sheet`) attempts to fetch the sheet's CSV export to verify public access.
+-   **File Validation**: Validates file type (CSV, Excel, PNG, JPEG, GIF, WebP, PDF) and size (max 50MB) when files are uploaded.
+-   **URL Validation**: Basic URL format validation for links.
+-   **Validation Indicators**: Each captured item displays a status indicator (green = valid, yellow = warning, red = error) in the CaptureAssignmentPanel.
+-   **Tooltips**: Hover over indicators to see the issue and recommended solution.
+-   **Capture Data Button Warning**: Shows warning badge when items have validation issues.
+-   **Confirmation Dialog**: When proceeding with validation warnings, a dialog explains the issues and allows users to proceed anyway or go back to fix.
+-   **Key Files**: `src/lib/captureValidation.ts`, `server/routes.ts` (validation endpoint), `src/components/CaptureAssignmentPanel.tsx`, `src/components/FloatingCaptureToolbar.tsx`
+
 **Data Editing Capabilities (Excel/Google Sheets-like):**
 -   **Single-Click Selection**: Click any cell to select it (subtle border-only highlight, no background fill).
 -   **Type-to-Edit**: Start typing immediately to replace cell content (no double-click needed).
