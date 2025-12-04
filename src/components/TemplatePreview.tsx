@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  X, AlertTriangle, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
+  X, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
   Eye, ArrowRight, Loader2, RefreshCw, Filter, BarChart3, Download
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -167,14 +167,8 @@ export function TemplatePreview({
     try {
       let response;
       
-      if (templateId && sheetId) {
-        response = await fetch(`/api/templates/${templateId}/preview`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ sheetId }),
-        });
-      } else if (sampleData && sampleData.length > 0 && (cleaningPipeline || columnSchema)) {
+      // Priority 1: Use sample data if available (works for both new and existing templates)
+      if (sampleData && sampleData.length > 0 && (cleaningPipeline || columnSchema)) {
         response = await fetch('/api/templates/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -191,8 +185,21 @@ export function TemplatePreview({
             sampleData,
           }),
         });
+      } else if (templateId && sheetId) {
+        // Priority 2: Use template with specific sheet data
+        response = await fetch(`/api/templates/${templateId}/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ sheetId }),
+        });
+      } else if (templateId && !sampleData) {
+        // Priority 3: Existing template without sample data - show helpful message
+        setError('To preview this template, please upload or import data first. The preview will show how your data will be transformed.');
+        setIsLoading(false);
+        return;
       } else {
-        setError('No data available for preview');
+        setError('No data available for preview. Upload data to see how transformations will be applied.');
         setIsLoading(false);
         return;
       }
