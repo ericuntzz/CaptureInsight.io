@@ -25,7 +25,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Image, File, Link as LinkIcon, FolderOpen, Clock, Brain, ChevronDown, ChevronRight, Check, Plus, AlertCircle, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { Project } from './ProjectBrowser';
 import { Badge } from './ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import type { ValidationStatus, ValidationResult } from './CaptureOptionsModal';
 
 interface CaptureItem {
@@ -107,6 +106,7 @@ export function CaptureAssignmentPanel({
   const [showLlmPopup, setShowLlmPopup] = useState(false);
   const [editingCaptureId, setEditingCaptureId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
+  const [hoveredCaptureId, setHoveredCaptureId] = useState<string | null>(null);
   
   // Track previous captures to detect new ones
   const previousCaptureIdsRef = useRef<Set<string>>(new Set());
@@ -230,7 +230,7 @@ export function CaptureAssignmentPanel({
         exit={{ opacity: 0, y: -20 }}
         className="fixed top-4 left-4 z-[100] w-[340px]"
       >
-        <div className="space-y-2">
+        <div className="space-y-2 relative">
           {/* Select All */}
           {captures.length > 1 && (
             <button
@@ -311,7 +311,17 @@ export function CaptureAssignmentPanel({
                 <div
                   key={capture.id}
                   onClick={() => toggleCapture(capture.id)}
-                  className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all bg-[rgba(26,31,46,0.85)] border border-[rgba(26,31,46,0.85)] cursor-pointer hover:border-[rgba(255,107,53,0.3)]`}
+                  onMouseEnter={() => {
+                    if (capture.validationStatus && capture.validationStatus !== 'valid' && capture.validationStatus !== 'pending') {
+                      setHoveredCaptureId(capture.id);
+                    }
+                  }}
+                  onMouseLeave={() => setHoveredCaptureId(null)}
+                  className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all bg-[rgba(26,31,46,0.85)] border cursor-pointer ${
+                    hoveredCaptureId === capture.id 
+                      ? 'border-[rgba(255,107,53,0.5)]' 
+                      : 'border-[rgba(26,31,46,0.85)] hover:border-[rgba(255,107,53,0.3)]'
+                  }`}
                 >
                   {/* Checkbox */}
                   <button
@@ -331,41 +341,20 @@ export function CaptureAssignmentPanel({
                   
                   {/* Validation Status Indicator */}
                   {capture.validationStatus && capture.validationStatus !== 'pending' && (
-                    <TooltipProvider delayDuration={0}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex-shrink-0 cursor-help">
-                            {capture.validationStatus === 'validating' && (
-                              <Loader2 className="w-3 h-3 text-[#9CA3AF] animate-spin" />
-                            )}
-                            {capture.validationStatus === 'valid' && (
-                              <CheckCircle className="w-3 h-3 text-[#22C55E]" />
-                            )}
-                            {capture.validationStatus === 'warning' && (
-                              <AlertTriangle className="w-3 h-3 text-[#F59E0B]" />
-                            )}
-                            {capture.validationStatus === 'error' && (
-                              <AlertCircle className="w-3 h-3 text-[#EF4444]" />
-                            )}
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent 
-                          side="right" 
-                          className="max-w-[250px] bg-[#1A1F2E] border border-[rgba(255,107,53,0.3)] text-white"
-                        >
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium">
-                              {capture.validationResult?.message || 'Validating...'}
-                            </p>
-                            {capture.validationResult?.solution && (
-                              <p className="text-[10px] text-[#9CA3AF]">
-                                {capture.validationResult.solution}
-                              </p>
-                            )}
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <div className="flex-shrink-0">
+                      {capture.validationStatus === 'validating' && (
+                        <Loader2 className="w-3 h-3 text-[#9CA3AF] animate-spin" />
+                      )}
+                      {capture.validationStatus === 'valid' && (
+                        <CheckCircle className="w-3 h-3 text-[#22C55E]" />
+                      )}
+                      {capture.validationStatus === 'warning' && (
+                        <AlertTriangle className="w-3 h-3 text-[#F59E0B]" />
+                      )}
+                      {capture.validationStatus === 'error' && (
+                        <AlertCircle className="w-3 h-3 text-[#EF4444]" />
+                      )}
+                    </div>
                   )}
                   
                   {/* Info */}
@@ -454,6 +443,64 @@ export function CaptureAssignmentPanel({
               );
             })}
           </div>
+          
+          {/* Validation Info Side Panel - appears to the right */}
+          <AnimatePresence>
+            {hoveredCaptureId && (() => {
+              const hoveredCapture = captures.find(c => c.id === hoveredCaptureId);
+              if (!hoveredCapture?.validationResult) return null;
+              
+              const isError = hoveredCapture.validationStatus === 'error';
+              const isWarning = hoveredCapture.validationStatus === 'warning';
+              
+              return (
+                <motion.div
+                  key="validation-panel"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute left-full top-0 ml-3 w-[240px]"
+                  onMouseEnter={() => setHoveredCaptureId(hoveredCaptureId)}
+                  onMouseLeave={() => setHoveredCaptureId(null)}
+                >
+                  <div className={`bg-[rgba(26,31,46,0.95)] backdrop-blur-xl border rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.6)] p-3 ${
+                    isError ? 'border-[rgba(239,68,68,0.4)]' : 
+                    isWarning ? 'border-[rgba(245,158,11,0.4)]' : 
+                    'border-[rgba(255,107,53,0.3)]'
+                  }`}>
+                    {/* Header with icon */}
+                    <div className="flex items-center gap-2 mb-2">
+                      {isError && <AlertCircle className="w-4 h-4 text-[#EF4444]" />}
+                      {isWarning && <AlertTriangle className="w-4 h-4 text-[#F59E0B]" />}
+                      <span className={`text-xs font-semibold ${
+                        isError ? 'text-[#EF4444]' : 
+                        isWarning ? 'text-[#F59E0B]' : 
+                        'text-white'
+                      }`}>
+                        {isError ? 'Validation Error' : 'Warning'}
+                      </span>
+                    </div>
+                    
+                    {/* Message */}
+                    <p className="text-[11px] text-white mb-2">
+                      {hoveredCapture.validationResult.message}
+                    </p>
+                    
+                    {/* Solution */}
+                    {hoveredCapture.validationResult.solution && (
+                      <div className="bg-[rgba(0,0,0,0.3)] rounded-md p-2">
+                        <p className="text-[10px] text-[#9CA3AF] leading-relaxed">
+                          <span className="text-[#FF6B35] font-medium">Fix: </span>
+                          {hoveredCapture.validationResult.solution}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })()}
+          </AnimatePresence>
         </div>
       </motion.div>
     </AnimatePresence>
