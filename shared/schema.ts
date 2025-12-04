@@ -562,6 +562,24 @@ export const dataTemplates = pgTable("data_templates", {
     }>;
   }>(),
   
+  // Calculated fields - user-defined formulas for KPIs
+  calculatedFields: jsonb("calculated_fields").$type<{
+    fields: Array<{
+      id: string; // Unique identifier
+      name: string; // Field name (e.g., "CPA")
+      description?: string; // Description (e.g., "Cost Per Acquisition")
+      expression: string; // Formula (e.g., "[Ad Spend] / [Conversions]")
+      outputType: 'currency' | 'percentage' | 'number' | 'integer';
+      formatConfig?: {
+        currencyCode?: string; // e.g., "USD"
+        decimalPlaces?: number; // e.g., 2
+        percentageMode?: 'decimal' | 'whole'; // 0.125 vs 12.5
+      };
+      position: number; // Display order
+      isActive: boolean;
+    }>;
+  }>(),
+  
   // AI prompt customization for this template
   aiPromptHints: text("ai_prompt_hints"), // Additional context for AI cleaning
   

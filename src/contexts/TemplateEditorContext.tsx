@@ -37,6 +37,27 @@ export interface CleaningStep {
   };
 }
 
+export interface CalculatedField {
+  id: string;
+  name: string;
+  description?: string;
+  expression: string;
+  outputType: 'currency' | 'percentage' | 'number' | 'integer';
+  formatConfig?: {
+    currencyCode?: string;
+    decimalPlaces?: number;
+    percentageMode?: 'decimal' | 'whole';
+  };
+  position: number;
+  isActive: boolean;
+}
+
+export interface FormulaValidationResult {
+  isValid: boolean;
+  error?: string;
+  referencedColumns: string[];
+}
+
 export interface TemplateData {
   id?: string;
   name: string;
@@ -47,6 +68,7 @@ export interface TemplateData {
   columns: TemplateColumn[];
   cleaningPipeline: CleaningStep[];
   columnAliases: Record<string, string[]>;
+  calculatedFields: CalculatedField[];
 }
 
 export interface ColumnMappingSuggestion {
@@ -89,6 +111,11 @@ interface TemplateEditorContextValue {
   acceptSuggestion: (columnId: string) => void;
   rejectSuggestion: (columnId: string) => void;
   clearAllSuggestions: () => void;
+  addCalculatedField: (field?: Partial<CalculatedField>) => void;
+  updateCalculatedField: (fieldId: string, updates: Partial<CalculatedField>) => void;
+  deleteCalculatedField: (fieldId: string) => void;
+  reorderCalculatedFields: (fromIndex: number, toIndex: number) => void;
+  validateFormula: (expression: string) => FormulaValidationResult;
   validate: () => boolean;
   openEditor: (initialData?: Partial<TemplateData>) => void;
   closeEditor: () => void;
@@ -117,7 +144,81 @@ const createDefaultTemplate = (): TemplateData => ({
   columns: [],
   cleaningPipeline: [...defaultCleaningSteps],
   columnAliases: {},
+  calculatedFields: [],
 });
+
+// Supported functions aligned with server-side evaluator
+const SUPPORTED_FUNCTIONS = ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT', 'IF', 'ROUND', 'ABS', 'CEIL', 'FLOOR'];
+
+// Formula validation helper - validates expression syntax and column references
+// MUST stay aligned with server/ai/formulaEvaluator.ts validateFormula
+function validateFormulaExpression(expression: string, availableColumns: string[]): FormulaValidationResult {
+  if (!expression.trim()) {
+    return { isValid: false, error: 'Formula is required', referencedColumns: [] };
+  }
+  
+  // Extract column references from [Column Name] syntax
+  const columnRefPattern = /\[([^\]]+)\]/g;
+  const referencedColumns: string[] = [];
+  let match;
+  
+  while ((match = columnRefPattern.exec(expression)) !== null) {
+    referencedColumns.push(match[1]);
+  }
+  
+  // Check for empty column references
+  if (referencedColumns.length === 0) {
+    return { isValid: false, error: 'Formula must reference at least one column using [Column Name] syntax', referencedColumns: [] };
+  }
+  
+  // Check if all referenced columns exist
+  const missingColumns = referencedColumns.filter(col => !availableColumns.includes(col));
+  if (missingColumns.length > 0) {
+    return { 
+      isValid: false, 
+      error: `Unknown column(s): ${missingColumns.map(c => `"${c}"`).join(', ')}`, 
+      referencedColumns 
+    };
+  }
+  
+  // Check for valid operators and syntax - aligned with server-side validation
+  const sanitized = expression.replace(columnRefPattern, '1');
+  
+  // Remove supported function names before checking characters
+  const functionPattern = new RegExp(`\\b(${SUPPORTED_FUNCTIONS.join('|')})\\b`, 'gi');
+  const withoutFunctions = sanitized.replace(functionPattern, '');
+  
+  // Valid characters: digits, spaces, operators, parentheses, commas, comparison operators for IF
+  const validChars = /^[\d\s+\-*/().,:?<>=!&|]+$/;
+  
+  if (!validChars.test(withoutFunctions)) {
+    return { isValid: false, error: 'Invalid characters in formula. Use +, -, *, /, parentheses, and column references.', referencedColumns };
+  }
+  
+  // Check balanced parentheses
+  const openParens = (expression.match(/\(/g) || []).length;
+  const closeParens = (expression.match(/\)/g) || []).length;
+  if (openParens !== closeParens) {
+    return { isValid: false, error: 'Unbalanced parentheses in formula.', referencedColumns };
+  }
+  
+  // Try to evaluate with dummy values to catch syntax errors
+  try {
+    let testExpression = sanitized;
+    testExpression = testExpression.replace(/\bABS\s*\(/gi, 'Math.abs(');
+    testExpression = testExpression.replace(/\bROUND\s*\(/gi, 'Math.round(');
+    testExpression = testExpression.replace(/\bCEIL\s*\(/gi, 'Math.ceil(');
+    testExpression = testExpression.replace(/\bFLOOR\s*\(/gi, 'Math.floor(');
+    testExpression = testExpression.replace(/\bMIN\s*\(/gi, 'Math.min(');
+    testExpression = testExpression.replace(/\bMAX\s*\(/gi, 'Math.max(');
+    testExpression = testExpression.replace(/\bIF\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)/gi, '(($1) ? ($2) : ($3))');
+    new Function(`return ${testExpression}`);
+  } catch {
+    return { isValid: false, error: 'Invalid formula syntax. Check parentheses and operators.', referencedColumns };
+  }
+  
+  return { isValid: true, referencedColumns };
+}
 
 const TemplateEditorContext = createContext<TemplateEditorContextValue | null>(null);
 
@@ -338,6 +439,58 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
     setColumnSuggestionsState({});
   }, []);
 
+  // Calculated Fields CRUD
+  const addCalculatedField = useCallback((field?: Partial<CalculatedField>) => {
+    const newField: CalculatedField = {
+      id: `calc-${Date.now()}`,
+      name: field?.name || '',
+      description: field?.description || '',
+      expression: field?.expression || '',
+      outputType: field?.outputType || 'number',
+      formatConfig: field?.formatConfig || { decimalPlaces: 2 },
+      position: template.calculatedFields.length,
+      isActive: field?.isActive ?? true,
+    };
+    setTemplateState(prev => ({
+      ...prev,
+      calculatedFields: [...prev.calculatedFields, newField],
+    }));
+  }, [template.calculatedFields.length]);
+
+  const updateCalculatedField = useCallback((fieldId: string, updates: Partial<CalculatedField>) => {
+    setTemplateState(prev => ({
+      ...prev,
+      calculatedFields: prev.calculatedFields.map(field =>
+        field.id === fieldId ? { ...field, ...updates } : field
+      ),
+    }));
+  }, []);
+
+  const deleteCalculatedField = useCallback((fieldId: string) => {
+    setTemplateState(prev => ({
+      ...prev,
+      calculatedFields: prev.calculatedFields.filter(field => field.id !== fieldId)
+        .map((field, idx) => ({ ...field, position: idx })),
+    }));
+  }, []);
+
+  const reorderCalculatedFields = useCallback((fromIndex: number, toIndex: number) => {
+    setTemplateState(prev => {
+      const newFields = [...prev.calculatedFields];
+      const [removed] = newFields.splice(fromIndex, 1);
+      newFields.splice(toIndex, 0, removed);
+      return {
+        ...prev,
+        calculatedFields: newFields.map((field, idx) => ({ ...field, position: idx })),
+      };
+    });
+  }, []);
+
+  const validateFormula = useCallback((expression: string): FormulaValidationResult => {
+    const availableColumns = template.columns.map(c => c.displayName);
+    return validateFormulaExpression(expression, availableColumns);
+  }, [template.columns]);
+
   const validate = useCallback((): boolean => {
     const newErrors: ValidationError[] = [];
     
@@ -415,6 +568,7 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
           ...template,
           columnSchema: { columns: template.columns },
           cleaningPipeline: { steps: template.cleaningPipeline },
+          calculatedFields: { fields: template.calculatedFields },
         }),
       });
       
@@ -466,6 +620,11 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
     acceptSuggestion,
     rejectSuggestion,
     clearAllSuggestions,
+    addCalculatedField,
+    updateCalculatedField,
+    deleteCalculatedField,
+    reorderCalculatedFields,
+    validateFormula,
     validate,
     openEditor,
     closeEditor,

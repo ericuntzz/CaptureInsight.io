@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Plus, Trash2, GripVertical, ChevronDown, ChevronRight, 
   Settings, Columns3, Sparkles, FileText, Save, RotateCcw,
-  AlertCircle, Wand2, Loader2, Eye, Lightbulb, Tag, HelpCircle, ArrowRight, CheckCircle2
+  AlertCircle, Wand2, Loader2, Eye, Lightbulb, Tag, HelpCircle, ArrowRight, CheckCircle2, Calculator
 } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { 
@@ -26,10 +26,11 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { useTemplateEditor, TemplateColumn, CleaningStep, ColumnMappingSuggestion } from '../contexts/TemplateEditorContext';
+import { useTemplateEditor, TemplateColumn, CleaningStep, ColumnMappingSuggestion, CalculatedField } from '../contexts/TemplateEditorContext';
 import { ColumnMappingPanel, ConfirmedMapping } from './ColumnMappingPanel';
 import { TemplatePreview } from './TemplatePreview';
 import { SuggestedMapping, SuggestedMappingBanner } from './SuggestedMapping';
+import { CalculatedFieldsPanel } from './CalculatedFieldsPanel';
 import {
   DndContext,
   closestCenter,
@@ -682,6 +683,9 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
   const [showMappingPanel, setShowMappingPanel] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [schemaTab, setSchemaTab] = useState<'columns' | 'calculated'>('columns');
+  const [editingField, setEditingField] = useState<CalculatedField | null>(null);
+  const [showFieldEditor, setShowFieldEditor] = useState(false);
 
   const fetchAISuggestions = useCallback(async () => {
     if (!currentData || currentData.length === 0) {
@@ -1041,14 +1045,44 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
           </div>
 
           <div className="flex-1 p-4 overflow-y-auto">
+            {/* Schema Tabs */}
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Columns3 className="w-4 h-4 text-[#FF6B35]" />
-                <h3 className="text-sm font-medium text-white">Column Schema</h3>
-                <span className="text-xs text-gray-500">({template.columns.length} columns)</span>
+              <div className="flex items-center gap-1 p-1 bg-[#0D1117] rounded-xl">
+                <button
+                  onClick={() => setSchemaTab('columns')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    schemaTab === 'columns' 
+                      ? 'bg-[#FF6B35]/20 text-[#FF6B35]' 
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1F2E]'
+                  }`}
+                >
+                  <Columns3 className="w-4 h-4" />
+                  Columns
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    schemaTab === 'columns' ? 'bg-[#FF6B35]/30' : 'bg-[#1A1F2E]'
+                  }`}>
+                    {template.columns.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setSchemaTab('calculated')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    schemaTab === 'calculated' 
+                      ? 'bg-purple-500/20 text-purple-400' 
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1F2E]'
+                  }`}
+                >
+                  <Calculator className="w-4 h-4" />
+                  Calculated Fields
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    schemaTab === 'calculated' ? 'bg-purple-500/30' : 'bg-[#1A1F2E]'
+                  }`}>
+                    {template.calculatedFields.length}
+                  </span>
+                </button>
               </div>
               
-              {template.columns.length > 0 && (
+              {schemaTab === 'columns' && template.columns.length > 0 && (
                 <div className="flex items-center gap-2">
                   {currentData && currentData.length > 0 && (
                     <button
@@ -1074,31 +1108,47 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                   </button>
                 </div>
               )}
+              
+              {schemaTab === 'calculated' && (
+                <button
+                  onClick={() => {
+                    setEditingField(null);
+                    setShowFieldEditor(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-sm transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Calculated Field
+                </button>
+              )}
             </div>
             
-            {showMappingPanel && (
-              <div className="mb-4">
-                <ColumnMappingPanel
-                  suggestions={aiSuggestions}
-                  isLoading={isLoadingSuggestions}
-                  onConfirm={handleConfirmMappings}
-                  onDismiss={handleDismissMappings}
-                  onRefresh={fetchAISuggestions}
-                />
-              </div>
-            )}
-            
-            {suggestionsCount > 0 && !showMappingPanel && (
-              <SuggestedMappingBanner
-                totalSuggestions={suggestionsCount}
-                highConfidenceCount={highConfidenceCount}
-                onApplyAll={handleAcceptAllSuggestions}
-                onDismissAll={clearAllSuggestions}
-                isLoading={isLoadingSuggestions}
-              />
-            )}
-            
-            {template.columns.length === 0 ? (
+            {/* Columns Tab Content */}
+            {schemaTab === 'columns' && (
+              <>
+                {showMappingPanel && (
+                  <div className="mb-4">
+                    <ColumnMappingPanel
+                      suggestions={aiSuggestions}
+                      isLoading={isLoadingSuggestions}
+                      onConfirm={handleConfirmMappings}
+                      onDismiss={handleDismissMappings}
+                      onRefresh={fetchAISuggestions}
+                    />
+                  </div>
+                )}
+                
+                {suggestionsCount > 0 && !showMappingPanel && (
+                  <SuggestedMappingBanner
+                    totalSuggestions={suggestionsCount}
+                    highConfidenceCount={highConfidenceCount}
+                    onApplyAll={handleAcceptAllSuggestions}
+                    onDismissAll={clearAllSuggestions}
+                    isLoading={isLoadingSuggestions}
+                  />
+                )}
+                
+                {template.columns.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-500">
                 {currentData && currentData.length > 0 ? (
                   <>
@@ -1218,6 +1268,27 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                 </SortableContext>
               </DndContext>
             )}
+              </>
+            )}
+            
+            {/* Calculated Fields Tab Content */}
+            {schemaTab === 'calculated' && (
+              <CalculatedFieldsPanel
+                fields={template.calculatedFields}
+                columns={template.columns}
+                sampleData={currentData}
+                onEdit={(field) => {
+                  setEditingField(field);
+                  setShowFieldEditor(true);
+                }}
+                showEditor={showFieldEditor}
+                editingField={editingField}
+                onCloseEditor={() => {
+                  setShowFieldEditor(false);
+                  setEditingField(null);
+                }}
+              />
+            )}
           </div>
 
           <div className="w-80 border-l border-[#1A1F2E] p-4 overflow-y-auto">
@@ -1280,6 +1351,20 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                 </span>
               </div>
               
+              {/* Calculated Fields */}
+              {template.calculatedFields.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center">
+                    <Calculator className="w-3 h-3 text-purple-400" />
+                  </div>
+                  <span className="text-sm text-gray-400">
+                    <span className="font-medium text-white">
+                      {template.calculatedFields.filter(f => f.isActive).length}/{template.calculatedFields.length}
+                    </span> calculated field{template.calculatedFields.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              )}
+              
               {/* Required Columns */}
               {template.columns.filter(c => c.isRequired).length > 0 && (
                 <div className="flex items-center gap-2">
@@ -1334,6 +1419,12 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
                     <li className="flex items-center gap-2 text-sm">
                       <div className="w-1.5 h-1.5 rounded-full bg-[#FF6B35]" />
                       <span>Column schema ({template.columns.length} column{template.columns.length !== 1 ? 's' : ''})</span>
+                    </li>
+                  )}
+                  {template.calculatedFields.length > 0 && (
+                    <li className="flex items-center gap-2 text-sm">
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                      <span>Calculated fields ({template.calculatedFields.filter(f => f.isActive).length}/{template.calculatedFields.length} active)</span>
                     </li>
                   )}
                   {template.cleaningPipeline.filter(s => s.enabled).length > 0 && (
