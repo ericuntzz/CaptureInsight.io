@@ -600,6 +600,9 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     // Don't auto-save loading state or placeholder content
     if (activeTabId === 'loading' || localTitle === 'Loading...') return;
     
+    // Don't auto-save if workspace is still being created (temp ID)
+    if (workspaceId?.startsWith('temp-')) return;
+    
     // Check if content has changed from last saved state
     const hasChanges = 
       localTitle !== lastSavedContentRef.current.title || 

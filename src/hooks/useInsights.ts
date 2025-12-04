@@ -77,6 +77,10 @@ export function useCreateInsight() {
         tags?: string[];
       }
     }) => {
+      // Don't create insight if workspaceId is a temp ID (workspace not yet created in DB)
+      if (workspaceId?.startsWith('temp-')) {
+        throw new Error('Cannot create insight: workspace is still being created. Please wait a moment and try again.');
+      }
       const res = await apiRequest("POST", `/api/spaces/${spaceId}/insights`, {
         ...data,
         workspaceId: workspaceId || undefined,

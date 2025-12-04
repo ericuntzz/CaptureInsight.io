@@ -1940,6 +1940,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const securityMode = await serverEncryption.getSecurityMode(userId);
       
+      // Reject temporary workspace IDs (workspace not yet created in DB)
+      if (req.body.workspaceId?.startsWith('temp-')) {
+        return res.status(400).json({ 
+          message: "Cannot create insight: workspace is still being created. Please wait a moment and try again." 
+        });
+      }
+      
       let insightData = { 
         ...req.body, 
         spaceId: req.params.spaceId, 
