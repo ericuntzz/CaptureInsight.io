@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useTemplates, useDeleteTemplate, type DataTemplate } from '../hooks/useTemplates';
 import { useTemplateEditor } from '../contexts/TemplateEditorContext';
+import { TemplateEditor } from '../components/TemplateEditor';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -503,6 +504,9 @@ export function TemplateManagement({ workspaceId, spaceId, onBack }: TemplateMan
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Template Editor Modal */}
+      <TemplateEditor />
     </motion.div>
   );
 }
