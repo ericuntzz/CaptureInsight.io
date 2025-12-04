@@ -167,14 +167,15 @@ export default function App() {
   }, [authLoading, hasRestoredUrl, router]);
   
   // Persist current URL to localStorage whenever it changes
-  // IMPORTANT: Don't persist while auth is loading to avoid overwriting good saved URLs
+  // Only skip persisting BEFORE the initial URL restoration is complete
   useEffect(() => {
-    // Skip persisting during auth loading to prevent overwriting saved URL with root
-    if (authLoading) return;
+    // Don't persist until we've completed the initial URL restoration check
+    // This prevents overwriting a good saved URL during the initial load race
+    if (!hasRestoredUrl) return;
     
     const currentUrl = router.pathname + router.search + router.hash;
     localStorage.setItem('captureinsight_current_url', currentUrl);
-  }, [authLoading, router.pathname, router.search, router.hash]);
+  }, [hasRestoredUrl, router.pathname, router.search, router.hash]);
   
   // Initialize view from URL or localStorage
   const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights' | 'workspace'>(() => {
@@ -228,16 +229,12 @@ export default function App() {
   // Note: Current view is now persisted via the full URL in captureinsight_current_url
   
   // Sync URL with current view when router changes (back/forward navigation)
-  // IMPORTANT: Wait for auth to settle before syncing to prevent premature view resets
   useEffect(() => {
-    // Don't sync while auth is loading to avoid resetting view to 'capture'
-    if (authLoading) return;
-    
     const viewFromUrl = getCurrentView(router.pathname);
     if (viewFromUrl !== currentView) {
       setCurrentView(viewFromUrl);
     }
-  }, [authLoading, router.pathname, currentView]);
+  }, [router.pathname, currentView]);
   
   // Update URL when view changes
   const handleViewChange = (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace') => {
@@ -1808,7 +1805,7 @@ export default function App() {
           onAnalysisFrequencyChange={handleAnalysisFrequencyChange}
           onAnalysisTimeChange={handleAnalysisTimeChange}
           onSelectedLlmChange={handleSelectedLlmChange}
-          onViewDashboard={() => setCurrentView('workspace')}
+          onViewDashboard={() => handleViewChange('workspace')}
           forceOpenPopup={forceOpenPopup}
         />
       )}
