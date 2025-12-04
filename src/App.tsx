@@ -196,6 +196,9 @@ export default function App() {
   type SettingsPage = 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security' | 'templates' | null;
   const [activeSettingsPage, setActiveSettingsPage] = useState<SettingsPage>(() => {
     if (typeof window !== 'undefined') {
+      if (window.location.pathname === '/settings') {
+        return 'settings';
+      }
       if (window.location.pathname === '/settings/security') {
         return 'security';
       }
@@ -208,7 +211,9 @@ export default function App() {
   
   const handleNavigateToSettings = (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security' | 'templates') => {
     setActiveSettingsPage(page);
-    if (page === 'security' || page === 'settings') {
+    if (page === 'settings') {
+      router.push('/settings');
+    } else if (page === 'security') {
       router.push('/settings/security');
     } else if (page === 'templates') {
       router.push('/settings/templates');
@@ -217,7 +222,7 @@ export default function App() {
   
   const handleCloseSettings = () => {
     setActiveSettingsPage(null);
-    if (window.location.pathname.startsWith('/settings/')) {
+    if (window.location.pathname.startsWith('/settings')) {
       router.push('/');
     }
   };

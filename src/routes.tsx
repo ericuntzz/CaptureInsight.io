@@ -31,6 +31,7 @@ export const ROUTES = {
   SEARCH: '/search',
   
   // Settings
+  SETTINGS: '/settings',
   SETTINGS_SECURITY: '/settings/security',
   SETTINGS_TEMPLATES: '/settings/templates',
 } as const;
@@ -53,6 +54,7 @@ export const buildRoute = {
   tags: () => ROUTES.TAGS,
   tagDetail: (tagId: string) => `/tags/${tagId}`,
   search: (query?: string) => query ? `/search?q=${encodeURIComponent(query)}` : ROUTES.SEARCH,
+  settings: () => ROUTES.SETTINGS,
   settingsSecurity: () => ROUTES.SETTINGS_SECURITY,
   settingsTemplates: () => ROUTES.SETTINGS_TEMPLATES,
 };
@@ -67,6 +69,7 @@ export const parseRoute = {
   isAIChat: (pathname: string) => pathname.startsWith('/ai-assistant'),
   isTags: (pathname: string) => pathname.startsWith('/tags'),
   isSearch: (pathname: string) => pathname.startsWith('/search'),
+  isSettings: (pathname: string) => pathname === '/settings',
   isSettingsSecurity: (pathname: string) => pathname === '/settings/security',
   isSettingsTemplates: (pathname: string) => pathname === '/settings/templates',
   
