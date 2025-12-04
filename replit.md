@@ -53,6 +53,19 @@ The Insight Workspace features AI-powered canvas editing similar to ChatGPT's Ca
 **Data Ingestion Pipeline:**
 Supports Google Sheets import, parsing CSV data, generating text embeddings for RAG, and background processing for asynchronous ingestion.
 
+**AI Data Cleaning & Structure Detection:**
+Intelligent AI-powered cleaning that preserves data structure while extracting notes:
+-   **Column Order Preservation**: Keeps identifier/label columns (metric names) on the left, matching the source document structure
+-   **Notes Detection**: Automatically detects and extracts standalone notes from data:
+    -   Rows starting with `*` or `**` (e.g., "*JZ NOTE - look at decline...")
+    -   Rows containing "NOTE:" or "NOTE -" patterns
+    -   Parenthetical annotations alone in a cell (e.g., "(from tableau waterfall)")
+    -   Rows with only text and no numeric data
+-   **Inline Notes**: Notes attached to data rows (like "**1M CCC -- explanation") are preserved in a notes column
+-   **Standalone Notes Extraction**: Pure comment rows are moved to a separate notes array, not mixed with data
+-   **Large Dataset Handling**: Special processing for datasets >100 rows to detect and filter standalone notes
+-   **Key Functions**: `isStandaloneNoteRow()`, `extractNoteFromCell()` in `server/ai/dataCleaning.ts`
+
 **Intelligent Template System:**
 A comprehensive template system for automated data cleaning and structuring:
 -   **Template Matching**: Auto-detects when uploaded data matches a saved template using:

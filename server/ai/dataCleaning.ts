@@ -94,6 +94,12 @@ async function generateWithRetry(
   );
 }
 
+export interface ExtractedNote {
+  text: string;
+  originalRow?: number;
+  context?: string;
+}
+
 export interface CleanedDataResult {
   success: boolean;
   cleanedData?: {
@@ -101,6 +107,8 @@ export interface CleanedDataResult {
     title?: string;
     description?: string;
     data: any[];
+    notes?: ExtractedNote[];
+    columnOrder?: string[];
     metadata?: {
       sourceType: string;
       columnCount?: number;
@@ -139,7 +147,21 @@ SOURCE: Google Sheets
 - Preserve cell formatting hints (merged cells may appear as empty)
 - Handle formula results (numbers may be formatted as text)
 - Watch for locale-specific number formats (1.000,00 vs 1,000.00)
-- Date formats vary by user locale settings`,
+- Date formats vary by user locale settings
+
+NOTES & ANNOTATIONS DETECTION (Google Sheets specific):
+- Look for rows that contain ONLY text with no associated numeric data - these are likely notes
+- Patterns like "*JZ NOTE", "**NOTE", or text starting with asterisks are user notes
+- Parenthetical text alone in a cell like "(from tableau waterfall)" is an annotation
+- Rows after empty rows that contain only text are often contextual notes
+- If a row has a label in column A but only text (no numbers) in other cells, check if it's a note
+- Inline annotations: Text in data cells starting with "**" or containing " -- " is commentary
+
+COLUMN STRUCTURE:
+- The FIRST column typically contains row identifiers (metric names, categories)
+- Keep the first column as the first property in each data object
+- Preserve the original left-to-right column order
+- If column A has text labels and columns B-E have monthly data, order should be: label, month1, month2, etc.`,
 
   csv: `
 SOURCE: CSV File
@@ -231,10 +253,19 @@ OUTPUT FORMAT:
   "description": "Brief summary of what this data contains",
   "data": [
     // Array of cleaned records - each record is an object with consistent keys
+    // IMPORTANT: Column order in each object should match source order (identifiers first, then data)
   ],
   "columns": [
-    // Optional: column definitions with inferred types
+    // Column definitions with inferred types - ORDER MATTERS (preserve source order)
     {"name": "column_name", "type": "string|number|date|boolean", "description": "brief description"}
+  ],
+  "notes": [
+    // Optional: Array of extracted notes/comments that were standalone rows (not regular data)
+    // Example: {"text": "*JZ NOTE - look at decline of VIP...", "originalRow": 23, "context": "after VIP metrics"}
+  ],
+  "columnOrder": [
+    // Array of column names in the order they should appear (identifier columns first)
+    // Example: ["metric_name", "april", "may", "june", "july", "notes"]
   ]
 }`;
 
@@ -269,6 +300,26 @@ Tasks:
 5. Handle missing/empty values consistently (use null)
 6. Remove duplicate rows if any
 7. Infer and document column types
+
+COLUMN ORDERING (CRITICAL):
+- PRESERVE the original column order from the source data
+- Identifier/label columns (metric names, categories, row labels) should appear FIRST (leftmost)
+- If the first column in the source contains names/labels, keep it as the first column in output
+- Numeric data columns should follow identifier columns
+- Notes columns should appear after data columns
+
+NOTES DETECTION (IMPORTANT):
+Detect and extract notes/comments that are NOT regular data rows:
+- Rows starting with "*" or "**" followed by text (e.g., "*JZ NOTE - look at decline...")
+- Rows containing "NOTE:" or "NOTE -" patterns
+- Parenthetical annotations that appear alone (e.g., "(from tableau waterfall)")
+- Rows that are clearly commentary, not data (text with no associated metrics)
+- Cells with inline notes like "**1M CCC --" are notes attached to that row
+
+For detected notes:
+- If the note is a STANDALONE ROW with no real data values, extract it to the "notes" array
+- If the note is INLINE (attached to a data row), keep it in a "notes" column for that row
+- Standalone note rows should NOT appear in the main data array
 
 Return the ENTIRE dataset, cleaned and structured.`;
 
@@ -529,6 +580,115 @@ export async function cleanScreenshotData(
   });
 }
 
+/**
+ * Check if a cell contains a note pattern.
+ * Returns the note text if found.
+ */
+function extractNoteFromCell(value: any): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  
+  // Pattern: starts with * or ** followed by text (e.g., "*JZ NOTE")
+  if (/^\*+\s*\w+/i.test(trimmed)) {
+    return trimmed;
+  }
+  
+  // Pattern: contains "NOTE:" or "NOTE -" or "NOTE –" at start
+  if (/^\**\s*NOTE\s*[-:–]/i.test(trimmed)) {
+    return trimmed;
+  }
+  
+  // Pattern: inline note starting with ** and containing --
+  if (/^\*\*.*--/i.test(trimmed)) {
+    return trimmed;
+  }
+  
+  return null;
+}
+
+/**
+ * Check if a value is "empty" (null, undefined, empty string, 'null' string)
+ */
+function isEmptyValue(value: any): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') {
+    const trimmed = value.trim().toLowerCase();
+    return trimmed === '' || trimmed === 'null';
+  }
+  return false;
+}
+
+/**
+ * Detect if a row is a STANDALONE note/comment rather than actual data.
+ * A standalone note is a row where:
+ * - It contains a note pattern AND
+ * - All other cells are empty (no numeric or meaningful data)
+ * 
+ * This is DIFFERENT from inline notes, which are note cells on data rows.
+ * Inline notes should be kept with the row, not extracted.
+ */
+function isStandaloneNoteRow(row: Record<string, any>): { isNote: boolean; noteText?: string } {
+  const entries = Object.entries(row);
+  const values = Object.values(row);
+  
+  // Count cells with actual data vs note patterns
+  let noteText: string | null = null;
+  let noteColumnKey: string | null = null;
+  let hasNonEmptyDataCells = false;
+  
+  for (const [key, value] of entries) {
+    if (isEmptyValue(value)) continue;
+    
+    // Check if this cell is a note
+    const extractedNote = extractNoteFromCell(value);
+    if (extractedNote) {
+      noteText = extractedNote;
+      noteColumnKey = key;
+      continue;
+    }
+    
+    // This is a non-empty cell that's NOT a note pattern
+    // Check if it's actual data (numbers, dates, meaningful text)
+    if (typeof value === 'number') {
+      hasNonEmptyDataCells = true;
+    } else if (typeof value === 'string') {
+      const trimmed = value.trim();
+      // If it's a number in string format, it's data
+      if (/^[\d,.$%+-]+$/.test(trimmed) && trimmed !== '') {
+        hasNonEmptyDataCells = true;
+      }
+      // If it looks like a label/category (short text, no note pattern), could be data
+      else if (trimmed.length > 0 && trimmed.length < 100 && !extractNoteFromCell(value)) {
+        hasNonEmptyDataCells = true;
+      }
+    } else if (value !== null && value !== undefined) {
+      hasNonEmptyDataCells = true;
+    }
+  }
+  
+  // A standalone note row has a note pattern but NO other meaningful data
+  if (noteText && !hasNonEmptyDataCells) {
+    return { isNote: true, noteText };
+  }
+  
+  // Special case: parenthetical text alone (e.g., "(from tableau waterfall)")
+  const nonEmptyValues = values.filter(v => !isEmptyValue(v));
+  if (nonEmptyValues.length === 1 && typeof nonEmptyValues[0] === 'string') {
+    const text = nonEmptyValues[0].trim();
+    // Parenthetical text with no numbers
+    if (/^\([^)]+\)$/.test(text) && !/\d/.test(text)) {
+      return { isNote: true, noteText: text };
+    }
+    // Long text with no numbers is likely a standalone note
+    if (text.length > 30 && !/\d/.test(text) && !text.includes(',')) {
+      return { isNote: true, noteText: text };
+    }
+  }
+  
+  return { isNote: false };
+}
+
 export async function cleanTabularData(
   rows: Record<string, string>[],
   headers?: string[],
@@ -560,9 +720,58 @@ ${isLargeDataset ? `Full row count: ${rows.length}` : ''}`;
         const parsed = JSON.parse(jsonMatch[0]);
         
         let cleanedRows = parsed.data;
+        let extractedNotes: ExtractedNote[] = parsed.notes || [];
+        
         if (isLargeDataset && Array.isArray(parsed.data)) {
           const columnMapping = inferColumnMapping(parsed.data[0], rows[0]);
-          cleanedRows = rows.map(row => applyCleaningRules(row, columnMapping, parsed.columns));
+          
+          // For large datasets, we need to filter out note rows and extract them separately
+          const processedRows: Record<string, any>[] = [];
+          const detectedNotes: ExtractedNote[] = [];
+          
+          rows.forEach((row, index) => {
+            const noteCheck = isStandaloneNoteRow(row);
+            if (noteCheck.isNote && noteCheck.noteText) {
+              // This is a standalone note row (no actual data), extract it
+              detectedNotes.push({
+                text: noteCheck.noteText,
+                originalRow: index + 1,
+                context: `Row ${index + 1}`
+              });
+            } else {
+              // Regular data row (may have inline notes), apply cleaning rules
+              processedRows.push(applyCleaningRules(row, columnMapping, parsed.columns));
+            }
+          });
+          
+          cleanedRows = processedRows;
+          // Merge AI-detected notes with our detected notes
+          extractedNotes = [...extractedNotes, ...detectedNotes];
+        }
+        
+        // Get column order from AI response, or infer from first row
+        let columnOrder = parsed.columnOrder;
+        if (!columnOrder && cleanedRows.length > 0) {
+          columnOrder = Object.keys(cleanedRows[0]);
+        }
+        
+        // Reorder data columns based on columnOrder if provided
+        if (columnOrder && cleanedRows.length > 0) {
+          cleanedRows = cleanedRows.map((row: Record<string, any>) => {
+            const orderedRow: Record<string, any> = {};
+            for (const col of columnOrder) {
+              if (col in row) {
+                orderedRow[col] = row[col];
+              }
+            }
+            // Add any remaining columns not in columnOrder
+            for (const key of Object.keys(row)) {
+              if (!(key in orderedRow)) {
+                orderedRow[key] = row[key];
+              }
+            }
+            return orderedRow;
+          });
         }
 
         return {
@@ -572,6 +781,8 @@ ${isLargeDataset ? `Full row count: ${rows.length}` : ''}`;
             title: parsed.title || sourceName || "Spreadsheet Data",
             description: parsed.description || "Cleaned tabular data",
             data: cleanedRows,
+            notes: extractedNotes,
+            columnOrder: columnOrder,
             metadata: {
               sourceType: sourceType,
               columnCount: headers?.length || Object.keys(rows[0] || {}).length,
