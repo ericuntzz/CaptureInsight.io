@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
+
+const DRAFT_STORAGE_KEY = 'captureinsight_template_editor_draft';
+const DRAFT_TIMESTAMP_KEY = 'captureinsight_template_editor_draft_timestamp';
 
 export interface ColumnValidationRules {
   format?: string;
@@ -67,6 +70,8 @@ interface TemplateEditorContextValue {
   errors: ValidationError[];
   isOpen: boolean;
   isSaving: boolean;
+  hasDraft: boolean;
+  draftTimestamp: Date | null;
   columnSuggestions: Record<string, ColumnMappingSuggestion>;
   isLoadingSuggestions: boolean;
   setTemplate: (template: TemplateData) => void;
@@ -89,6 +94,8 @@ interface TemplateEditorContextValue {
   closeEditor: () => void;
   save: () => Promise<void>;
   reset: () => void;
+  restoreDraft: () => void;
+  clearDraft: () => void;
 }
 
 const defaultCleaningSteps: CleaningStep[] = [
@@ -114,6 +121,43 @@ const createDefaultTemplate = (): TemplateData => ({
 
 const TemplateEditorContext = createContext<TemplateEditorContextValue | null>(null);
 
+// Helper to check if draft exists in localStorage
+function getDraftFromStorage(): { template: TemplateData; timestamp: Date } | null {
+  try {
+    const draftStr = localStorage.getItem(DRAFT_STORAGE_KEY);
+    const timestampStr = localStorage.getItem(DRAFT_TIMESTAMP_KEY);
+    if (draftStr && timestampStr) {
+      const template = JSON.parse(draftStr) as TemplateData;
+      const timestamp = new Date(timestampStr);
+      // Only return draft if it's less than 24 hours old
+      if (Date.now() - timestamp.getTime() < 24 * 60 * 60 * 1000) {
+        return { template, timestamp };
+      }
+    }
+  } catch (e) {
+    console.error('Error reading template draft from localStorage:', e);
+  }
+  return null;
+}
+
+function saveDraftToStorage(template: TemplateData): void {
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(template));
+    localStorage.setItem(DRAFT_TIMESTAMP_KEY, new Date().toISOString());
+  } catch (e) {
+    console.error('Error saving template draft to localStorage:', e);
+  }
+}
+
+function clearDraftFromStorage(): void {
+  try {
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+    localStorage.removeItem(DRAFT_TIMESTAMP_KEY);
+  } catch (e) {
+    console.error('Error clearing template draft from localStorage:', e);
+  }
+}
+
 export function TemplateEditorProvider({ children }: { children: React.ReactNode }) {
   const [template, setTemplateState] = useState<TemplateData>(createDefaultTemplate());
   const [originalTemplate, setOriginalTemplate] = useState<TemplateData | null>(null);
@@ -122,11 +166,25 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
   const [isSaving, setIsSaving] = useState(false);
   const [columnSuggestions, setColumnSuggestionsState] = useState<Record<string, ColumnMappingSuggestion>>({});
   const [isLoadingSuggestions, setIsLoadingSuggestionsState] = useState(false);
+  const [hasDraft, setHasDraft] = useState<boolean>(() => getDraftFromStorage() !== null);
+  const [draftTimestamp, setDraftTimestamp] = useState<Date | null>(() => getDraftFromStorage()?.timestamp || null);
 
   const isDirty = useMemo(() => {
     if (!originalTemplate) return false;
     return JSON.stringify(template) !== JSON.stringify(originalTemplate);
   }, [template, originalTemplate]);
+
+  // Auto-save draft when template changes and editor is open
+  useEffect(() => {
+    if (isOpen && isDirty) {
+      const timeoutId = setTimeout(() => {
+        saveDraftToStorage(template);
+        setHasDraft(true);
+        setDraftTimestamp(new Date());
+      }, 1000); // Debounce by 1 second
+      return () => clearTimeout(timeoutId);
+    }
+  }, [template, isOpen, isDirty]);
 
   const setTemplate = useCallback((newTemplate: TemplateData) => {
     setTemplateState(newTemplate);
@@ -319,6 +377,26 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
     setTemplateState(createDefaultTemplate());
     setOriginalTemplate(null);
     setErrors([]);
+    // Clear draft when editor is intentionally closed
+    clearDraftFromStorage();
+    setHasDraft(false);
+    setDraftTimestamp(null);
+  }, []);
+
+  const restoreDraft = useCallback(() => {
+    const draft = getDraftFromStorage();
+    if (draft) {
+      setTemplateState(draft.template);
+      setOriginalTemplate(draft.template);
+      setIsOpen(true);
+      setErrors([]);
+    }
+  }, []);
+
+  const clearDraft = useCallback(() => {
+    clearDraftFromStorage();
+    setHasDraft(false);
+    setDraftTimestamp(null);
   }, []);
 
   const save = useCallback(async () => {
@@ -365,6 +443,8 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
     errors,
     isOpen,
     isSaving,
+    hasDraft,
+    draftTimestamp,
     columnSuggestions,
     isLoadingSuggestions,
     setTemplate,
@@ -387,6 +467,8 @@ export function TemplateEditorProvider({ children }: { children: React.ReactNode
     closeEditor,
     save,
     reset,
+    restoreDraft,
+    clearDraft,
   };
 
   return (
