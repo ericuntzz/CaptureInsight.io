@@ -38,6 +38,8 @@ import { ChangeLogsView } from './ChangeLogsView';
 import { InsightsView } from './InsightsView';
 import { FileNavigationBar } from './FileNavigationBar';
 import { DataSourceSidebar, DataSource } from './DataSourceSidebar';
+import { TemplateEditor } from './TemplateEditor';
+import { useTemplateEditor } from '../contexts/TemplateEditorContext';
 import { AnimatePresence } from 'motion/react';
 import { LayoutGrid, Table, Sparkles, Plus, Upload, Link2, ArrowLeft, Brain, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -165,6 +167,8 @@ export function DataManagementView({
   onNavigateToSettings,
   onLogout,
 }: DataManagementViewProps) {
+  const { openEditor: openTemplateEditor } = useTemplateEditor();
+  
   // Use spaces as projects for backward compatibility
   const projects = spaces;
   const onCreateProject = onCreateSpace;
@@ -328,6 +332,7 @@ export function DataManagementView({
                   onUpdateSheetAnalysis={onUpdateSheetAnalysis}
                   showSourceData={showSourceDataSidebar}
                   onToggleSourceData={() => setShowSourceDataSidebar(!showSourceDataSidebar)}
+                  onCreateTemplate={() => openTemplateEditor()}
                 />
               )}
               
@@ -386,6 +391,9 @@ export function DataManagementView({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Template Editor Modal */}
+      <TemplateEditor />
     </div>
   );
 }

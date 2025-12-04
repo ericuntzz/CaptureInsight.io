@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Plus, MoreVertical, Pencil, Trash2, FolderPlus, Settings, Eye, EyeOff } from 'lucide-react';
+import { ChevronDown, Plus, MoreVertical, Pencil, Trash2, FolderPlus, Settings, Eye, EyeOff, FileText } from 'lucide-react';
 import { FolderOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
@@ -59,9 +59,9 @@ interface FileNavigationBarProps {
       schedule?: { frequency: string; time: string };
     }
   ) => void;
-  // NEW: Source data toggle props
   showSourceData?: boolean;
   onToggleSourceData?: () => void;
+  onCreateTemplate?: () => void;
 }
 
 export function FileNavigationBar({
@@ -77,6 +77,7 @@ export function FileNavigationBar({
   onUpdateSheetAnalysis,
   showSourceData = false,
   onToggleSourceData,
+  onCreateTemplate,
 }: FileNavigationBarProps) {
   const [showFolderDropdown, setShowFolderDropdown] = useState(false);
   const [isRenamingFolder, setIsRenamingFolder] = useState(false);
@@ -241,7 +242,6 @@ export function FileNavigationBar({
             )}
           </div>
 
-          {/* NEW: View Source Data Button */}
           {onToggleSourceData && (
             <button
               onClick={onToggleSourceData}
@@ -262,6 +262,16 @@ export function FileNavigationBar({
                   <span className="text-sm">View Source Data</span>
                 </>
               )}
+            </button>
+          )}
+
+          {onCreateTemplate && (
+            <button
+              onClick={onCreateTemplate}
+              className="flex items-center gap-2 px-3 py-2 bg-[rgba(26,31,46,0.6)] text-white border border-[rgba(255,107,53,0.15)] rounded-lg hover:bg-[rgba(255,107,53,0.1)] hover:border-[rgba(255,107,53,0.3)] transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              <span className="text-sm">Create Template</span>
             </button>
           )}
         </div>

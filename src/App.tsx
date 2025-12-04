@@ -24,6 +24,7 @@ import {
 } from './components/settings';
 import { SecuritySettings } from './pages/SecuritySettings';
 import { InsightWorkspace } from './pages/InsightWorkspace';
+import { TemplateManagement } from './pages/TemplateManagement';
 import { ProjectBrowser, Project } from './components/ProjectBrowser';
 import { EmptyWorkspaceState } from './components/EmptyWorkspaceState';
 import { 
@@ -183,20 +184,25 @@ export default function App() {
     return 'capture';
   });
   
-  type SettingsPage = 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security' | null;
+  type SettingsPage = 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security' | 'templates' | null;
   const [activeSettingsPage, setActiveSettingsPage] = useState<SettingsPage>(() => {
     if (typeof window !== 'undefined') {
       if (window.location.pathname === '/settings/security') {
         return 'security';
       }
+      if (window.location.pathname === '/settings/templates') {
+        return 'templates';
+      }
     }
     return null;
   });
   
-  const handleNavigateToSettings = (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security') => {
+  const handleNavigateToSettings = (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security' | 'templates') => {
     setActiveSettingsPage(page);
     if (page === 'security' || page === 'settings') {
       router.push('/settings/security');
+    } else if (page === 'templates') {
+      router.push('/settings/templates');
     }
   };
   
@@ -1316,6 +1322,14 @@ export default function App() {
           return <CompanyManagementPage onBack={handleCloseSettings} />;
         case 'security':
           return <SecuritySettings onBack={handleCloseSettings} />;
+        case 'templates':
+          return (
+            <TemplateManagement 
+              workspaceId={activeWorkspaceId} 
+              spaceId={currentSpaceId}
+              onBack={handleCloseSettings} 
+            />
+          );
         default:
           return null;
       }

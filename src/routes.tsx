@@ -32,6 +32,7 @@ export const ROUTES = {
   
   // Settings
   SETTINGS_SECURITY: '/settings/security',
+  SETTINGS_TEMPLATES: '/settings/templates',
 } as const;
 
 // Helper functions to build URLs with parameters
@@ -53,6 +54,7 @@ export const buildRoute = {
   tagDetail: (tagId: string) => `/tags/${tagId}`,
   search: (query?: string) => query ? `/search?q=${encodeURIComponent(query)}` : ROUTES.SEARCH,
   settingsSecurity: () => ROUTES.SETTINGS_SECURITY,
+  settingsTemplates: () => ROUTES.SETTINGS_TEMPLATES,
 };
 
 // Parse URL parameters
@@ -66,6 +68,7 @@ export const parseRoute = {
   isTags: (pathname: string) => pathname.startsWith('/tags'),
   isSearch: (pathname: string) => pathname.startsWith('/search'),
   isSettingsSecurity: (pathname: string) => pathname === '/settings/security',
+  isSettingsTemplates: (pathname: string) => pathname === '/settings/templates',
   
   getSpaceId: (pathname: string) => {
     const match = pathname.match(/^\/data\/([^\/]+)/);
