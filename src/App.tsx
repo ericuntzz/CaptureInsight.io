@@ -146,27 +146,35 @@ export default function App() {
     onboardingStatus?.isFirstLogin && !onboardingStatus?.hasCompletedOnboarding;
   
   // On initial load, restore the last visited URL if at root
+  // IMPORTANT: Wait for auth to settle before restoring to prevent race conditions
   const [hasRestoredUrl, setHasRestoredUrl] = useState(false);
   
   useEffect(() => {
+    // Wait for auth loading to complete before restoring URL
+    if (authLoading) return;
     if (hasRestoredUrl) return;
     setHasRestoredUrl(true);
     
     // Only restore if we're at the root path (fresh page load/refresh)
     if (window.location.pathname === '/') {
       const savedUrl = localStorage.getItem('captureinsight_current_url');
-      if (savedUrl && savedUrl !== '/') {
+      // Check that savedUrl is valid and different from current location
+      if (savedUrl && savedUrl !== '/' && savedUrl !== window.location.pathname) {
         // Use replace to avoid adding to history
         router.replace(savedUrl);
       }
     }
-  }, [hasRestoredUrl, router]);
+  }, [authLoading, hasRestoredUrl, router]);
   
   // Persist current URL to localStorage whenever it changes
+  // IMPORTANT: Don't persist while auth is loading to avoid overwriting good saved URLs
   useEffect(() => {
+    // Skip persisting during auth loading to prevent overwriting saved URL with root
+    if (authLoading) return;
+    
     const currentUrl = router.pathname + router.search + router.hash;
     localStorage.setItem('captureinsight_current_url', currentUrl);
-  }, [router.pathname, router.search, router.hash]);
+  }, [authLoading, router.pathname, router.search, router.hash]);
   
   // Initialize view from URL or localStorage
   const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights' | 'workspace'>(() => {
@@ -220,12 +228,16 @@ export default function App() {
   // Note: Current view is now persisted via the full URL in captureinsight_current_url
   
   // Sync URL with current view when router changes (back/forward navigation)
+  // IMPORTANT: Wait for auth to settle before syncing to prevent premature view resets
   useEffect(() => {
+    // Don't sync while auth is loading to avoid resetting view to 'capture'
+    if (authLoading) return;
+    
     const viewFromUrl = getCurrentView(router.pathname);
     if (viewFromUrl !== currentView) {
       setCurrentView(viewFromUrl);
     }
-  }, [router.pathname]);
+  }, [authLoading, router.pathname, currentView]);
   
   // Update URL when view changes
   const handleViewChange = (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace') => {
