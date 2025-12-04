@@ -194,6 +194,21 @@ export const sheets = pgTable("sheets", {
       fileSize?: number; // For all: file size in bytes
     };
   }>(),
+  // Processing progress tracking for real-time UI updates
+  processingProgress: jsonb("processing_progress").$type<{
+    currentStep: 'ingesting' | 'matching_templates' | 'cleaning' | 'validating' | 'finalizing' | 'complete' | 'failed';
+    stepDetails?: string; // e.g., "Applying template: Monthly Sales Report"
+    percentComplete?: number; // 0-100
+    startedAt?: string;
+    templateMatch?: {
+      templateId: string;
+      templateName: string;
+      confidence: number;
+      wasAutoApplied: boolean;
+    };
+  }>(),
+  // Template that was applied to this sheet
+  appliedTemplateId: varchar("applied_template_id"),
   encryptedData: text("encrypted_data"), // E2EE: Base64 encrypted data
   encryptionIv: text("encryption_iv"), // E2EE: Base64 IV for decryption
   encryptionVersion: integer("encryption_version").default(0), // 0=unencrypted, 1+=E2EE version
@@ -484,6 +499,183 @@ export const aiFeedbackRelations = relations(aiFeedback, ({ one }) => ({
   }),
 }));
 
+// Data Templates table - Intelligent templates for automated data cleaning and structuring
+export const dataTemplates = pgTable("data_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  
+  // Scope: where this template applies
+  scope: varchar("scope").notNull().default('workspace'), // 'workspace' | 'space'
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  spaceId: varchar("space_id").references(() => spaces.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  
+  // Source type lock (optional) - restricts template to specific sources
+  sourceType: varchar("source_type"), // 'google_sheets' | 'csv' | 'google_ads' | 'meta_ads' | 'ga4' | 'custom'
+  
+  // Source fingerprint for smart matching
+  sourceFingerprint: jsonb("source_fingerprint").$type<{
+    googleSheetId?: string; // For recurring imports from same spreadsheet
+    urlPatterns?: string[]; // URL patterns that match this template
+    fileNamePatterns?: string[]; // File name patterns for CSV matching
+  }>(),
+  
+  // Column schema - the heart of the template
+  columnSchema: jsonb("column_schema").$type<{
+    columns: Array<{
+      canonicalName: string; // Standard name (e.g., "ad_spend")
+      displayName: string; // User-facing name (e.g., "Ad Spend")
+      position: number; // Column order
+      dataType: 'currency' | 'percentage' | 'integer' | 'decimal' | 'date' | 'text' | 'boolean';
+      isRequired: boolean;
+      validationRules?: {
+        format?: string; // e.g., "$X.XX" for currency, "MM/DD/YYYY" for dates
+        min?: number;
+        max?: number;
+        maxLength?: number;
+        pattern?: string; // Regex pattern
+        allowedValues?: string[]; // Enum values
+      };
+    }>;
+  }>(),
+  
+  // Column aliases for intelligent matching (e.g., "Cost" = "Ad Spend" = "Total Spend")
+  columnAliases: jsonb("column_aliases").$type<{
+    [canonicalName: string]: string[]; // Maps canonical name to list of aliases
+  }>(),
+  
+  // Default cleaning pipeline - auto-applied on every use
+  cleaningPipeline: jsonb("cleaning_pipeline").$type<{
+    steps: Array<{
+      id: string;
+      type: 'remove_commas' | 'strip_currency' | 'convert_percentage' | 'trim_whitespace' | 'convert_date_format' | 'remove_duplicates' | 'fill_empty' | 'custom';
+      enabled: boolean;
+      config?: {
+        targetColumns?: string[]; // Apply to specific columns only
+        fromFormat?: string; // For date conversion
+        toFormat?: string; // For date conversion
+        percentageMode?: 'decimal' | 'whole'; // 0.125 vs 12.5
+        fillValue?: string; // For fill_empty
+        customRule?: string; // For custom transformations
+      };
+    }>;
+  }>(),
+  
+  // AI prompt customization for this template
+  aiPromptHints: text("ai_prompt_hints"), // Additional context for AI cleaning
+  
+  // Matching configuration - controls when template auto-applies
+  matchingConfig: jsonb("matching_config").$type<{
+    autoApplyThreshold: number; // 0-1, default 0.85 - auto-apply if confidence >= this
+    suggestThreshold: number; // 0-1, default 0.6 - suggest if confidence >= this
+    featureWeights: {
+      columnNameSimilarity: number; // Weight for column name matching
+      columnTypeMatch: number; // Weight for data type matching
+      sourceFingerprint: number; // Weight for URL/file pattern matching
+      statisticalProfile: number; // Weight for data distribution matching
+    };
+  }>().default({
+    autoApplyThreshold: 0.85,
+    suggestThreshold: 0.6,
+    featureWeights: {
+      columnNameSimilarity: 0.4,
+      columnTypeMatch: 0.25,
+      sourceFingerprint: 0.2,
+      statisticalProfile: 0.15,
+    },
+  }),
+  
+  // Statistical profile for smart matching (populated from sample data)
+  statisticalProfile: jsonb("statistical_profile").$type<{
+    rowCountRange: [number, number]; // Min/max row count seen
+    columnCount: number;
+    columnSignatures: {
+      [columnName: string]: {
+        nullRatio: number;
+        uniqueRatio: number;
+        sampleValues: string[]; // Hashed sample values
+        patternType?: string; // Detected pattern (e.g., "email", "phone", "url")
+      };
+    };
+  }>(),
+  
+  // Usage tracking
+  usageCount: integer("usage_count").default(0),
+  lastUsedAt: timestamp("last_used_at"),
+  
+  // Version control
+  version: integer("version").default(1),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_data_templates_workspace").on(table.workspaceId),
+  index("idx_data_templates_space").on(table.spaceId),
+  index("idx_data_templates_created_by").on(table.createdBy),
+  index("idx_data_templates_source_type").on(table.sourceType),
+]);
+
+export const dataTemplatesRelations = relations(dataTemplates, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [dataTemplates.workspaceId],
+    references: [workspaces.id],
+  }),
+  space: one(spaces, {
+    fields: [dataTemplates.spaceId],
+    references: [spaces.id],
+  }),
+  creator: one(users, {
+    fields: [dataTemplates.createdBy],
+    references: [users.id],
+  }),
+}));
+
+// Template applications - tracks which sheets used which templates
+export const templateApplications = pgTable("template_applications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => dataTemplates.id).notNull(),
+  sheetId: varchar("sheet_id").references(() => sheets.id).notNull(),
+  matchConfidence: integer("match_confidence"), // 0-100, how confident the match was
+  wasAutoApplied: boolean("was_auto_applied").default(false), // true if auto-applied, false if user selected
+  appliedAt: timestamp("applied_at").defaultNow(),
+  
+  // Capture which columns were mapped and any mismatches
+  columnMappings: jsonb("column_mappings").$type<{
+    [sourceColumn: string]: {
+      mappedTo: string; // Template's canonical name
+      confidence: number;
+      wasUserConfirmed: boolean;
+    };
+  }>(),
+  
+  // Track unmapped columns for template improvement
+  unmappedColumns: jsonb("unmapped_columns").$type<string[]>(),
+});
+
+export const templateApplicationsRelations = relations(templateApplications, ({ one }) => ({
+  template: one(dataTemplates, {
+    fields: [templateApplications.templateId],
+    references: [dataTemplates.id],
+  }),
+  sheet: one(sheets, {
+    fields: [templateApplications.sheetId],
+    references: [sheets.id],
+  }),
+}));
+
+// Pre-built column aliases for common marketing/advertising data
+// These are system-wide and supplement user-defined aliases
+export const systemColumnAliases = pgTable("system_column_aliases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  canonicalName: varchar("canonical_name").notNull(), // e.g., "ad_spend"
+  displayName: varchar("display_name").notNull(), // e.g., "Ad Spend"
+  aliases: jsonb("aliases").$type<string[]>().notNull(), // e.g., ["Cost", "Total Spend", "Spend"]
+  category: varchar("category").notNull(), // e.g., "advertising", "analytics", "ecommerce"
+  dataType: varchar("data_type").notNull(), // Expected data type
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Companies table
 export const companies = pgTable("companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -624,3 +816,12 @@ export type DocumentEmbedding = typeof documentEmbeddings.$inferSelect;
 
 export type InsertAiFeedback = typeof aiFeedback.$inferInsert;
 export type AiFeedback = typeof aiFeedback.$inferSelect;
+
+export type InsertDataTemplate = typeof dataTemplates.$inferInsert;
+export type DataTemplate = typeof dataTemplates.$inferSelect;
+
+export type InsertTemplateApplication = typeof templateApplications.$inferInsert;
+export type TemplateApplication = typeof templateApplications.$inferSelect;
+
+export type InsertSystemColumnAlias = typeof systemColumnAliases.$inferInsert;
+export type SystemColumnAlias = typeof systemColumnAliases.$inferSelect;
