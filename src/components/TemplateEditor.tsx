@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Plus, Trash2, GripVertical, ChevronDown, ChevronRight, 
   Settings, Columns3, Sparkles, FileText, Save, RotateCcw,
-  AlertCircle
+  AlertCircle, Wand2, Loader2, Eye
 } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { 
@@ -16,6 +16,8 @@ import {
 import { Checkbox } from './ui/checkbox';
 import { toast } from 'sonner';
 import { useTemplateEditor, TemplateColumn, CleaningStep } from '../contexts/TemplateEditorContext';
+import { ColumnMappingPanel, ColumnMappingSuggestion, ConfirmedMapping } from './ColumnMappingPanel';
+import { TemplatePreview } from './TemplatePreview';
 import {
   DndContext,
   closestCenter,
@@ -465,9 +467,10 @@ function CleaningStepItem({ step, onToggle, onUpdate, columns }: CleaningStepIte
 
 interface TemplateEditorProps {
   currentData?: Record<string, any>[];
+  spaceId?: string;
 }
 
-export function TemplateEditor({ currentData }: TemplateEditorProps) {
+export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
   const {
     template,
     isDirty,
@@ -489,6 +492,94 @@ export function TemplateEditor({ currentData }: TemplateEditorProps) {
   } = useTemplateEditor();
 
   const [expandedColumns, setExpandedColumns] = useState<Set<string>>(new Set());
+  const [aiSuggestions, setAiSuggestions] = useState<ColumnMappingSuggestion[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showMappingPanel, setShowMappingPanel] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+
+  const fetchAISuggestions = useCallback(async () => {
+    if (!currentData || currentData.length === 0) {
+      toast.error('No data available to analyze');
+      return;
+    }
+
+    const sourceColumns = Object.keys(currentData[0] || {});
+    if (sourceColumns.length === 0) {
+      toast.error('No columns found in the data');
+      return;
+    }
+
+    setIsLoadingSuggestions(true);
+    setShowMappingPanel(true);
+
+    try {
+      const response = await fetch('/api/templates/suggest-mappings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          sourceColumns,
+          templateColumns: template.columns.map(c => ({
+            canonicalName: c.canonicalName,
+            displayName: c.displayName,
+            dataType: c.dataType,
+          })),
+          sampleData: currentData.slice(0, 5),
+          spaceId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to get AI suggestions');
+      }
+
+      const data = await response.json();
+      setAiSuggestions(data.suggestions || []);
+      
+      if (data.summary?.highConfidence > 0) {
+        toast.success(`Found ${data.summary.highConfidence} high-confidence mappings`);
+      }
+    } catch (error) {
+      console.error('Failed to fetch AI suggestions:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to get AI suggestions');
+      setShowMappingPanel(false);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, [currentData, template.columns, spaceId]);
+
+  const handleConfirmMappings = useCallback((mappings: ConfirmedMapping[]) => {
+    mappings.forEach(mapping => {
+      const existingColumn = template.columns.find(
+        c => c.canonicalName === mapping.mappedTo
+      );
+
+      if (!existingColumn) {
+        addColumn({
+          canonicalName: mapping.mappedTo,
+          displayName: mapping.displayName,
+          dataType: 'text',
+          isRequired: false,
+          aliases: mapping.sourceColumn !== mapping.mappedTo ? [mapping.sourceColumn] : [],
+        });
+      } else {
+        if (mapping.sourceColumn !== mapping.mappedTo && 
+            !(existingColumn.aliases || []).includes(mapping.sourceColumn)) {
+          addColumnAlias(existingColumn.id, mapping.sourceColumn);
+        }
+      }
+    });
+
+    setShowMappingPanel(false);
+    setAiSuggestions([]);
+    toast.success(`Applied ${mappings.length} column mappings`);
+  }, [template.columns, addColumn, addColumnAlias]);
+
+  const handleDismissMappings = useCallback(() => {
+    setShowMappingPanel(false);
+    setAiSuggestions([]);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -572,6 +663,15 @@ export function TemplateEditor({ currentData }: TemplateEditorProps) {
               >
                 <RotateCcw className="w-4 h-4" />
                 Reset
+              </button>
+            )}
+            {currentData && currentData.length > 0 && (
+              <button
+                onClick={() => setShowPreview(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg transition-colors"
+              >
+                <Eye className="w-4 h-4" />
+                Preview
               </button>
             )}
             <button
@@ -698,14 +798,43 @@ export function TemplateEditor({ currentData }: TemplateEditorProps) {
                 <span className="text-xs text-gray-500">({template.columns.length} columns)</span>
               </div>
               
-              <button
-                onClick={() => addColumn()}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF6B35]/20 hover:bg-[#FF6B35]/30 text-[#FF6B35] rounded-lg text-sm transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add Column
-              </button>
+              <div className="flex items-center gap-2">
+                {currentData && currentData.length > 0 && (
+                  <button
+                    onClick={fetchAISuggestions}
+                    disabled={isLoadingSuggestions}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-[#FF6B35]/20 hover:from-purple-500/30 hover:to-[#FF6B35]/30 text-purple-300 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Use AI to suggest column mappings from your data"
+                  >
+                    {isLoadingSuggestions ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Wand2 className="w-4 h-4" />
+                    )}
+                    AI Suggest
+                  </button>
+                )}
+                <button
+                  onClick={() => addColumn()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF6B35]/20 hover:bg-[#FF6B35]/30 text-[#FF6B35] rounded-lg text-sm transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Column
+                </button>
+              </div>
             </div>
+            
+            {showMappingPanel && (
+              <div className="mb-4">
+                <ColumnMappingPanel
+                  suggestions={aiSuggestions}
+                  isLoading={isLoadingSuggestions}
+                  onConfirm={handleConfirmMappings}
+                  onDismiss={handleDismissMappings}
+                  onRefresh={fetchAISuggestions}
+                />
+              </div>
+            )}
             
             <div className="mb-3 grid grid-cols-[40px_1fr_1fr_100px_100px_32px_32px] gap-2 px-3 text-xs text-gray-500 font-medium">
               <div></div>
@@ -776,6 +905,16 @@ export function TemplateEditor({ currentData }: TemplateEditorProps) {
           </div>
         </div>
       </motion.div>
+
+      <TemplatePreview
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        templateId={template.id}
+        templateName={template.name}
+        sampleData={currentData}
+        cleaningPipeline={{ steps: template.cleaningPipeline }}
+        columnSchema={{ columns: template.columns }}
+      />
     </AnimatePresence>
   );
 }

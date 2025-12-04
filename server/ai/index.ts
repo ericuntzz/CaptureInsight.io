@@ -60,6 +60,14 @@ import {
   type ProcessingProgress,
 } from "./dataCleaning";
 
+import {
+  suggestColumnMappings,
+  suggestMappingsForTemplate,
+  isColumnMappingConfigured,
+  type ColumnMappingSuggestion,
+  type ColumnSchema as ColumnMappingSchema,
+} from "./columnMapping";
+
 import { storage } from "../storage";
 
 export {
@@ -89,6 +97,9 @@ export {
   cleanDocumentData,
   triggerDataCleaning,
   isDataCleaningConfigured,
+  suggestColumnMappings,
+  suggestMappingsForTemplate,
+  isColumnMappingConfigured,
 };
 
 export type { PIIFilterOptions, PIIFilterResult };
@@ -105,6 +116,11 @@ export type {
   CleanedDataResult,
   SourceType,
   ProcessingProgress,
+};
+
+export type {
+  ColumnMappingSuggestion,
+  ColumnMappingSchema,
 };
 
 export type {

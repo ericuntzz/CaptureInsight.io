@@ -29,6 +29,340 @@ import { eq } from "drizzle-orm";
 import * as OTPAuth from "otpauth";
 import { filterPII } from "./ai/piiFilter";
 
+interface CleaningPipelineStep {
+  id: string;
+  type: 'remove_commas' | 'strip_currency' | 'convert_percentage' | 'trim_whitespace' | 'convert_date_format' | 'remove_duplicates' | 'fill_empty' | 'custom';
+  enabled: boolean;
+  config?: {
+    targetColumns?: string[];
+    fromFormat?: string;
+    toFormat?: string;
+    percentageMode?: 'decimal' | 'whole';
+    fillValue?: string;
+    customRule?: string;
+  };
+}
+
+interface ColumnDefinition {
+  canonicalName: string;
+  displayName: string;
+  dataType: 'currency' | 'percentage' | 'integer' | 'decimal' | 'date' | 'text' | 'boolean';
+  isRequired?: boolean;
+  validationRules?: {
+    format?: string;
+    min?: number;
+    max?: number;
+    maxLength?: number;
+    pattern?: string;
+    allowedValues?: string[];
+  };
+}
+
+interface PreviewChange {
+  row: number;
+  column: string;
+  from: string;
+  to: string;
+  type: 'format' | 'transform' | 'error';
+}
+
+interface PreviewError {
+  row: number;
+  column: string;
+  message: string;
+  severity: 'error' | 'warning';
+}
+
+function applyCleaningPipelineForPreview(
+  data: Record<string, any>[],
+  steps: CleaningPipelineStep[]
+): Record<string, any>[] {
+  let result = data.map(row => ({ ...row }));
+  
+  for (const step of steps) {
+    if (!step.enabled) continue;
+    
+    const targetColumns = step.config?.targetColumns;
+
+    switch (step.type) {
+      case 'remove_commas':
+        result = result.map(row => {
+          const newRow = { ...row };
+          for (const [key, value] of Object.entries(newRow)) {
+            if (targetColumns && !targetColumns.includes(key)) continue;
+            if (typeof value === 'string') {
+              const cleaned = value.replace(/,/g, '');
+              const num = parseFloat(cleaned);
+              newRow[key] = isNaN(num) ? value : num;
+            }
+          }
+          return newRow;
+        });
+        break;
+
+      case 'strip_currency':
+        result = result.map(row => {
+          const newRow = { ...row };
+          for (const [key, value] of Object.entries(newRow)) {
+            if (targetColumns && !targetColumns.includes(key)) continue;
+            if (typeof value === 'string') {
+              const cleaned = value.replace(/[$€£¥₹₽₩฿]/g, '').replace(/,/g, '').trim();
+              const num = parseFloat(cleaned);
+              newRow[key] = isNaN(num) ? value : num;
+            }
+          }
+          return newRow;
+        });
+        break;
+
+      case 'convert_percentage':
+        const mode = step.config?.percentageMode || 'decimal';
+        result = result.map(row => {
+          const newRow = { ...row };
+          for (const [key, value] of Object.entries(newRow)) {
+            if (targetColumns && !targetColumns.includes(key)) continue;
+            if (typeof value === 'string' && value.includes('%')) {
+              const cleaned = value.replace(/%/g, '').trim();
+              const num = parseFloat(cleaned);
+              if (!isNaN(num)) {
+                newRow[key] = mode === 'decimal' ? num / 100 : num;
+              }
+            }
+          }
+          return newRow;
+        });
+        break;
+
+      case 'trim_whitespace':
+        result = result.map(row => {
+          const newRow = { ...row };
+          for (const [key, value] of Object.entries(newRow)) {
+            if (targetColumns && !targetColumns.includes(key)) continue;
+            if (typeof value === 'string') {
+              newRow[key] = value.trim();
+            }
+          }
+          return newRow;
+        });
+        break;
+
+      case 'convert_date_format':
+        result = result.map(row => {
+          const newRow = { ...row };
+          for (const [key, value] of Object.entries(newRow)) {
+            if (targetColumns && !targetColumns.includes(key)) continue;
+            if (typeof value === 'string' && value) {
+              const parsed = new Date(value);
+              if (!isNaN(parsed.getTime())) {
+                newRow[key] = parsed.toISOString();
+              }
+            }
+          }
+          return newRow;
+        });
+        break;
+
+      case 'remove_duplicates':
+        const seen = new Set<string>();
+        result = result.filter(row => {
+          const key = JSON.stringify(row);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        break;
+
+      case 'fill_empty':
+        const fillValue = step.config?.fillValue ?? null;
+        result = result.map(row => {
+          const newRow = { ...row };
+          for (const [key, value] of Object.entries(newRow)) {
+            if (targetColumns && !targetColumns.includes(key)) continue;
+            if (value === null || value === undefined || value === '') {
+              newRow[key] = fillValue;
+            }
+          }
+          return newRow;
+        });
+        break;
+    }
+  }
+  
+  return result;
+}
+
+function analyzeCleaningChanges(
+  originalData: Record<string, any>[],
+  cleanedData: Record<string, any>[],
+  columnDefs: ColumnDefinition[]
+): { changes: PreviewChange[]; errors: PreviewError[] } {
+  const changes: PreviewChange[] = [];
+  const errors: PreviewError[] = [];
+  
+  const columnTypeMap = new Map(columnDefs.map(c => [c.canonicalName, c]));
+  
+  for (let rowIndex = 0; rowIndex < Math.max(originalData.length, cleanedData.length); rowIndex++) {
+    const origRow = originalData[rowIndex] || {};
+    const cleanedRow = cleanedData[rowIndex] || {};
+    
+    const allColumns = new Set([...Object.keys(origRow), ...Object.keys(cleanedRow)]);
+    
+    for (const column of allColumns) {
+      const origValue = origRow[column];
+      const cleanedValue = cleanedRow[column];
+      const colDef = columnTypeMap.get(column);
+      
+      if (origValue !== cleanedValue) {
+        const origStr = String(origValue ?? '');
+        const cleanedStr = String(cleanedValue ?? '');
+        
+        let changeType: 'format' | 'transform' | 'error' = 'transform';
+        
+        if (typeof origValue === 'string' && typeof cleanedValue === 'string' && origValue.trim() === cleanedValue) {
+          changeType = 'format';
+        } else if (typeof cleanedValue === 'number' && typeof origValue === 'string') {
+          changeType = 'transform';
+        }
+        
+        changes.push({
+          row: rowIndex,
+          column,
+          from: origStr,
+          to: cleanedStr,
+          type: changeType
+        });
+      }
+      
+      if (colDef) {
+        const valueToValidate = cleanedValue ?? origValue;
+        const validationErrors = validateValueAgainstColumnDef(valueToValidate, colDef, rowIndex, column);
+        errors.push(...validationErrors);
+      }
+    }
+  }
+  
+  return { changes, errors };
+}
+
+function validateValueAgainstColumnDef(
+  value: any,
+  colDef: ColumnDefinition,
+  rowIndex: number,
+  column: string
+): PreviewError[] {
+  const errors: PreviewError[] = [];
+  
+  if (colDef.isRequired && (value === null || value === undefined || value === '')) {
+    errors.push({
+      row: rowIndex,
+      column,
+      message: `Required field is empty`,
+      severity: 'error'
+    });
+    return errors;
+  }
+  
+  if (value === null || value === undefined || value === '') {
+    return errors;
+  }
+  
+  switch (colDef.dataType) {
+    case 'integer':
+    case 'decimal':
+    case 'currency':
+    case 'percentage':
+      const numValue = typeof value === 'number' ? value : parseFloat(String(value).replace(/[,$%]/g, ''));
+      if (isNaN(numValue)) {
+        errors.push({
+          row: rowIndex,
+          column,
+          message: `Value "${value}" is not a valid number`,
+          severity: 'error'
+        });
+      } else {
+        if (colDef.validationRules?.min !== undefined && numValue < colDef.validationRules.min) {
+          errors.push({
+            row: rowIndex,
+            column,
+            message: `Value ${numValue} is below minimum ${colDef.validationRules.min}`,
+            severity: 'warning'
+          });
+        }
+        if (colDef.validationRules?.max !== undefined && numValue > colDef.validationRules.max) {
+          errors.push({
+            row: rowIndex,
+            column,
+            message: `Value ${numValue} exceeds maximum ${colDef.validationRules.max}`,
+            severity: 'warning'
+          });
+        }
+      }
+      break;
+      
+    case 'date':
+      const dateValue = new Date(value);
+      if (isNaN(dateValue.getTime())) {
+        errors.push({
+          row: rowIndex,
+          column,
+          message: `Value "${value}" is not a valid date`,
+          severity: 'error'
+        });
+      }
+      break;
+      
+    case 'boolean':
+      const strValue = String(value).toLowerCase();
+      if (!['true', 'false', 'yes', 'no', '1', '0'].includes(strValue)) {
+        errors.push({
+          row: rowIndex,
+          column,
+          message: `Value "${value}" is not a valid boolean`,
+          severity: 'error'
+        });
+      }
+      break;
+      
+    case 'text':
+      if (colDef.validationRules?.maxLength && String(value).length > colDef.validationRules.maxLength) {
+        errors.push({
+          row: rowIndex,
+          column,
+          message: `Value exceeds maximum length of ${colDef.validationRules.maxLength}`,
+          severity: 'warning'
+        });
+      }
+      if (colDef.validationRules?.pattern) {
+        try {
+          const regex = new RegExp(colDef.validationRules.pattern);
+          if (!regex.test(String(value))) {
+            errors.push({
+              row: rowIndex,
+              column,
+              message: `Value doesn't match required pattern`,
+              severity: 'error'
+            });
+          }
+        } catch (e) {
+        }
+      }
+      break;
+  }
+  
+  if (colDef.validationRules?.allowedValues && colDef.validationRules.allowedValues.length > 0) {
+    if (!colDef.validationRules.allowedValues.includes(String(value))) {
+      errors.push({
+        row: rowIndex,
+        column,
+        message: `Value "${value}" is not in the allowed values list`,
+        severity: 'error'
+      });
+    }
+  }
+  
+  return errors;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
@@ -3015,6 +3349,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   /**
+   * Preview template cleaning without saving
+   * Shows side-by-side comparison of original vs cleaned data with error flagging
+   * @route POST /api/templates/:id/preview
+   */
+  app.post('/api/templates/:id/preview', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sheetId, data: providedData } = req.body;
+
+      const template = await templateService.getTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+
+      const space = await storage.getSpace(template.spaceId!);
+      if (!space || space.ownerId !== userId) {
+        return res.status(403).json({ message: "Forbidden: you do not have access to this template" });
+      }
+
+      let originalData: Record<string, any>[] = [];
+
+      if (sheetId) {
+        const sheet = await storage.getSheet(sheetId);
+        if (!sheet) {
+          return res.status(404).json({ message: "Sheet not found" });
+        }
+
+        const sheetSpace = await storage.getSpace(sheet.spaceId);
+        if (!sheetSpace || sheetSpace.ownerId !== userId) {
+          return res.status(403).json({ message: "Forbidden: you do not have access to this sheet" });
+        }
+
+        const cleanedData = sheet.cleanedData as any;
+        const rawData = sheet.data as any;
+        originalData = cleanedData?.data || rawData || [];
+        if (!Array.isArray(originalData)) {
+          originalData = [originalData].filter(Boolean);
+        }
+      } else if (providedData && Array.isArray(providedData)) {
+        originalData = providedData;
+      } else {
+        return res.status(400).json({ message: "Either sheetId or data array is required" });
+      }
+
+      if (originalData.length === 0) {
+        return res.json({
+          originalData: [],
+          cleanedData: [],
+          changes: [],
+          errors: [],
+          stats: { rowsProcessed: 0, changesCount: 0, errorsCount: 0, warningsCount: 0 }
+        });
+      }
+
+      const pipeline = template.cleaningPipeline as { steps: any[] } | null;
+      const columnSchema = template.columnSchema as { columns: any[] } | null;
+      
+      const cleanedData = applyCleaningPipelineForPreview(originalData, pipeline?.steps || []);
+      
+      const { changes, errors } = analyzeCleaningChanges(originalData, cleanedData, columnSchema?.columns || []);
+
+      const stats = {
+        rowsProcessed: originalData.length,
+        changesCount: changes.length,
+        errorsCount: errors.filter(e => e.severity === 'error').length,
+        warningsCount: errors.filter(e => e.severity === 'warning').length
+      };
+
+      res.json({
+        originalData,
+        cleanedData,
+        changes,
+        errors,
+        stats
+      });
+    } catch (error) {
+      console.error("Error previewing template:", error);
+      res.status(500).json({ message: "Failed to preview template" });
+    }
+  });
+
+  /**
+   * Preview cleaning with template config (without saving template first)
+   * @route POST /api/templates/preview-with-config
+   */
+  app.post('/api/templates/preview-with-config', isAuthenticated, async (req: any, res) => {
+    try {
+      const { data, cleaningPipeline, columnSchema } = req.body;
+
+      if (!data || !Array.isArray(data)) {
+        return res.status(400).json({ message: "data array is required" });
+      }
+
+      if (data.length === 0) {
+        return res.json({
+          originalData: [],
+          cleanedData: [],
+          changes: [],
+          errors: [],
+          stats: { rowsProcessed: 0, changesCount: 0, errorsCount: 0, warningsCount: 0 }
+        });
+      }
+
+      const steps = cleaningPipeline?.steps || cleaningPipeline || [];
+      const columns = columnSchema?.columns || columnSchema || [];
+      
+      const cleanedData = applyCleaningPipelineForPreview(data, steps);
+      const { changes, errors } = analyzeCleaningChanges(data, cleanedData, columns);
+
+      const stats = {
+        rowsProcessed: data.length,
+        changesCount: changes.length,
+        errorsCount: errors.filter(e => e.severity === 'error').length,
+        warningsCount: errors.filter(e => e.severity === 'warning').length
+      };
+
+      res.json({
+        originalData: data,
+        cleanedData,
+        changes,
+        errors,
+        stats
+      });
+    } catch (error) {
+      console.error("Error previewing with config:", error);
+      res.status(500).json({ message: "Failed to preview cleaning" });
+    }
+  });
+
+  /**
    * Find matching template for sheet data
    * @route GET /api/templates/match
    * Query params: workspaceId, spaceId, sheetId (optional - to get data from existing sheet)
@@ -3191,6 +3655,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching system column aliases:", error);
       res.status(500).json({ message: "Failed to fetch system column aliases" });
+    }
+  });
+
+  /**
+   * Get AI-suggested column mappings
+   * @route POST /api/templates/suggest-mappings
+   */
+  app.post('/api/templates/suggest-mappings', isAuthenticated, async (req: any, res) => {
+    try {
+      const { sourceColumns, templateColumns, sampleData, spaceId } = req.body;
+      const userId = req.user.claims.sub;
+
+      if (!sourceColumns || !Array.isArray(sourceColumns)) {
+        return res.status(400).json({ message: "sourceColumns array is required" });
+      }
+
+      if (spaceId) {
+        const space = await storage.getSpace(spaceId);
+        if (!space || space.ownerId !== userId) {
+          return res.status(403).json({ message: "Forbidden: you do not have access to this space" });
+        }
+      }
+
+      const { suggestColumnMappings, isColumnMappingConfigured } = await import("./ai/columnMapping");
+
+      if (!isColumnMappingConfigured()) {
+        return res.status(503).json({ 
+          message: "AI column mapping is not configured. Please check Gemini API settings." 
+        });
+      }
+
+      const systemAliases = await templateService.getSystemColumnAliases();
+
+      const suggestions = await suggestColumnMappings(
+        sourceColumns,
+        templateColumns || [],
+        systemAliases,
+        sampleData
+      );
+
+      const highConfidenceCount = suggestions.filter(s => s.confidence >= 80).length;
+      const lowConfidenceCount = suggestions.filter(s => s.confidence < 50).length;
+
+      res.json({
+        suggestions,
+        summary: {
+          total: suggestions.length,
+          highConfidence: highConfidenceCount,
+          lowConfidence: lowConfidenceCount,
+          hasGoodMappings: highConfidenceCount > sourceColumns.length * 0.5,
+        }
+      });
+    } catch (error) {
+      console.error("Error suggesting column mappings:", error);
+      res.status(500).json({ message: "Failed to suggest column mappings" });
+    }
+  });
+
+  /**
+   * Get AI-suggested column mappings for a sheet
+   * @route GET /api/sheets/:id/suggest-mappings
+   */
+  app.get('/api/sheets/:id/suggest-mappings', isAuthenticated, requireEntityOwner('sheet'), async (req: any, res) => {
+    try {
+      const sheet = req.entity;
+      
+      const cleanedData = sheet.cleanedData as any;
+      const rawData = sheet.data as any;
+      const dataToUse = cleanedData?.data || rawData || [];
+      
+      if (!Array.isArray(dataToUse) || dataToUse.length === 0) {
+        return res.status(400).json({ message: "Sheet has no data to analyze" });
+      }
+
+      const sourceColumns = Object.keys(dataToUse[0] || {});
+      
+      if (sourceColumns.length === 0) {
+        return res.status(400).json({ message: "Sheet has no columns to analyze" });
+      }
+
+      const { suggestColumnMappings, isColumnMappingConfigured } = await import("./ai/columnMapping");
+
+      if (!isColumnMappingConfigured()) {
+        return res.status(503).json({ 
+          message: "AI column mapping is not configured. Please check Gemini API settings." 
+        });
+      }
+
+      const systemAliases = await templateService.getSystemColumnAliases();
+      const sampleData = dataToUse.slice(0, 5);
+
+      const suggestions = await suggestColumnMappings(
+        sourceColumns,
+        [],
+        systemAliases,
+        sampleData
+      );
+
+      const highConfidenceCount = suggestions.filter(s => s.confidence >= 80).length;
+
+      res.json({
+        suggestions,
+        sourceColumns,
+        summary: {
+          total: suggestions.length,
+          highConfidence: highConfidenceCount,
+          hasGoodMappings: highConfidenceCount > sourceColumns.length * 0.5,
+        }
+      });
+    } catch (error) {
+      console.error("Error suggesting column mappings for sheet:", error);
+      res.status(500).json({ message: "Failed to suggest column mappings" });
     }
   });
 
