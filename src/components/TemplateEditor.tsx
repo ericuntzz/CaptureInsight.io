@@ -15,6 +15,16 @@ import {
 } from './ui/select';
 import { Checkbox } from './ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 import { toast } from 'sonner';
 import { useTemplateEditor, TemplateColumn, CleaningStep, ColumnMappingSuggestion } from '../contexts/TemplateEditorContext';
 import { ColumnMappingPanel, ConfirmedMapping } from './ColumnMappingPanel';
@@ -671,6 +681,7 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
   const [aiSuggestions, setAiSuggestions] = useState<ColumnMappingSuggestion[]>([]);
   const [showMappingPanel, setShowMappingPanel] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const fetchAISuggestions = useCallback(async () => {
     if (!currentData || currentData.length === 0) {
@@ -855,7 +866,7 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
           <div className="flex items-center gap-3">
             {isDirty && (
               <button
-                onClick={reset}
+                onClick={() => setShowResetConfirm(true)}
                 className="flex items-center gap-2 px-3 py-2 text-gray-400 hover:text-white transition-colors"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -1307,6 +1318,58 @@ export function TemplateEditor({ currentData, spaceId }: TemplateEditorProps) {
         cleaningPipeline={{ steps: template.cleaningPipeline }}
         columnSchema={{ columns: template.columns }}
       />
+
+      <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <AlertDialogContent className="bg-[#0A0E1A] border-[#1A1F2E]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-yellow-500" />
+              Are you sure you want to reset?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="text-gray-400 space-y-3">
+                <p>This will discard all unsaved changes to:</p>
+                <ul className="space-y-2 ml-1">
+                  {template.columns.length > 0 && (
+                    <li className="flex items-center gap-2 text-sm">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#FF6B35]" />
+                      <span>Column schema ({template.columns.length} column{template.columns.length !== 1 ? 's' : ''})</span>
+                    </li>
+                  )}
+                  {template.cleaningPipeline.filter(s => s.enabled).length > 0 && (
+                    <li className="flex items-center gap-2 text-sm">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#FF6B35]" />
+                      <span>Cleaning pipeline rules ({template.cleaningPipeline.filter(s => s.enabled).length} active)</span>
+                    </li>
+                  )}
+                  <li className="flex items-center gap-2 text-sm">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#FF6B35]" />
+                    <span>Template settings (name, description, scope)</span>
+                  </li>
+                </ul>
+                <p className="text-xs text-gray-500 pt-1">
+                  This action cannot be undone.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-[#1A1F2E] text-gray-300 hover:bg-[#252A3A] hover:text-white border-[#2A2F3E]">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                reset();
+                setShowResetConfirm(false);
+                toast.info('Template reset to original state');
+              }}
+              className="bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:text-red-300 border border-red-500/30"
+            >
+              Yes, Reset Everything
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AnimatePresence>
   );
 }
