@@ -13,7 +13,9 @@ import {
   ChevronDown,
   Layers,
   Globe,
-  Building2
+  Building2,
+  RotateCcw,
+  X
 } from 'lucide-react';
 import { useTemplates, useDeleteTemplate, type DataTemplate } from '../hooks/useTemplates';
 import { useTemplateEditor } from '../contexts/TemplateEditorContext';
@@ -176,7 +178,7 @@ function TemplateCard({
 export function TemplateManagement({ workspaceId, spaceId, onBack }: TemplateManagementProps) {
   const { data: templates = [], isLoading } = useTemplates(workspaceId, spaceId);
   const deleteTemplateMutation = useDeleteTemplate();
-  const { openEditor } = useTemplateEditor();
+  const { openEditor, hasDraft, draftTimestamp, restoreDraft, clearDraft } = useTemplateEditor();
   
   const [searchQuery, setSearchQuery] = useState<string>(() => getStoredValue(STORAGE_KEY_SEARCH, ''));
   const [sortBy, setSortBy] = useState<SortOption>(() => getStoredValue(STORAGE_KEY_SORT, 'usageCount'));
@@ -322,6 +324,48 @@ export function TemplateManagement({ workspaceId, spaceId, onBack }: TemplateMan
             New Template
           </button>
         </div>
+
+        {/* Draft Restoration Banner */}
+        <AnimatePresence>
+          {hasDraft && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mb-6 bg-[#1A1F2E] border border-[#FF6B35]/30 rounded-xl p-4 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[#FF6B35]/20 flex items-center justify-center">
+                  <RotateCcw className="w-5 h-5 text-[#FF6B35]" />
+                </div>
+                <div>
+                  <p className="text-white font-medium">Unsaved template draft found</p>
+                  <p className="text-gray-400 text-sm">
+                    {draftTimestamp 
+                      ? `Last edited ${new Date(draftTimestamp).toLocaleString()}`
+                      : 'You have an unsaved template from a previous session'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={clearDraft}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-lg transition-colors"
+                  title="Discard draft"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={restoreDraft}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#FF6B35] hover:bg-[#FF8F35] text-white rounded-lg font-medium transition-colors"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Restore Draft
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="flex items-center gap-3 mb-6">
           <div className="flex-1 relative">
