@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Plus, Trash2, GripVertical, ChevronDown, ChevronRight, 
   Settings, Columns3, Sparkles, FileText, Save, RotateCcw,
-  AlertCircle, Wand2, Loader2, Eye
+  AlertCircle, Wand2, Loader2, Eye, Lightbulb, Tag
 } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { 
@@ -77,6 +77,56 @@ const formatValidationPresets = [
   { value: 'phone', label: 'Phone Number', pattern: '^[\\d\\s\\-\\(\\)\\+]+$' },
   { value: 'custom', label: 'Custom pattern (advanced)', pattern: '' },
 ];
+
+const commonColumnAliases: Record<string, string[]> = {
+  'ad_spend': ['Cost', 'Total Spend', 'Amount', 'Spend', 'Ad Cost', 'Advertising Cost', 'Media Spend'],
+  'spend': ['Cost', 'Total Spend', 'Amount', 'Ad Spend', 'Expense', 'Budget Used'],
+  'cost': ['Spend', 'Amount', 'Total Cost', 'Price', 'Expense'],
+  'revenue': ['Sales', 'Income', 'Total Revenue', 'Earnings', 'Gross Revenue'],
+  'sales': ['Revenue', 'Total Sales', 'Orders Value', 'Gross Sales'],
+  'impressions': ['Impr', 'Views', 'Total Impressions', 'Ad Views', 'Displays'],
+  'clicks': ['Total Clicks', 'Click Count', 'Link Clicks', 'Interactions'],
+  'ctr': ['Click Rate', 'Click Through Rate', 'CTR %', 'Click-Through Rate'],
+  'cpc': ['Cost Per Click', 'Avg CPC', 'Average CPC', 'Click Cost'],
+  'cpm': ['Cost Per Mille', 'Cost Per 1000', 'CPM Cost'],
+  'conversions': ['Conv', 'Total Conversions', 'Converted', 'Actions', 'Goals'],
+  'roas': ['Return On Ad Spend', 'ROAS %', 'Ad Return'],
+  'date': ['Day', 'Report Date', 'Period', 'Time', 'Date Range'],
+  'campaign': ['Campaign Name', 'Ad Campaign', 'Campaign Title'],
+  'campaign_name': ['Campaign', 'Ad Campaign', 'Campaign Title'],
+  'ad_group': ['Ad Set', 'Ad Group Name', 'Group', 'Adset'],
+  'ad_name': ['Ad', 'Ad Title', 'Creative Name', 'Ad Creative'],
+  'keyword': ['Search Term', 'Keywords', 'Query', 'Search Query'],
+  'device': ['Device Type', 'Platform', 'Device Category'],
+  'country': ['Region', 'Location', 'Geo', 'Country Code'],
+  'budget': ['Daily Budget', 'Campaign Budget', 'Spend Limit', 'Budget Amount'],
+};
+
+function getSuggestedAliases(columnName: string, existingAliases: string[] = []): string[] {
+  const normalizedName = columnName.toLowerCase().replace(/[\s_-]+/g, '_').replace(/[^a-z0-9_]/g, '');
+  const suggestions: Set<string> = new Set();
+  
+  for (const [key, aliases] of Object.entries(commonColumnAliases)) {
+    if (normalizedName.includes(key) || key.includes(normalizedName)) {
+      aliases.forEach(alias => suggestions.add(alias));
+    }
+  }
+  
+  const words = columnName.split(/[\s_-]+/).filter(w => w.length > 0);
+  if (words.length > 1) {
+    suggestions.add(words.join(' '));
+    suggestions.add(words.join('_'));
+    suggestions.add(words.join('-'));
+    suggestions.add(words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '));
+  }
+  
+  const existingLower = existingAliases.map(a => a.toLowerCase());
+  const columnLower = columnName.toLowerCase();
+  
+  return Array.from(suggestions)
+    .filter(s => !existingLower.includes(s.toLowerCase()) && s.toLowerCase() !== columnLower)
+    .slice(0, 5);
+}
 
 interface SortableColumnRowProps {
   column: TemplateColumn;
@@ -241,6 +291,90 @@ function SortableColumnRow({
             <p className="text-xs text-gray-500 mt-1">Enter a regular expression pattern for advanced validation</p>
           </div>
         )}
+
+        {/* Column Aliases - Prominent Section */}
+        <div className="bg-gradient-to-r from-[#FF6B35]/5 to-transparent rounded-lg p-3 border border-[#FF6B35]/20">
+          <div className="flex items-start gap-2 mb-3">
+            <div className="w-6 h-6 rounded bg-[#FF6B35]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Tag className="w-3.5 h-3.5 text-[#FF6B35]" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-white">Column Aliases</label>
+              <p className="text-xs text-gray-400 mt-0.5">Help AI recognize this column even if the name changes in future uploads</p>
+            </div>
+          </div>
+          
+          {/* Current aliases */}
+          {(column.aliases || []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {(column.aliases || []).map((alias, idx) => (
+                <span 
+                  key={idx}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-[#1A1F2E] rounded text-xs text-white border border-[#FF6B35]/30"
+                >
+                  {alias}
+                  <button 
+                    onClick={() => onRemoveAlias(alias)}
+                    className="text-gray-400 hover:text-red-400 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          
+          {/* Suggested aliases */}
+          {(() => {
+            const suggestions = getSuggestedAliases(column.displayName || column.canonicalName, column.aliases || []);
+            if (suggestions.length === 0) return null;
+            
+            return (
+              <div className="mb-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Lightbulb className="w-3 h-3 text-yellow-500" />
+                  <span className="text-xs text-gray-400">Suggested aliases:</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestions.map((suggestion, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => onAddAlias(suggestion)}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-[#1A1F2E]/50 hover:bg-[#FF6B35]/20 border border-dashed border-gray-600 hover:border-[#FF6B35]/50 rounded text-xs text-gray-300 hover:text-[#FF6B35] transition-all"
+                    >
+                      <Plus className="w-3 h-3" />
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+          
+          {/* Custom alias input */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newAliasValue}
+              onChange={(e) => setNewAliasValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddAlias();
+                }
+              }}
+              placeholder="Add custom alias..."
+              className="flex-1 px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
+            />
+            <button
+              onClick={handleAddAlias}
+              disabled={!newAliasValue.trim()}
+              className="px-3 py-1.5 bg-[#FF6B35]/20 hover:bg-[#FF6B35]/30 text-[#FF6B35] rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Add
+            </button>
+          </div>
+        </div>
         
         {(column.dataType === 'integer' || column.dataType === 'decimal' || column.dataType === 'currency' || column.dataType === 'percentage') && (
           <div className="grid grid-cols-2 gap-4">
@@ -297,47 +431,6 @@ function SortableColumnRow({
             placeholder="value1, value2, value3"
             className="w-full px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
           />
-        </div>
-        
-        <div className="border-t border-[#1A1F2E] pt-4">
-          <label className="block text-xs text-gray-400 mb-2">Column Aliases</label>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {(column.aliases || []).map((alias, idx) => (
-              <span 
-                key={idx}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-[#1A1F2E] rounded text-xs text-gray-300"
-              >
-                {alias}
-                <button 
-                  onClick={() => onRemoveAlias(alias)}
-                  className="text-gray-500 hover:text-red-400"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newAliasValue}
-              onChange={(e) => setNewAliasValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddAlias();
-                }
-              }}
-              placeholder="Add alias..."
-              className="flex-1 px-2 py-1.5 bg-[#1A1F2E] border border-transparent focus:border-[#FF6B35]/50 rounded text-sm text-white placeholder:text-gray-500 focus:outline-none"
-            />
-            <button
-              onClick={handleAddAlias}
-              className="px-3 py-1.5 bg-[#FF6B35]/20 hover:bg-[#FF6B35]/30 text-[#FF6B35] rounded text-sm transition-colors"
-            >
-              Add
-            </button>
-          </div>
         </div>
       </div>
     </div>
