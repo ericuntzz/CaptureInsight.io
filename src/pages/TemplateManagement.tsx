@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowLeft, 
@@ -43,6 +43,22 @@ interface TemplateManagementProps {
 
 type SortOption = 'name' | 'usageCount' | 'lastUsed' | 'createdAt';
 type ScopeFilter = 'all' | 'workspace' | 'space';
+
+const STORAGE_KEY_SEARCH = 'captureinsight_template_management_search';
+const STORAGE_KEY_SORT = 'captureinsight_template_management_sort';
+const STORAGE_KEY_FILTER = 'captureinsight_template_management_filter';
+
+function getStoredValue<T>(key: string, defaultValue: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored !== null) {
+      return JSON.parse(stored) as T;
+    }
+  } catch (e) {
+    console.error(`Error reading ${key} from localStorage:`, e);
+  }
+  return defaultValue;
+}
 
 const sourceTypeLabels: Record<string, string> = {
   google_ads: 'Google Ads',
@@ -162,10 +178,37 @@ export function TemplateManagement({ workspaceId, spaceId, onBack }: TemplateMan
   const deleteTemplateMutation = useDeleteTemplate();
   const { openEditor } = useTemplateEditor();
   
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<SortOption>('usageCount');
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
+  const [searchQuery, setSearchQuery] = useState<string>(() => getStoredValue(STORAGE_KEY_SEARCH, ''));
+  const [sortBy, setSortBy] = useState<SortOption>(() => getStoredValue(STORAGE_KEY_SORT, 'usageCount'));
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(() => getStoredValue(STORAGE_KEY_FILTER, 'all'));
   const [templateToDelete, setTemplateToDelete] = useState<DataTemplate | null>(null);
+
+  // Persist search query to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_SEARCH, JSON.stringify(searchQuery));
+    } catch (e) {
+      console.error('Error saving search query to localStorage:', e);
+    }
+  }, [searchQuery]);
+
+  // Persist sort option to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_SORT, JSON.stringify(sortBy));
+    } catch (e) {
+      console.error('Error saving sort option to localStorage:', e);
+    }
+  }, [sortBy]);
+
+  // Persist scope filter to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_FILTER, JSON.stringify(scopeFilter));
+    } catch (e) {
+      console.error('Error saving scope filter to localStorage:', e);
+    }
+  }, [scopeFilter]);
   
   const filteredAndSortedTemplates = useMemo(() => {
     let result = [...templates];
