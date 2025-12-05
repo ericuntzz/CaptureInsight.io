@@ -275,26 +275,34 @@ export default function App() {
   }, [router.pathname, currentView]);
   
   // Update URL when view changes
-  const handleViewChange = (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace') => {
+  const handleViewChange = (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace', params?: { captureBatchId?: string }) => {
     setCurrentView(view);
-    // Push new URL
+    // Push new URL with optional search params
+    let url: string;
     switch (view) {
       case 'capture':
-        router.push(buildRoute.capture());
+        url = buildRoute.capture();
         break;
       case 'data':
-        router.push(buildRoute.data());
+        url = buildRoute.data();
         break;
       case 'changelogs':
-        router.push(buildRoute.changeLogs());
+        url = buildRoute.changeLogs();
         break;
       case 'insights':
-        router.push(buildRoute.insights());
+        url = buildRoute.insights();
         break;
       case 'workspace':
-        router.push(buildRoute.workspace());
+        url = buildRoute.workspace();
         break;
     }
+    
+    // Add search params if provided
+    if (params?.captureBatchId) {
+      url = `${url}?batchId=${params.captureBatchId}`;
+    }
+    
+    router.push(url);
   };
   
   const [captureMode, setCaptureMode] = useState<CaptureMode>('region');
@@ -665,8 +673,12 @@ export default function App() {
     let { destinations } = data;
     const { analysisSettings } = data;
     
+    // Generate a unique batch ID to group all captures from this session
+    const captureBatchId = crypto.randomUUID();
+    
     try {
       console.log('[Capture Flow] Starting analysis with destinations:', destinations);
+      console.log('[Capture Flow] Capture batch ID:', captureBatchId);
       console.log('[Capture Flow] Available spaces:', spaces.map(s => ({ id: s.id, name: s.name, workspaces: s.workspaces?.length || 0, folders: s.folders?.length || 0 })));
       
       // Step 1: Determine or create the target space
@@ -799,18 +811,20 @@ export default function App() {
             schedule: settings?.schedule,
             url: item.url,
           },
+          captureBatchId,
         });
       }
       
-      // Step 6: Navigate to workspace view
+      // Step 6: Navigate to workspace view with batch ID
       console.log('[Capture Flow] Navigating to workspace view...');
       console.log('[Capture Flow] Active workspace ID:', finalFolderId);
+      console.log('[Capture Flow] Capture batch ID for navigation:', captureBatchId);
       
       // Set the active workspace before navigating
       setActiveWorkspaceId(finalFolderId);
       
-      // Use handleViewChange to properly update URL and view state
-      handleViewChange('workspace');
+      // Use handleViewChange to properly update URL and view state with batch ID
+      handleViewChange('workspace', { captureBatchId });
       setShowOptionsModal(false);
       
       // Clear captures after successful save

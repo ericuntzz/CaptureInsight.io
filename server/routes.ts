@@ -1658,7 +1658,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const securityMode = await serverEncryption.getSecurityMode(userId);
       const spaceId = req.params.spaceId;
       
-      let sheetData = { ...req.body, spaceId, createdBy: userId };
+      // Extract captureBatchId from request body if provided
+      const { captureBatchId, ...restBody } = req.body;
+      let sheetData = { ...restBody, spaceId, createdBy: userId, captureBatchId: captureBatchId || null };
       
       // Validate workspaceId exists if provided
       if (sheetData.workspaceId) {

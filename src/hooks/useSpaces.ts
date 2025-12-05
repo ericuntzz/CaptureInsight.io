@@ -293,7 +293,8 @@ export function useCreateSheet() {
       folderId, 
       name, 
       dataSourceType, 
-      dataSourceMeta 
+      dataSourceMeta,
+      captureBatchId,
     }: { 
       spaceId: string; 
       workspaceId?: string;
@@ -301,12 +302,14 @@ export function useCreateSheet() {
       name: string; 
       dataSourceType?: string;
       dataSourceMeta?: any;
+      captureBatchId?: string;
     }) => {
       const res = await apiRequest("POST", `/api/spaces/${spaceId}/sheets`, { 
         workspaceId: workspaceId || folderId, 
         name,
         dataSourceType,
         dataSourceMeta,
+        captureBatchId,
       });
       return res.json();
     },
