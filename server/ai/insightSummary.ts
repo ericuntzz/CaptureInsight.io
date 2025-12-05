@@ -103,13 +103,37 @@ function buildDataContext(sheetsData: typeof sheets.$inferSelect[]): string {
   return dataBlocks.join("\n\n");
 }
 
+// Helper to wait for a specified time
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Check if sheets have data available
+function sheetsHaveData(sheetsList: typeof sheets.$inferSelect[]): boolean {
+  return sheetsList.some(sheet => {
+    const rawData = sheet.data as any[] | null;
+    return Array.isArray(rawData) && rawData.length > 0;
+  });
+}
+
 export async function* streamInsightSummary(
   options: StreamInsightSummaryOptions
 ): AsyncGenerator<SummaryStreamChunk> {
   const { batchId, spaceId, piiFilter } = options;
   
   try {
-    const batchSheets = await getSheetsByBatchId(batchId);
+    // Retry logic: wait for data ingestion to complete
+    // The sheet record is created immediately, but data ingestion runs async
+    const maxRetries = 10;
+    const retryDelay = 1000; // 1 second between retries
+    let batchSheets = await getSheetsByBatchId(batchId);
+    let retries = 0;
+    
+    // Wait for sheets to have data (data ingestion to complete)
+    while (!sheetsHaveData(batchSheets) && retries < maxRetries) {
+      console.log(`[InsightSummary] Waiting for data ingestion... (attempt ${retries + 1}/${maxRetries})`);
+      await delay(retryDelay);
+      batchSheets = await getSheetsByBatchId(batchId);
+      retries++;
+    }
     
     if (batchSheets.length === 0) {
       yield {
