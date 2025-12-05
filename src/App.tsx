@@ -1773,6 +1773,18 @@ export default function App() {
         {/* Main Workspace Content */}
         <div className="flex-1 overflow-hidden">
           {(() => {
+            // Show loading state while spaces data is being fetched
+            if (spacesLoading) {
+              return (
+                <div className="flex-1 flex items-center justify-center h-full bg-[#0D1117]">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-2 border-[#FF6B35] border-t-transparent rounded-full animate-spin" />
+                    <span className="text-gray-400 text-sm">Loading workspace...</span>
+                  </div>
+                </div>
+              );
+            }
+            
             const workspaces = currentSpace?.workspaces || currentSpace?.folders || [];
             const hasWorkspaces = workspaces.length > 0;
             
