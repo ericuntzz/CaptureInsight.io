@@ -604,6 +604,12 @@ function extractNoteFromCell(value: any): string | null {
     return trimmed;
   }
   
+  // Pattern: parenthetical annotation like "(from tableau waterfall)" or "(see appendix)"
+  // Must be wrapped in parentheses with no standalone numbers
+  if (/^\([^)]+\)$/.test(trimmed) && !/^\(\d+\)$/.test(trimmed)) {
+    return trimmed;
+  }
+  
   return null;
 }
 
@@ -625,6 +631,9 @@ function isEmptyValue(value: any): boolean {
  * - It contains a note pattern AND
  * - All other cells are empty (no numeric or meaningful data)
  * 
+ * Special case: If a row has a note in a column named "notes" and NO OTHER meaningful data
+ * (just nulls), it should be extracted as a standalone note.
+ * 
  * This is DIFFERENT from inline notes, which are note cells on data rows.
  * Inline notes should be kept with the row, not extracted.
  */
@@ -636,14 +645,26 @@ function isStandaloneNoteRow(row: Record<string, any>): { isNote: boolean; noteT
   let noteText: string | null = null;
   let noteColumnKey: string | null = null;
   let hasNonEmptyDataCells = false;
+  let nonEmptyCount = 0;
   
   for (const [key, value] of entries) {
     if (isEmptyValue(value)) continue;
+    nonEmptyCount++;
     
-    // Check if this cell is a note
+    // Check if this cell is a note (including column named "notes" or similar)
+    const keyLower = key.toLowerCase();
+    const isNotesColumn = keyLower === 'notes' || keyLower === 'note' || keyLower === 'comments' || keyLower === 'annotations';
+    
     const extractedNote = extractNoteFromCell(value);
     if (extractedNote) {
       noteText = extractedNote;
+      noteColumnKey = key;
+      continue;
+    }
+    
+    // If this is a "notes" column, treat any text as a note
+    if (isNotesColumn && typeof value === 'string' && value.trim().length > 0) {
+      noteText = value.trim();
       noteColumnKey = key;
       continue;
     }
@@ -670,6 +691,14 @@ function isStandaloneNoteRow(row: Record<string, any>): { isNote: boolean; noteT
   // A standalone note row has a note pattern but NO other meaningful data
   if (noteText && !hasNonEmptyDataCells) {
     return { isNote: true, noteText };
+  }
+  
+  // Special case: If the ONLY non-empty value is in a "notes" column, extract it
+  if (noteText && noteColumnKey && nonEmptyCount === 1) {
+    const keyLower = noteColumnKey.toLowerCase();
+    if (keyLower === 'notes' || keyLower === 'note' || keyLower === 'comments' || keyLower === 'annotations') {
+      return { isNote: true, noteText };
+    }
   }
   
   // Special case: parenthetical text alone (e.g., "(from tableau waterfall)")
