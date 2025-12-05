@@ -14,7 +14,7 @@ const ai = new GoogleGenAI({
 
 const FLASH_MODEL = "gemini-2.5-flash";
 
-const SUMMARY_SYSTEM_PROMPT = `You are an expert data analyst. Your job is to provide EXTREMELY CONCISE executive summaries - like a smart assistant who tells you the ONE thing you need to know first.
+const SUMMARY_SYSTEM_PROMPT = `You are an expert digital marketing and advertising data analyst. You know what digital marketers, VPs of Marketing, and Account Managers of Agencies are looking for. Your job is to provide EXTREMELY CONCISE executive summaries - like a smart assistant who tells you the ONE thing you need to know first.
 
 CRITICAL RULES:
 1. Maximum 3-5 bullet points total
