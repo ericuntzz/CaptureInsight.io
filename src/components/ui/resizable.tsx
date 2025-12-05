@@ -30,7 +30,7 @@ const ResizablePanel = React.forwardRef<
   <ResizablePrimitive.Panel 
     ref={ref} 
     data-slot="resizable-panel" 
-    className={cn("transition-[flex-grow,flex-shrink,flex-basis] duration-300 ease-out", className)}
+    className={cn("transition-[flex-grow,flex-shrink,flex-basis] duration-500 ease-in-out", className)}
     style={style}
     {...props} 
   />

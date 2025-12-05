@@ -181,7 +181,7 @@ function PanelContentWrapper({
         style={{ 
           opacity: collapsedOpacity,
           pointerEvents: collapsedOpacity > 0.5 ? 'auto' : 'none',
-          transition: 'opacity 350ms cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'opacity 500ms cubic-bezier(0.4, 0, 0.2, 1)'
         }}
       >
         {collapsedContent}
@@ -192,7 +192,7 @@ function PanelContentWrapper({
         style={{ 
           opacity: contentOpacity,
           pointerEvents: contentOpacity > 0.5 ? 'auto' : 'none',
-          transition: 'opacity 350ms cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'opacity 500ms cubic-bezier(0.4, 0, 0.2, 1)'
         }}
       >
         {expandedContent}
