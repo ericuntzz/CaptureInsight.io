@@ -80,10 +80,29 @@ function buildDataContext(sheetsData: typeof sheets.$inferSelect[]): string {
   
   for (const sheet of sheetsData) {
     // Use raw data for speed (already PII-filtered if filtering is enabled)
-    const rawData = sheet.data as any[] | null;
-    const data = rawData || [];
+    const rawData = sheet.data as any;
     
-    if (!Array.isArray(data) || data.length === 0) {
+    // Handle both data formats: { headers, rows } object or plain array
+    let data: any[] = [];
+    if (rawData) {
+      if (rawData.rows && Array.isArray(rawData.rows)) {
+        // Format 1: { headers: [], rows: [] } from data ingestion
+        // Convert to array of objects with headers as keys
+        const headers = rawData.headers || [];
+        data = rawData.rows.map((row: any[]) => {
+          const obj: Record<string, any> = {};
+          headers.forEach((header: string, idx: number) => {
+            obj[header || `col_${idx}`] = row[idx];
+          });
+          return obj;
+        });
+      } else if (Array.isArray(rawData)) {
+        // Format 2: Plain array
+        data = rawData;
+      }
+    }
+    
+    if (data.length === 0) {
       continue;
     }
     
@@ -107,11 +126,36 @@ function buildDataContext(sheetsData: typeof sheets.$inferSelect[]): string {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Check if sheets have data available
+// Data can be stored as: { headers, rows } object OR as a plain array
 function sheetsHaveData(sheetsList: typeof sheets.$inferSelect[]): boolean {
-  return sheetsList.some(sheet => {
-    const rawData = sheet.data as any[] | null;
-    return Array.isArray(rawData) && rawData.length > 0;
-  });
+  for (const sheet of sheetsList) {
+    const rawData = sheet.data as any;
+    
+    // Check if data exists in either format
+    let hasData = false;
+    if (rawData) {
+      // Format 1: { headers: [], rows: [] } from data ingestion
+      if (rawData.rows && Array.isArray(rawData.rows) && rawData.rows.length > 0) {
+        hasData = true;
+      }
+      // Format 2: Plain array
+      else if (Array.isArray(rawData) && rawData.length > 0) {
+        hasData = true;
+      }
+    }
+    
+    console.log(`[InsightSummary] Sheet ${sheet.id} data check:`, {
+      hasData,
+      dataType: typeof rawData,
+      hasRows: rawData?.rows ? rawData.rows.length : 0,
+      isArray: Array.isArray(rawData)
+    });
+    
+    if (hasData) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export async function* streamInsightSummary(
@@ -125,6 +169,7 @@ export async function* streamInsightSummary(
     const maxRetries = 10;
     const retryDelay = 1000; // 1 second between retries
     let batchSheets = await getSheetsByBatchId(batchId);
+    console.log(`[InsightSummary] Found ${batchSheets.length} sheets for batchId: ${batchId}`);
     let retries = 0;
     
     // Wait for sheets to have data (data ingestion to complete)
@@ -132,6 +177,7 @@ export async function* streamInsightSummary(
       console.log(`[InsightSummary] Waiting for data ingestion... (attempt ${retries + 1}/${maxRetries})`);
       await delay(retryDelay);
       batchSheets = await getSheetsByBatchId(batchId);
+      console.log(`[InsightSummary] Retry found ${batchSheets.length} sheets`);
       retries++;
     }
     
