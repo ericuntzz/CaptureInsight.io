@@ -168,6 +168,7 @@ export const sheets = pgTable("sheets", {
   name: varchar("name").notNull(),
   workspaceId: varchar("workspace_id").references(() => workspaces.id),
   spaceId: varchar("space_id").references(() => spaces.id).notNull(),
+  captureBatchId: varchar("capture_batch_id"), // Groups multiple sheets captured together for combined AI summary
   rowCount: integer("row_count").default(0),
   lastModified: timestamp("last_modified").defaultNow(),
   dataSourceType: varchar("data_source_type"),
