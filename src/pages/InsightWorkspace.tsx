@@ -801,38 +801,52 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     canvasPanelRef.current?.resize(3);
   }, []);
   
-  // Expand canvas - move canvas next to chat, collapse data
+  // Expand canvas - collapse data, keep chat size unchanged
   const handleExpandCanvas = useCallback(() => {
+    // Calculate remaining space after chat (don't touch chat size at all)
+    const remainingSpace = 100 - chatSize;
+    const collapsedSize = 3;
+    
     // If canvas is already large (not collapsed), restore to normal sizes
     if (!isCanvasCollapsed && isDataCollapsed) {
-      // Canvas is expanded, restore both to normal sizes
-      canvasPanelRef.current?.resize(45);
-      dataPanelRef.current?.resize(25);
+      // Canvas is expanded, restore both to proportional sizes
+      // Keep ratio roughly 65:35 for canvas:data within remaining space
+      const canvasShare = Math.round(remainingSpace * 0.65);
+      const dataShare = remainingSpace - canvasShare;
+      canvasPanelRef.current?.resize(canvasShare);
+      dataPanelRef.current?.resize(dataShare);
     } else {
       // Expand canvas fully, collapse data
-      // Don't touch chat - respect chatManuallyCollapsed
-      canvasPanelRef.current?.resize(chatManuallyCollapsed ? 72 : 67);
-      dataPanelRef.current?.resize(3);
+      // Chat stays exactly where it is - only redistribute canvas/data space
+      canvasPanelRef.current?.resize(remainingSpace - collapsedSize);
+      dataPanelRef.current?.resize(collapsedSize);
     }
     setRightPanelOrder('canvas-data');
-  }, [isCanvasCollapsed, isDataCollapsed, chatManuallyCollapsed]);
+  }, [isCanvasCollapsed, isDataCollapsed, chatSize]);
   
-  // Expand data - move data next to chat, collapse canvas
+  // Expand data - collapse canvas, keep chat size unchanged
   const handleExpandData = useCallback(() => {
+    // Calculate remaining space after chat (don't touch chat size at all)
+    const remainingSpace = 100 - chatSize;
+    const collapsedSize = 3;
+    
     // If data is already large (not collapsed), restore to normal sizes
     if (!isDataCollapsed && isCanvasCollapsed) {
-      // Data is expanded, restore both to normal sizes
-      dataPanelRef.current?.resize(25);
-      canvasPanelRef.current?.resize(45);
+      // Data is expanded, restore both to proportional sizes
+      // Keep ratio roughly 65:35 for canvas:data within remaining space
+      const canvasShare = Math.round(remainingSpace * 0.65);
+      const dataShare = remainingSpace - canvasShare;
+      dataPanelRef.current?.resize(dataShare);
+      canvasPanelRef.current?.resize(canvasShare);
       setRightPanelOrder('canvas-data');
     } else {
       // Expand data fully, collapse canvas, swap order so data is next to chat
-      // Don't touch chat - respect chatManuallyCollapsed
-      dataPanelRef.current?.resize(chatManuallyCollapsed ? 72 : 67);
-      canvasPanelRef.current?.resize(3);
+      // Chat stays exactly where it is - only redistribute canvas/data space
+      dataPanelRef.current?.resize(remainingSpace - collapsedSize);
+      canvasPanelRef.current?.resize(collapsedSize);
       setRightPanelOrder('data-canvas');
     }
-  }, [isCanvasCollapsed, isDataCollapsed, chatManuallyCollapsed]);
+  }, [isCanvasCollapsed, isDataCollapsed, chatSize]);
   
   // Double-click handlers use the same expand logic
   const handleDoubleClickExpandCanvas = handleExpandCanvas;
