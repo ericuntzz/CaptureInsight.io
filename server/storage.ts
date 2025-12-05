@@ -401,6 +401,12 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(sheets).where(eq(sheets.workspaceId, workspaceId)).orderBy(desc(sheets.lastModified));
   }
 
+  async getSheetsByBatch(spaceId: string, batchId: string): Promise<Sheet[]> {
+    return await db.select().from(sheets).where(
+      and(eq(sheets.spaceId, spaceId), eq(sheets.captureBatchId, batchId))
+    ).orderBy(desc(sheets.lastModified));
+  }
+
   async getSheet(id: string): Promise<Sheet | undefined> {
     const [sheet] = await db.select().from(sheets).where(eq(sheets.id, id));
     return sheet;

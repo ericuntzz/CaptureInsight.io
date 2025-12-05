@@ -502,6 +502,11 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   // Fetch sheets (captures) for this workspace
   const { data: workspaceSheets = [] } = useWorkspaceSheets(spaceId, workspaceId ?? null);
   
+  // Batch completion tracking state for new capture mode
+  const [pendingCaptureBatchId, setPendingCaptureBatchId] = useState<string | null>(null);
+  const [isWaitingForBatchCompletion, setIsWaitingForBatchCompletion] = useState(false);
+  const [batchSheets, setBatchSheets] = useState<any[]>([]);
+  
   // Fetch insights for current workspace
   const { data: workspaceInsights = [], isLoading: isLoadingInsights } = useInsights(spaceId, workspaceId ?? null);
   
@@ -776,6 +781,57 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
       onSidebarCollapse?.(false);
     };
   }, [onSidebarCollapse]);
+  
+  // Read batch ID from URL on mount - for new capture mode
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const batchId = urlParams.get('batchId');
+    if (batchId) {
+      setPendingCaptureBatchId(batchId);
+      setIsWaitingForBatchCompletion(true);
+      setChatManuallyCollapsed(false);
+      chatPanelRef.current?.resize(30);
+      handleExpandCanvas();
+    }
+  }, []);
+  
+  // Batch completion watcher - polls sheets when there's a pending batch
+  useEffect(() => {
+    if (!pendingCaptureBatchId || !isWaitingForBatchCompletion || !spaceId) return;
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/spaces/${spaceId}/sheets?batchId=${pendingCaptureBatchId}`, {
+          credentials: 'include'
+        });
+        if (!response.ok) return;
+        
+        const sheets = await response.json();
+        setBatchSheets(sheets);
+        
+        const allCompleted = sheets.every((s: any) => s.cleaningStatus === 'completed');
+        const anyFailed = sheets.some((s: any) => s.cleaningStatus === 'failed');
+        
+        if (allCompleted || anyFailed) {
+          setIsWaitingForBatchCompletion(false);
+          clearInterval(pollInterval);
+          
+          if (allCompleted && sheets.length > 0) {
+            triggerAutoSummary(sheets);
+          }
+        }
+      } catch (error) {
+        console.error('Error polling batch sheets:', error);
+      }
+    }, 1000);
+    
+    return () => clearInterval(pollInterval);
+  }, [pendingCaptureBatchId, isWaitingForBatchCompletion, spaceId]);
+  
+  // Placeholder function for auto-summary (will be implemented in next task)
+  const triggerAutoSummary = useCallback((sheets: any[]) => {
+    console.log('triggerAutoSummary called with', sheets.length, 'sheets');
+  }, []);
   
   // Load insight data and mark as saved (for existing insights from DB)
   useEffect(() => {

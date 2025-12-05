@@ -1541,7 +1541,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/spaces/:spaceId/sheets', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const sheets = await storage.getSheets(req.params.spaceId);
+      const batchId = req.query.batchId as string | undefined;
+      
+      const sheets = batchId 
+        ? await storage.getSheetsByBatch(req.params.spaceId, batchId)
+        : await storage.getSheets(req.params.spaceId);
       const securityMode = await serverEncryption.getSecurityMode(userId);
       
       if (securityMode === 0) {
