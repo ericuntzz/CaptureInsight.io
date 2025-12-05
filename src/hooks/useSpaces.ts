@@ -350,12 +350,12 @@ export function useDeleteSheet() {
       await queryClient.cancelQueries({ queryKey: ["/api/spaces"] });
       await queryClient.cancelQueries({ queryKey: ["/api/sheets"] });
       
-      // Snapshot previous values
+      // Snapshot previous values for all sheets queries (including parameterized ones)
+      const previousSheets = queryClient.getQueriesData({ queryKey: ["/api/sheets"] });
       const previousSpaces = queryClient.getQueryData(["/api/spaces"]);
-      const previousSheets = queryClient.getQueryData(["/api/sheets"]);
       
-      // Optimistically remove the sheet from cache
-      queryClient.setQueryData(["/api/sheets"], (old: any) => {
+      // Optimistically remove the sheet from ALL sheets queries (including workspace-scoped ones)
+      queryClient.setQueriesData({ queryKey: ["/api/sheets"] }, (old: any) => {
         if (!old) return old;
         return old.filter((sheet: any) => sheet.id !== id);
       });
@@ -379,12 +379,14 @@ export function useDeleteSheet() {
       return { previousSpaces, previousSheets };
     },
     onError: (_err, _id, context) => {
-      // Rollback on error
+      // Rollback on error - restore all sheets queries
+      if (context?.previousSheets) {
+        context.previousSheets.forEach(([queryKey, data]: [any, any]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
       if (context?.previousSpaces) {
         queryClient.setQueryData(["/api/spaces"], context.previousSpaces);
-      }
-      if (context?.previousSheets) {
-        queryClient.setQueryData(["/api/sheets"], context.previousSheets);
       }
     },
     onSettled: () => {

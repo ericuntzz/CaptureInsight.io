@@ -172,7 +172,32 @@ export function useDeleteChatConversation() {
       await apiRequest("DELETE", `/api/chats/${chatId}`);
       return { chatId, spaceId };
     },
-    onSuccess: (variables) => {
+    onMutate: async ({ chatId, spaceId }) => {
+      // Cancel outgoing refetches
+      const baseKey = "/api/spaces/" + spaceId + "/chats";
+      await queryClient.cancelQueries({ queryKey: [baseKey] });
+      
+      // Snapshot previous values for all chat queries (including workspace-scoped ones)
+      const previousChats = queryClient.getQueriesData({ queryKey: [baseKey] });
+      
+      // Optimistically remove the chat from ALL matching queries
+      queryClient.setQueriesData({ queryKey: [baseKey] }, (old: any) => {
+        if (!old) return old;
+        return old.filter((chat: any) => chat.id !== chatId);
+      });
+      
+      return { previousChats, baseKey };
+    },
+    onError: (_err, _variables, context) => {
+      // Rollback on error
+      if (context?.previousChats) {
+        context.previousChats.forEach(([queryKey, data]: [any, any]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: (_data, _error, variables) => {
+      // Refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ["/api/spaces/" + variables.spaceId + "/chats"] });
     },
   });
