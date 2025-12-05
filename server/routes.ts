@@ -2164,6 +2164,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/insights/:id/auto-summary', isAuthenticated, requireEntityOwner('insight'), async (req: any, res) => {
+    try {
+      const { batchId } = req.body;
+      
+      if (!batchId) {
+        return res.status(400).json({ message: "batchId is required" });
+      }
+      
+      const insight = req.entity;
+      const spaceId = insight.spaceId;
+      
+      if (!spaceId) {
+        return res.status(400).json({ message: "Insight must belong to a space" });
+      }
+      
+      const { streamInsightSummary, isInsightSummaryConfigured } = await import("./ai/insightSummary");
+      
+      if (!isInsightSummaryConfigured()) {
+        return res.status(503).json({ 
+          message: "AI summary is not configured. Please check Gemini API settings." 
+        });
+      }
+      
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+      
+      const summaryStream = streamInsightSummary({
+        insightId: req.params.id,
+        batchId,
+        spaceId,
+      });
+      
+      for await (const chunk of summaryStream) {
+        const data = JSON.stringify(chunk);
+        res.write(`data: ${data}\n\n`);
+        
+        if (chunk.type === 'done' || chunk.type === 'error') {
+          break;
+        }
+      }
+      
+      res.end();
+    } catch (error) {
+      console.error("Error streaming insight summary:", error);
+      
+      if (!res.headersSent) {
+        return res.status(500).json({ message: "Failed to generate summary" });
+      }
+      
+      const errorData = JSON.stringify({ 
+        type: "error", 
+        error: error instanceof Error ? error.message : "Failed to generate summary" 
+      });
+      res.write(`data: ${errorData}\n\n`);
+      res.end();
+    }
+  });
+
   // Insight sources
   app.get('/api/insights/:insightId/sources', isAuthenticated, requireEntityOwner('insight', 'insightId'), async (req: any, res) => {
     try {

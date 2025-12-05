@@ -68,6 +68,13 @@ import {
   type ColumnSchema as ColumnMappingSchema,
 } from "./columnMapping";
 
+import {
+  streamInsightSummary,
+  isInsightSummaryConfigured,
+  type SummaryStreamChunk,
+  type StreamInsightSummaryOptions,
+} from "./insightSummary";
+
 import { storage } from "../storage";
 
 export {
@@ -100,6 +107,8 @@ export {
   suggestColumnMappings,
   suggestMappingsForTemplate,
   isColumnMappingConfigured,
+  streamInsightSummary,
+  isInsightSummaryConfigured,
 };
 
 export type { PIIFilterOptions, PIIFilterResult };
@@ -121,6 +130,11 @@ export type {
 export type {
   ColumnMappingSuggestion,
   ColumnMappingSchema,
+};
+
+export type {
+  SummaryStreamChunk,
+  StreamInsightSummaryOptions,
 };
 
 export type {
