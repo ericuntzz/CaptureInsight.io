@@ -26,8 +26,14 @@ function ResizablePanelGroup({
 const ResizablePanel = React.forwardRef<
   ImperativePanelHandle,
   React.ComponentProps<typeof ResizablePrimitive.Panel>
->(({ ...props }, ref) => (
-  <ResizablePrimitive.Panel ref={ref} data-slot="resizable-panel" {...props} />
+>(({ className, style, ...props }, ref) => (
+  <ResizablePrimitive.Panel 
+    ref={ref} 
+    data-slot="resizable-panel" 
+    className={cn("transition-[flex-grow,flex-shrink,flex-basis] duration-300 ease-out", className)}
+    style={style}
+    {...props} 
+  />
 ));
 
 function ResizableHandle({
