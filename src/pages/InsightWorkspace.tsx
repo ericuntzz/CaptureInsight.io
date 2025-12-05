@@ -147,32 +147,41 @@ function CollapsedChatPanel({ onClick }: { onClick: () => void }) {
   );
 }
 
-// Helper functions for opacity and transform calculation (must be outside component)
-// Content fades out QUICKLY when panel starts shrinking (disappears by size 12)
-// Content fades in more gradually when panel expands
+// Helper functions for opacity, blur and transform calculation (must be outside component)
+// Content fades out and blurs VERY QUICKLY when panel starts shrinking
+// This masks the text squishing effect for a much smoother visual
 const getContentOpacity = (size: number) => {
-  // Fade out early and fast when collapsing (fully gone by size 12)
-  if (size <= 8) return 0;
-  if (size >= 18) return 1;
-  // Faster fade - content disappears quickly as panel shrinks
-  const t = (size - 8) / 10;
-  return Math.pow(t, 1.5); // Faster curve - disappears early
+  // Start fading immediately and be gone by size 12
+  if (size <= 10) return 0;
+  if (size >= 20) return 1;
+  // Very fast fade curve - content disappears early before squishing is visible
+  const t = (size - 10) / 10;
+  return Math.pow(t, 2); // Quadratic - fades very fast at the start
 };
 
 const getCollapsedOpacity = (size: number) => {
-  // Collapsed content appears quickly as expanded content disappears
+  // Collapsed content appears as expanded content disappears
   if (size <= 8) return 1;
   if (size >= 14) return 0;
   const t = (size - 8) / 6;
   return 1 - t;
 };
 
+// Blur effect - content blurs out as panel shrinks (masks text squishing)
+const getContentBlur = (size: number) => {
+  if (size >= 20) return 0;
+  if (size <= 10) return 8;
+  // Quick blur as panel shrinks
+  const t = (size - 10) / 10;
+  return 8 * (1 - t);
+};
+
 // Scale for a subtle zoom effect during transition
 const getContentScale = (size: number) => {
-  if (size <= 8) return 0.94;
-  if (size >= 18) return 1;
-  const t = (size - 8) / 10;
-  return 0.94 + (0.06 * t);
+  if (size <= 10) return 0.92;
+  if (size >= 20) return 1;
+  const t = (size - 10) / 10;
+  return 0.92 + (0.08 * t);
 };
 
 const getCollapsedScale = (size: number) => {
@@ -196,6 +205,7 @@ function PanelContentWrapper({
   const collapsedOpacity = getCollapsedOpacity(size);
   const contentScale = getContentScale(size);
   const collapsedScale = getCollapsedScale(size);
+  const contentBlur = getContentBlur(size);
   
   // Determine visibility states - hide completely when fully transparent
   const isCollapsedVisible = collapsedOpacity > 0.01;
@@ -212,21 +222,22 @@ function PanelContentWrapper({
           pointerEvents: collapsedOpacity > 0.3 ? 'auto' : 'none',
           visibility: isCollapsedVisible ? 'visible' : 'hidden',
           willChange: 'opacity, transform',
-          transition: 'opacity 250ms cubic-bezier(0.4, 0, 0.2, 1), transform 250ms cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'opacity 150ms ease-out, transform 150ms ease-out'
         }}
       >
         {collapsedContent}
       </div>
-      {/* Expanded content - fades out FAST when panel shrinks, fades in slower when expanding */}
+      {/* Expanded content - fades and blurs out quickly when panel shrinks */}
       <div 
         className="absolute inset-0 z-0"
         style={{ 
           opacity: contentOpacity,
           transform: `scale(${contentScale})`,
+          filter: contentBlur > 0 ? `blur(${contentBlur}px)` : 'none',
           pointerEvents: contentOpacity > 0.3 ? 'auto' : 'none',
           visibility: isExpandedVisible ? 'visible' : 'hidden',
-          willChange: 'opacity, transform',
-          transition: 'opacity 200ms cubic-bezier(0.4, 0, 0.2, 1), transform 200ms cubic-bezier(0.4, 0, 0.2, 1)'
+          willChange: 'opacity, transform, filter',
+          transition: 'opacity 120ms ease-out, transform 120ms ease-out, filter 120ms ease-out'
         }}
       >
         {expandedContent}
