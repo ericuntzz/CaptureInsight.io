@@ -361,26 +361,22 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     }
   }, [rightPanelOrder, panelOrderStorageKey]);
   
-  // Enforce chat collapsed state after panel layout restoration
-  // When rightPanelOrder changes, the ResizablePanelGroup restores panel sizes from its autoSaveId
-  // We need to override the chat size to match the user's manual collapsed preference
+  // Enforce chat collapsed state after ANY panel layout change
+  // This runs whenever rightPanelOrder changes (Canvas/Data toggle) to ensure chat state is preserved
   useEffect(() => {
     // Wait a tick for the panel group to restore its layout
     const timeoutId = setTimeout(() => {
-      // ALWAYS enforce the user's manual preference - no conditional logic
+      // ALWAYS enforce the user's manual preference unconditionally
       if (chatManuallyCollapsed) {
         chatPanelRef.current?.resize(3);
       } else {
-        // User wants chat open - ensure it stays at a visible size
-        // Only resize if it's currently too small to be useful
-        if (chatSize < 15) {
-          chatPanelRef.current?.resize(30);
-        }
+        // User wants chat open - always ensure it's at a visible size
+        chatPanelRef.current?.resize(30);
       }
     }, 50);
     
     return () => clearTimeout(timeoutId);
-  }, [rightPanelOrder, chatManuallyCollapsed]); // Include chatManuallyCollapsed to ensure preference is always applied
+  }, [rightPanelOrder, chatManuallyCollapsed]); // Run when panel order OR chat preference changes
   
   // DnD sensors - only for canvas and data panels
   const sensors = useSensors(
