@@ -367,17 +367,20 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   useEffect(() => {
     // Wait a tick for the panel group to restore its layout
     const timeoutId = setTimeout(() => {
+      // ALWAYS enforce the user's manual preference - no conditional logic
       if (chatManuallyCollapsed) {
         chatPanelRef.current?.resize(3);
-      } else if (chatSize < 8) {
-        // Chat was restored to collapsed state but user hasn't manually collapsed it
-        // Expand it to default size
-        chatPanelRef.current?.resize(30);
+      } else {
+        // User wants chat open - ensure it stays at a visible size
+        // Only resize if it's currently too small to be useful
+        if (chatSize < 15) {
+          chatPanelRef.current?.resize(30);
+        }
       }
     }, 50);
     
     return () => clearTimeout(timeoutId);
-  }, [rightPanelOrder]); // Only run when panel order changes (layout restoration happens)
+  }, [rightPanelOrder, chatManuallyCollapsed]); // Include chatManuallyCollapsed to ensure preference is always applied
   
   // DnD sensors - only for canvas and data panels
   const sensors = useSensors(
