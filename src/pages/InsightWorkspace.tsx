@@ -76,6 +76,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { TypewriterText } from '../components/TypewriterText';
 import { GlowingDot } from '../components/GlowingDot';
+import { ProcessingOverlay } from '../components/ProcessingOverlay';
 
 // Draggable collapsed panel content for canvas and data - must be outside component to use hooks
 function DraggableCollapsedPanel({ 
@@ -3572,10 +3573,12 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                     )}
                   </>
                 ) : cleaningStatus === 'processing' ? (
-                  <div className="bg-[#212121] rounded-lg p-8 border border-[#2A2A2A] text-center">
-                    <div className="animate-spin w-8 h-8 border-2 border-[#FF6B35] border-t-transparent rounded-full mx-auto mb-3" />
-                    <p className="text-gray-400 text-sm">AI is cleaning and structuring your data...</p>
-                    <p className="text-gray-500 text-xs mt-1">This may take a few moments</p>
+                  <div className="relative bg-[#0A0E1A] rounded-lg border border-[#2A2A2A] overflow-hidden min-h-[300px]">
+                    <ProcessingOverlay
+                      currentStep="cleaning"
+                      stepDetails="AI is cleaning and structuring your data..."
+                      percentComplete={undefined}
+                    />
                   </div>
                 ) : cleaningStatus === 'failed' ? (
                   <div className="bg-[#212121] rounded-lg p-8 border border-red-500/30 text-center">
