@@ -507,6 +507,10 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   const [isWaitingForBatchCompletion, setIsWaitingForBatchCompletion] = useState(false);
   const [batchSheets, setBatchSheets] = useState<any[]>([]);
   
+  // Streaming summary state
+  const [isStreamingSummary, setIsStreamingSummary] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
+  
   // Fetch insights for current workspace
   const { data: workspaceInsights = [], isLoading: isLoadingInsights } = useInsights(spaceId, workspaceId ?? null);
   
@@ -828,10 +832,109 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     return () => clearInterval(pollInterval);
   }, [pendingCaptureBatchId, isWaitingForBatchCompletion, spaceId]);
   
-  // Placeholder function for auto-summary (will be implemented in next task)
-  const triggerAutoSummary = useCallback((sheets: any[]) => {
-    console.log('triggerAutoSummary called with', sheets.length, 'sheets');
+  // Stream summary to canvas with typewriter effect
+  const streamSummaryToCanvas = useCallback(async (insightId: string, batchId: string) => {
+    setIsStreamingSummary(true);
+    setStreamingContent('');
+    
+    try {
+      const response = await fetch(`/api/insights/${insightId}/auto-summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ batchId }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to start summary stream');
+      
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No reader available');
+      
+      const decoder = new TextDecoder();
+      let fullContent = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'chunk' && data.content) {
+                fullContent += data.content;
+                setNotes(fullContent);
+                setStreamingContent(fullContent);
+              } else if (data.type === 'error') {
+                throw new Error(data.error || 'Summary generation failed');
+              }
+            } catch (e) {
+              if (e instanceof SyntaxError) {
+                // Ignore JSON parsing errors for incomplete chunks
+              } else {
+                throw e;
+              }
+            }
+          }
+        }
+      }
+      
+      setIsStreamingSummary(false);
+      toast.success('Summary generated successfully');
+      
+    } catch (error) {
+      console.error('[AutoSummary] Streaming failed:', error);
+      setIsStreamingSummary(false);
+      toast.error('Failed to generate summary');
+    }
   }, []);
+
+  // Auto-create insight and trigger streaming summary
+  const triggerAutoSummary = useCallback(async (completedSheets: any[]) => {
+    if (!spaceId || !workspaceId) return;
+    
+    try {
+      const insightTitle = `Data Summary - ${new Date().toLocaleDateString()}`;
+      
+      const newInsight = await createInsightMutation.mutateAsync({
+        spaceId,
+        workspaceId,
+        data: {
+          title: insightTitle,
+          summary: '',
+          status: 'Open',
+        }
+      });
+      
+      if (!newInsight?.id) return;
+      
+      const newTab: InsightTab = {
+        id: newInsight.id,
+        title: insightTitle,
+        summary: '',
+        isSaved: true,
+        dbId: newInsight.id,
+      };
+      setOpenTabs(prev => [...prev, newTab]);
+      setActiveTabId(newInsight.id);
+      setLocalTitle(insightTitle);
+      setNotes('');
+      lastSavedContentRef.current = { title: insightTitle, summary: '' };
+      
+      await streamSummaryToCanvas(newInsight.id, pendingCaptureBatchId!);
+      
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+      setPendingCaptureBatchId(null);
+      
+    } catch (error) {
+      console.error('[AutoSummary] Failed to create insight:', error);
+      toast.error('Failed to generate summary');
+    }
+  }, [spaceId, workspaceId, pendingCaptureBatchId, createInsightMutation, streamSummaryToCanvas]);
   
   // Load insight data and mark as saved (for existing insights from DB)
   useEffect(() => {
@@ -1624,7 +1727,13 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
             </button>
           </div>
           
-          <div className="flex items-center gap-1 ml-4">
+          <div className="flex items-center gap-2 ml-4">
+            {isStreamingSummary && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-[#FF6B35]/10 rounded-lg border border-[#FF6B35]/30">
+                <div className="w-2 h-2 bg-[#FF6B35] rounded-full animate-pulse" />
+                <span className="text-xs text-[#FF6B35] font-medium">Generating summary...</span>
+              </div>
+            )}
             <button
               onClick={() => setViewMode('default')}
               className={`p-1.5 rounded transition-colors ${
