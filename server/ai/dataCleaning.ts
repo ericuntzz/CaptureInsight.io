@@ -749,6 +749,46 @@ ${isLargeDataset ? `Full row count: ${rows.length}` : ''}`;
           extractedNotes = [...extractedNotes, ...detectedNotes];
         }
         
+        // ALWAYS run standalone note detection on the AI's cleaned data to catch anything the AI missed
+        // This applies to ALL datasets, not just large ones
+        if (Array.isArray(cleanedRows)) {
+          const finalRows: Record<string, any>[] = [];
+          const postProcessNotes: ExtractedNote[] = [];
+          
+          cleanedRows.forEach((row: Record<string, any>, index: number) => {
+            // First normalize "null" strings to actual null values
+            const normalizedRow: Record<string, any> = {};
+            for (const [key, value] of Object.entries(row)) {
+              if (value === 'null' || value === 'NULL' || value === 'Null') {
+                normalizedRow[key] = null;
+              } else {
+                normalizedRow[key] = value;
+              }
+            }
+            
+            // Check if this cleaned row is actually a standalone note
+            const noteCheck = isStandaloneNoteRow(normalizedRow);
+            if (noteCheck.isNote && noteCheck.noteText) {
+              // This row should be extracted as a note, not kept as data
+              postProcessNotes.push({
+                text: noteCheck.noteText,
+                originalRow: index + 1,
+                context: `Row ${index + 1}`
+              });
+              console.log(`[DataCleaning] Detected standalone note at row ${index + 1}: "${noteCheck.noteText.substring(0, 50)}..."`);
+            } else {
+              finalRows.push(normalizedRow);
+            }
+          });
+          
+          cleanedRows = finalRows;
+          // Merge any newly detected notes
+          if (postProcessNotes.length > 0) {
+            extractedNotes = [...extractedNotes, ...postProcessNotes];
+            console.log(`[DataCleaning] Post-processing extracted ${postProcessNotes.length} additional notes`);
+          }
+        }
+        
         // Get column order from AI response, or infer from first row
         let columnOrder = parsed.columnOrder;
         if (!columnOrder && cleanedRows.length > 0) {
