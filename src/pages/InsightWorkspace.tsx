@@ -317,6 +317,20 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     }
   }, [chatManuallyCollapsed, chatCollapsedStorageKey]);
   
+  // Re-read chat collapsed state when workspace changes
+  useEffect(() => {
+    const savedValue = getInitialChatCollapsed();
+    setChatManuallyCollapsed(savedValue);
+    // Also apply the state immediately
+    setTimeout(() => {
+      if (savedValue) {
+        chatPanelRef.current?.resize(3);
+      } else {
+        chatPanelRef.current?.resize(30);
+      }
+    }, 50);
+  }, [workspaceId]);
+  
   // Right panels order - Chat is always fixed on left, only Canvas and Data can swap
   // 'canvas-data' = Chat | Canvas | Data (default)
   // 'data-canvas' = Chat | Data | Canvas
