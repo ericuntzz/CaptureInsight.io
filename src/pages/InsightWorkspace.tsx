@@ -29,6 +29,10 @@ import {
   Eraser,
   FileDigit,
   FilePlus2,
+  DollarSign,
+  Percent,
+  Hash,
+  ZoomIn,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -1993,6 +1997,14 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const resizeStartX = useRef<number>(0);
   const resizeStartWidth = useRef<number>(0);
   
+  // Table zoom level
+  const [tableZoom, setTableZoom] = useState<number>(100);
+  
+  // Column number formats: column key -> format type
+  type NumberFormat = 'auto' | 'number' | 'currency' | 'percent' | 'scientific';
+  const [columnFormats, setColumnFormats] = useState<Record<string, NumberFormat>>({});
+  const [columnDecimals, setColumnDecimals] = useState<Record<string, number>>({});
+  
   const updateCleanedDataMutation = useUpdateSheetCleanedData();
   const retryProcessingMutation = useRetrySheetProcessing();
   const updateSheetMutation = useUpdateSheet();
@@ -2755,6 +2767,61 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     setEditingCell(null);
   };
 
+  // Format value based on column format settings
+  const formatCellValue = (value: any, columnKey: string): string => {
+    if (value === null || value === undefined) return 'null';
+    
+    const format = columnFormats[columnKey] || 'auto';
+    const decimals = columnDecimals[columnKey] ?? 2;
+    
+    // If not a number, return as-is
+    const num = typeof value === 'number' ? value : parseFloat(String(value));
+    if (isNaN(num)) return String(value);
+    
+    switch (format) {
+      case 'currency':
+        return `$${num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+      case 'percent':
+        return `${(num * 100).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}%`;
+      case 'number':
+        return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+      case 'scientific':
+        return num.toExponential(decimals);
+      case 'auto':
+      default:
+        return String(value);
+    }
+  };
+
+  // Apply format to selected column
+  const applyColumnFormat = (format: NumberFormat) => {
+    if (!selectedCell || !editableTableData) {
+      toast.error('Select a cell first');
+      return;
+    }
+    const columnKey = selectedCell.columnKey;
+    if (!columnKey) return;
+    
+    setColumnFormats(prev => ({ ...prev, [columnKey]: format }));
+    toast.success(`Applied ${format} format to column`);
+  };
+
+  // Increase/decrease decimal places for selected column
+  const adjustDecimals = (delta: number) => {
+    if (!selectedCell || !editableTableData) {
+      toast.error('Select a cell first');
+      return;
+    }
+    const columnKey = selectedCell.columnKey;
+    if (!columnKey) return;
+    
+    setColumnDecimals(prev => {
+      const current = prev[columnKey] ?? 2;
+      const newValue = Math.max(0, Math.min(10, current + delta));
+      return { ...prev, [columnKey]: newValue };
+    });
+  };
+
   // Helper function to get the display title for a sheet
   // Priority: cleanedData.title (AI-generated) > sheet.name (user-set or original)
   const getSheetDisplayTitle = (sheetId: string): string => {
@@ -3247,6 +3314,125 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                           </TooltipContent>
                         </Tooltip>
                         
+                        {/* Number Format buttons - styled like undo/redo */}
+                        <div className="flex items-center gap-0.5 border-l border-[#2A2A2A] pl-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => applyColumnFormat('currency')}
+                                className="p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+                              >
+                                <DollarSign className="w-3.5 h-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                              <p className="text-xs">Format as currency ($)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => applyColumnFormat('percent')}
+                                className="p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+                              >
+                                <Percent className="w-3.5 h-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                              <p className="text-xs">Format as percent (%)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => adjustDecimals(-1)}
+                                className="p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+                              >
+                                <span className="text-[10px] font-medium">.0</span>
+                                <span className="text-[8px] ml-0.5">←</span>
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                              <p className="text-xs">Decrease decimal places</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => adjustDecimals(1)}
+                                className="p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+                              >
+                                <span className="text-[10px] font-medium">.00</span>
+                                <span className="text-[8px] ml-0.5">→</span>
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                              <p className="text-xs">Increase decimal places</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => applyColumnFormat('number')}
+                                className="p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+                              >
+                                <Hash className="w-3.5 h-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                              <p className="text-xs">Format as number (1,234.56)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        
+                        {/* Zoom dropdown */}
+                        <div className="relative border-l border-[#2A2A2A] pl-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={(e) => {
+                                  const btn = e.currentTarget;
+                                  const dropdown = btn.nextElementSibling as HTMLElement;
+                                  if (dropdown) {
+                                    dropdown.classList.toggle('hidden');
+                                  }
+                                }}
+                                className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
+                              >
+                                <ZoomIn className="w-3.5 h-3.5" />
+                                <span>{tableZoom}%</span>
+                                <ChevronDown className="w-3 h-3" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                              <p className="text-xs">Table zoom level</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <div className="hidden absolute top-full left-0 mt-1 bg-[#1F2532] border border-[#2A2A2A] rounded-lg shadow-xl z-50 py-1 min-w-[80px]">
+                            {[50, 75, 90, 100, 125, 150, 200].map((zoom) => (
+                              <button
+                                key={zoom}
+                                onClick={(e) => {
+                                  setTableZoom(zoom);
+                                  const dropdown = (e.currentTarget.parentElement as HTMLElement);
+                                  dropdown.classList.add('hidden');
+                                }}
+                                className={`w-full px-3 py-1.5 text-left text-xs transition-colors ${
+                                  tableZoom === zoom 
+                                    ? 'text-[#FF6B35] bg-[#FF6B35]/10' 
+                                    : 'text-gray-400 hover:text-white hover:bg-[#2A2A2A]'
+                                }`}
+                              >
+                                {zoom}%
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        
                         {/* Undo/Redo buttons - always visible */}
                         <div className="flex items-center gap-1 border-l border-[#2A2A2A] pl-2">
                           <button
@@ -3448,7 +3634,14 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                             {editableTableData && editableTableData.length > 0 ? (() => {
                               const columnKeys = Object.keys(editableTableData[0] || {});
                               return (
-                                <table className="w-full text-sm table-fixed">
+                                <table 
+                                  className="w-full text-sm table-fixed"
+                                  style={{ 
+                                    transform: `scale(${tableZoom / 100})`, 
+                                    transformOrigin: 'top left',
+                                    width: `${10000 / tableZoom}%`
+                                  }}
+                                >
                                   <colgroup>
                                     <col style={{ width: '48px' }} />
                                     {columnKeys.map((key) => (
@@ -3520,7 +3713,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                                   <span className="truncate">
                                                     {value === null ? <span className="text-gray-500 italic">null</span> :
                                                      typeof value === 'object' ? JSON.stringify(value) :
-                                                     String(value)}
+                                                     formatCellValue(value, columnKey)}
                                                   </span>
                                                 </div>
                                               )}
