@@ -3578,10 +3578,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ duration: 0.4 }}
-                      className="flex flex-col items-center gap-8 p-10"
+                      className="flex flex-col items-center gap-10 p-10"
                     >
                       {/* Animated Spinner with Sparkles */}
-                      <div className="relative">
+                      <div className="relative mb-4">
                         {/* Outer glow ring */}
                         <motion.div
                           className="absolute inset-0 w-20 h-20 rounded-full bg-[#FF6B35]/20 blur-xl"
