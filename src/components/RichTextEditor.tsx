@@ -4,7 +4,7 @@ import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import Mention from '@tiptap/extension-mention';
 import { Mark, mergeAttributes, Editor } from '@tiptap/core';
-import { MessageCircle, Bell, Wand2 } from 'lucide-react';
+import { Wand2 } from 'lucide-react';
 import { mockTeamMembers } from '../data/insightsData';
 import tippy, { Instance as TippyInstance } from 'tippy.js';
 import 'tippy.js/dist/tippy.css';
@@ -236,28 +236,6 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     }
   }, [content, editor]);
 
-  const toggleCommentMode = () => {
-    if (editor) {
-      (editor.chain().focus() as any).toggleComment().run();
-    }
-  };
-
-  const getCommentMentionCount = () => {
-    if (!editor) return 0;
-    
-    const doc = editor.state.doc;
-    let count = 0;
-    doc.descendants((node) => {
-      if (node.marks.some(mark => mark.type.name === 'comment')) {
-        count++;
-      }
-      if (node.type.name === 'mention') {
-        count++;
-      }
-    });
-    return count;
-  };
-
   const handleRefineClick = () => {
     if (!editor || !onRefineSelection) return;
     
@@ -270,27 +248,9 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     }
   };
 
-  const commentMentionCount = getCommentMentionCount();
-
   return (
     <div className="relative flex-1 flex flex-col">
-      <button
-        onClick={toggleCommentMode}
-        disabled={disabled}
-        className="absolute top-2 right-2 z-10 p-2 bg-[#2A2A2A] hover:bg-[#FF6B35] text-white rounded-full transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-        title="Add comment (select text and click)"
-      >
-        <MessageCircle className="w-4 h-4" />
-      </button>
-
-      {commentMentionCount > 0 && (
-        <div className="absolute top-14 right-2 z-10 flex items-center gap-1 px-2 py-1 bg-[#FF6B35] text-white rounded-full text-xs">
-          <Bell className="w-3 h-3" />
-          <span>{commentMentionCount}</span>
-        </div>
-      )}
-
-      {editor && onRefineSelection && (
+      {editor && onRefineSelection && aiConsentEnabled && (
         <BubbleMenu
           editor={editor}
           updateDelay={100}
@@ -302,22 +262,13 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           }}
         >
           <div className="flex items-center gap-1 bg-[#1A1A1A] border border-[#3A3A3A] rounded-lg p-1 shadow-xl">
-            {aiConsentEnabled && (
-              <button
-                onClick={handleRefineClick}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gradient-to-r from-[#FF6B35] to-[#FF8F5C] hover:from-[#E55A2B] hover:to-[#FF6B35] text-white rounded-md transition-all font-medium"
-                title="Refine selection with AI"
-              >
-                <Wand2 className="w-3.5 h-3.5" />
-                <span>Refine</span>
-              </button>
-            )}
             <button
-              onClick={toggleCommentMode}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-[#2A2A2A] hover:bg-[#3A3A3A] text-[#9CA3AF] hover:text-white rounded-md transition-colors"
-              title="Add comment"
+              onClick={handleRefineClick}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gradient-to-r from-[#FF6B35] to-[#FF8F5C] hover:from-[#E55A2B] hover:to-[#FF6B35] text-white rounded-md transition-all font-medium"
+              title="Refine selection with AI"
             >
-              <MessageCircle className="w-3.5 h-3.5" />
+              <Wand2 className="w-3.5 h-3.5" />
+              <span>Refine</span>
             </button>
           </div>
         </BubbleMenu>
