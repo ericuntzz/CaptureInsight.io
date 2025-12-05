@@ -3573,12 +3573,78 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                     )}
                   </>
                 ) : cleaningStatus === 'processing' ? (
-                  <div className="relative bg-[#0A0E1A] rounded-lg border border-[#2A2A2A] overflow-hidden min-h-[300px]">
-                    <ProcessingOverlay
-                      currentStep="cleaning"
-                      stepDetails="AI is cleaning and structuring your data..."
-                      percentComplete={undefined}
-                    />
+                  <div className="flex-1 flex items-center justify-center min-h-[400px] rounded-xl bg-gradient-to-br from-[#0A0E1A] via-[#111827] to-[#0A0E1A] border border-[#1F2937] overflow-hidden">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.4 }}
+                      className="flex flex-col items-center gap-8 p-10"
+                    >
+                      {/* Animated Spinner with Sparkles */}
+                      <div className="relative">
+                        {/* Outer glow ring */}
+                        <motion.div
+                          className="absolute inset-0 w-20 h-20 rounded-full bg-[#FF6B35]/20 blur-xl"
+                          animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
+                          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                        />
+                        
+                        {/* Spinning outer ring */}
+                        <motion.div
+                          className="w-20 h-20 rounded-full border-2 border-[#FF6B35]/30"
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                        >
+                          {/* Spinning accent */}
+                          <motion.div
+                            className="absolute inset-0 w-20 h-20 rounded-full border-2 border-transparent border-t-[#FF6B35] border-r-[#FF6B35]/50"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                          />
+                        </motion.div>
+                        
+                        {/* Center sparkle icon */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <motion.div
+                            animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
+                            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                          >
+                            <Sparkles className="w-8 h-8 text-[#FF6B35]" />
+                          </motion.div>
+                        </div>
+                      </div>
+                      
+                      {/* Text content */}
+                      <div className="text-center space-y-3">
+                        <motion.h3
+                          initial={{ y: 10, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          transition={{ delay: 0.2 }}
+                          className="text-xl font-semibold text-white"
+                        >
+                          AI is cleaning and structuring your data
+                        </motion.h3>
+                        <motion.p
+                          initial={{ y: 10, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          transition={{ delay: 0.3 }}
+                          className="text-sm text-gray-400"
+                        >
+                          Detecting patterns, normalizing values, and organizing columns...
+                        </motion.p>
+                      </div>
+                      
+                      {/* Animated processing indicator */}
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.4 }}
+                        className="flex items-center gap-3"
+                      >
+                        <GlowingDot />
+                        <span className="text-xs text-[#64748B]">This may take a few moments</span>
+                      </motion.div>
+                    </motion.div>
                   </div>
                 ) : cleaningStatus === 'failed' ? (
                   <div className="bg-[#212121] rounded-lg p-8 border border-red-500/30 text-center">
