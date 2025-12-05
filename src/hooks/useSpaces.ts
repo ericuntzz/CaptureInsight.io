@@ -312,6 +312,8 @@ export function useCreateSheet() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
+      // Also invalidate sheets query to update the UI in InsightWorkspace immediately
+      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
     },
   });
 }
