@@ -510,7 +510,21 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   // Streaming summary state
   const [isStreamingSummary, setIsStreamingSummary] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const streamingInsightIdRef = useRef<string | null>(null); // Track which insight is being streamed
+  const activeTabIdRef = useRef<string>(activeTabId); // Live ref for active tab ID (for async closures)
   
+  // Centralized helper for tab changes - synchronously updates ref to prevent streaming content leaks
+  // ALWAYS use this instead of calling setActiveTabId directly
+  const setActiveTabSafe = useCallback((newTabId: string) => {
+    activeTabIdRef.current = newTabId;  // Synchronously update ref first
+    setActiveTabId(newTabId);           // Then trigger state update
+  }, []);
+  
+  // Keep activeTabIdRef in sync as a backup for any edge cases
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
   // Fetch insights for current workspace
   const { data: workspaceInsights = [], isLoading: isLoadingInsights } = useInsights(spaceId, workspaceId ?? null);
   
@@ -527,7 +541,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     
     // Reset tabs to loading state - will be populated by sync effect
     setOpenTabs([{ id: 'loading', title: 'Loading...', summary: '', isSaved: false }]);
-    setActiveTabId('loading');
+    setActiveTabSafe('loading');
     setLocalTitle('Loading...');
     setNotes('');
     lastSavedContentRef.current = { title: '', summary: '' };
@@ -557,13 +571,13 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
           dbId: insight.id,
         }));
         setOpenTabs(insightTabs);
-        setActiveTabId(insightTabs[0].id);
+        setActiveTabSafe(insightTabs[0].id);
         setLocalTitle(insightTabs[0].title);
         setNotes(insightTabs[0].summary);
         lastSavedContentRef.current = { title: insightTabs[0].title, summary: insightTabs[0].summary };
       } else {
         setOpenTabs([{ id: 'new', title: 'Untitled Insight', summary: '', isSaved: false }]);
-        setActiveTabId('new');
+        setActiveTabSafe('new');
         setLocalTitle('Untitled Insight');
         setNotes('');
         lastSavedContentRef.current = { title: '', summary: '' };
@@ -639,12 +653,12 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     const activeTabDeleted = previousIds.has(activeTabId) && !dbInsightIds.has(activeTabId);
     if (activeTabDeleted && workspaceInsights.length > 0) {
       const firstInsight = workspaceInsights[0];
-      setActiveTabId(firstInsight.id);
+      setActiveTabSafe(firstInsight.id);
       setLocalTitle(firstInsight.title);
       setNotes(firstInsight.summary || '');
       lastSavedContentRef.current = { title: firstInsight.title, summary: firstInsight.summary || '' };
     } else if (workspaceInsights.length === 0 && activeTabId !== 'new') {
-      setActiveTabId('new');
+      setActiveTabSafe('new');
       setLocalTitle('Untitled Insight');
       setNotes('');
       lastSavedContentRef.current = { title: '', summary: '' };
@@ -713,6 +727,11 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     // Don't auto-save if workspace is still being created (temp ID)
     if (workspaceId?.startsWith('temp-')) return;
     
+    // Don't auto-save while streaming summary - wait for stream to complete
+    // Also don't auto-save if the current tab is the one being streamed (prevents race on tab switch)
+    if (isStreamingSummary) return;
+    if (streamingInsightIdRef.current && streamingInsightIdRef.current === activeTabId) return;
+    
     // Check if content has changed from last saved state
     const hasChanges = 
       localTitle !== lastSavedContentRef.current.title || 
@@ -760,7 +779,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
             setOpenTabs(tabs => tabs.map(t => 
               t.id === activeTabId ? { ...t, isSaved: true, dbId: newInsight.id, id: newInsight.id } : t
             ));
-            setActiveTabId(newInsight.id);
+            setActiveTabSafe(newInsight.id);
             lastSavedContentRef.current = { title: localTitle, summary: notes };
             toast.success('Insight saved');
           },
@@ -776,7 +795,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [localTitle, notes, activeTabId, spaceId, workspaceId]);
+  }, [localTitle, notes, activeTabId, spaceId, workspaceId, isStreamingSummary]);
   
   // Auto-collapse left sidebar when workspace opens
   useEffect(() => {
@@ -813,15 +832,27 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         const sheets = await response.json();
         setBatchSheets(sheets);
         
+        // Check processing status
         const allCompleted = sheets.every((s: any) => s.cleaningStatus === 'completed');
-        const anyFailed = sheets.some((s: any) => s.cleaningStatus === 'failed');
+        const anyFailed = sheets.some((s: any) => s.cleaningStatus === 'failed' || s.cleaningStatus === 'validation_failed');
+        const stillProcessing = sheets.some((s: any) => s.cleaningStatus === 'pending' || s.cleaningStatus === 'processing');
         
-        if (allCompleted || anyFailed) {
+        // Only proceed when all sheets have finished processing (success or failure)
+        if (!stillProcessing && sheets.length > 0) {
           setIsWaitingForBatchCompletion(false);
           clearInterval(pollInterval);
           
-          if (allCompleted && sheets.length > 0) {
+          if (allCompleted) {
+            // All sheets processed successfully - generate summary
             triggerAutoSummary(sheets);
+          } else if (anyFailed) {
+            // Some sheets failed - show error and allow manual retry
+            const failedCount = sheets.filter((s: any) => s.cleaningStatus === 'failed' || s.cleaningStatus === 'validation_failed').length;
+            toast.error(`${failedCount} of ${sheets.length} items failed to process. Check the Data panel for details.`);
+            // Clean up URL but don't block the user
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+            setPendingCaptureBatchId(null);
           }
         }
       } catch (error) {
@@ -833,9 +864,14 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   }, [pendingCaptureBatchId, isWaitingForBatchCompletion, spaceId]);
   
   // Stream summary to canvas with typewriter effect
-  const streamSummaryToCanvas = useCallback(async (insightId: string, batchId: string) => {
+  // Uses a ref to store the insight title to avoid stale closure issues
+  const streamingTitleRef = useRef<string>('');
+  
+  const streamSummaryToCanvas = useCallback(async (insightId: string, insightTitle: string, batchId: string) => {
     setIsStreamingSummary(true);
     setStreamingContent('');
+    streamingInsightIdRef.current = insightId; // Track which insight is being streamed
+    streamingTitleRef.current = insightTitle; // Store the title for this streaming session
     
     try {
       const response = await fetch(`/api/insights/${insightId}/auto-summary`, {
@@ -866,8 +902,14 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
               const data = JSON.parse(line.slice(6));
               if (data.type === 'chunk' && data.content) {
                 fullContent += data.content;
-                setNotes(fullContent);
+                // Store content in streaming buffer for display
                 setStreamingContent(fullContent);
+                // Only update canvas notes if still on the streaming insight tab
+                // Uses ref for live value, not closure-captured state
+                // This prevents content leaking to other tabs if user switches
+                if (activeTabIdRef.current === insightId) {
+                  setNotes(fullContent);
+                }
               } else if (data.type === 'error') {
                 throw new Error(data.error || 'Summary generation failed');
               }
@@ -882,15 +924,41 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         }
       }
       
+      // Streaming complete - always save to the correct insight regardless of current tab
+      // Update the saved content ref ONLY if we're still on the streaming insight
+      // Uses ref for live value, not closure-captured state
+      if (activeTabIdRef.current === insightId) {
+        lastSavedContentRef.current = { title: streamingTitleRef.current, summary: fullContent };
+      }
+      
+      // Save the completed summary to the database (always save to correct insight)
+      try {
+        await updateInsightMutation.mutateAsync({
+          id: insightId,
+          data: { summary: fullContent }
+        });
+        toast.success('Summary generated and saved');
+        
+        // If user switched tabs during streaming, also update the tab's summary in state
+        setOpenTabs(prev => prev.map(t => 
+          t.id === insightId ? { ...t, summary: fullContent } : t
+        ));
+      } catch (saveError) {
+        console.error('[AutoSummary] Failed to save summary:', saveError);
+        toast.error('Summary generated but failed to save. Your content is visible - try saving manually.');
+      }
+      
+      // Clear streaming state AFTER save completes to prevent autosave race
       setIsStreamingSummary(false);
-      toast.success('Summary generated successfully');
+      streamingInsightIdRef.current = null;
       
     } catch (error) {
       console.error('[AutoSummary] Streaming failed:', error);
       setIsStreamingSummary(false);
-      toast.error('Failed to generate summary');
+      streamingInsightIdRef.current = null;
+      toast.error('Failed to generate summary. You can continue editing manually.');
     }
-  }, []);
+  }, [updateInsightMutation]);
 
   // Auto-create insight and trigger streaming summary
   const triggerAutoSummary = useCallback(async (completedSheets: any[]) => {
@@ -919,12 +987,12 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         dbId: newInsight.id,
       };
       setOpenTabs(prev => [...prev, newTab]);
-      setActiveTabId(newInsight.id);
+      setActiveTabSafe(newInsight.id);
       setLocalTitle(insightTitle);
       setNotes('');
       lastSavedContentRef.current = { title: insightTitle, summary: '' };
       
-      await streamSummaryToCanvas(newInsight.id, pendingCaptureBatchId!);
+      await streamSummaryToCanvas(newInsight.id, insightTitle, pendingCaptureBatchId!);
       
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
@@ -1353,7 +1421,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     setOpenTabs(prev => [...prev.map(t => 
       t.id === activeTabId ? { ...t, title: localTitle, summary: notes } : t
     ), newTab]);
-    setActiveTabId(newTab.id);
+    setActiveTabSafe(newTab.id);
     setLocalTitle(newTab.title);
     setNotes('');
     // Reset the saved content tracker for the new tab
@@ -1398,7 +1466,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     
     if (activeTabId === tabId) {
       const newActiveTab = newTabs[newTabs.length - 1];
-      setActiveTabId(newActiveTab.id);
+      setActiveTabSafe(newActiveTab.id);
       setLocalTitle(newActiveTab.title);
       setNotes(newActiveTab.summary);
       lastSavedContentRef.current = { title: newActiveTab.title, summary: newActiveTab.summary };
@@ -1416,7 +1484,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         t.id === activeTabId ? { ...t, title: localTitle, summary: notes } : t
       ));
       
-      setActiveTabId(tabId);
+      setActiveTabSafe(tabId);
       setLocalTitle(targetTab.title);
       setNotes(targetTab.summary);
       lastSavedContentRef.current = { title: targetTab.title, summary: targetTab.summary };
