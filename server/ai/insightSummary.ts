@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { db } from "../db";
 import { sheets, spaces } from "../../shared/schema";
 import { eq } from "drizzle-orm";
-import { filterPIIFromData, type PIIFilterOptions } from "./piiFilter";
+import { filterPII, filterPIIFromData, type PIIFilterOptions } from "./piiFilter";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
@@ -202,16 +202,34 @@ export async function* streamInsightSummary(
       };
       
       // SECURITY: Filter BOTH raw data and cleaned data to prevent PII leaks
-      // Since we use raw data for instant summaries, we must filter it
+      // Handle both data formats: { headers, rows } object AND plain array
       processedSheets = batchSheets.map(sheet => {
         const cleanedData = sheet.cleanedData as { data?: any[] } | null;
-        const rawData = sheet.data as any[] | null;
+        const rawData = sheet.data as any;
         
-        // Filter raw data (used for instant summaries)
+        // Filter raw data - handle both formats
         let filteredRawData = rawData;
-        if (Array.isArray(rawData) && rawData.length > 0) {
-          const filtered = filterPIIFromData(rawData, filterOptions);
-          filteredRawData = filtered.data;
+        if (rawData) {
+          if (rawData.rows && Array.isArray(rawData.rows) && rawData.rows.length > 0) {
+            // Format 1: { headers: [], rows: [] } from data ingestion
+            // Filter headers (might contain PII like column names)
+            const filteredHeaders = rawData.headers ? 
+              rawData.headers.map((h: string) => filterPII(h, filterOptions).text) : [];
+            // Filter each row's values
+            const filteredRows = rawData.rows.map((row: any[]) => 
+              row.map((cell: any) => {
+                if (typeof cell === 'string') {
+                  return filterPII(cell, filterOptions).text;
+                }
+                return cell;
+              })
+            );
+            filteredRawData = { headers: filteredHeaders, rows: filteredRows };
+          } else if (Array.isArray(rawData) && rawData.length > 0) {
+            // Format 2: Plain array
+            const filtered = filterPIIFromData(rawData, filterOptions);
+            filteredRawData = filtered.data;
+          }
         }
         
         // Filter cleaned data if it exists
