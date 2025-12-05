@@ -83,6 +83,28 @@ import { TypewriterText } from '../components/TypewriterText';
 import { GlowingDot } from '../components/GlowingDot';
 import { ProcessingOverlay } from '../components/ProcessingOverlay';
 
+function BouncingDots() {
+  return (
+    <div className="flex items-center gap-1">
+      <motion.div
+        className="w-2 h-2 bg-[#FF6B35] rounded-full"
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 0.6, repeat: Infinity, delay: 0 }}
+      />
+      <motion.div
+        className="w-2 h-2 bg-[#FF6B35] rounded-full"
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 0.6, repeat: Infinity, delay: 0.15 }}
+      />
+      <motion.div
+        className="w-2 h-2 bg-[#FF6B35] rounded-full"
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 0.6, repeat: Infinity, delay: 0.3 }}
+      />
+    </div>
+  );
+}
+
 // Draggable collapsed panel content for canvas and data - must be outside component to use hooks
 function DraggableCollapsedPanel({ 
   type, 
@@ -807,7 +829,10 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const batchId = urlParams.get('batchId');
+    console.log('[InstantSummary] Checking URL params:', { batchId, spaceId, workspaceId, url: window.location.href });
+    
     if (batchId && spaceId && workspaceId) {
+      console.log('[InstantSummary] Starting instant summary flow');
       // Expand panels immediately
       setChatManuallyCollapsed(false);
       chatPanelRef.current?.resize(30);
@@ -818,6 +843,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
       const startInstantSummary = async () => {
         try {
           const insightTitle = `Data Summary - ${new Date().toLocaleDateString()}`;
+          console.log('[InstantSummary] Creating insight with title:', insightTitle);
           
           // Create the insight immediately
           const newInsight = await createInsightMutation.mutateAsync({
@@ -830,7 +856,11 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
             }
           });
           
-          if (!newInsight?.id) return;
+          console.log('[InstantSummary] Created insight:', newInsight?.id);
+          if (!newInsight?.id) {
+            console.error('[InstantSummary] No insight ID returned');
+            return;
+          }
           
           // Add tab and switch to it instantly
           const newTab: InsightTab = {
@@ -847,7 +877,9 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
           lastSavedContentRef.current = { title: insightTitle, summary: '' };
           
           // Start streaming summary IMMEDIATELY with raw data
+          console.log('[InstantSummary] Starting summary stream for insight:', newInsight.id, 'batchId:', batchId);
           await streamSummaryToCanvas(newInsight.id, insightTitle, batchId);
+          console.log('[InstantSummary] Summary stream completed');
           
           // Clean up URL
           const newUrl = window.location.pathname;
@@ -870,12 +902,14 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   const streamingTitleRef = useRef<string>('');
   
   const streamSummaryToCanvas = useCallback(async (insightId: string, insightTitle: string, batchId: string) => {
+    console.log('[streamSummaryToCanvas] Starting stream for insight:', insightId, 'batch:', batchId);
     setIsStreamingSummary(true);
     setStreamingContent('');
     streamingInsightIdRef.current = insightId; // Track which insight is being streamed
     streamingTitleRef.current = insightTitle; // Store the title for this streaming session
     
     try {
+      console.log('[streamSummaryToCanvas] Making API call to /api/insights/' + insightId + '/auto-summary');
       const response = await fetch(`/api/insights/${insightId}/auto-summary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -883,6 +917,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
         body: JSON.stringify({ batchId }),
       });
       
+      console.log('[streamSummaryToCanvas] Response status:', response.status, response.ok);
       if (!response.ok) throw new Error('Failed to start summary stream');
       
       const reader = response.body?.getReader();
@@ -1828,14 +1863,22 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
           </div>
         ) : (
           <div className="px-8 py-6">
-            <input
-              type="text"
-              value={localTitle}
-              onChange={(e) => setLocalTitle(e.target.value)}
-              onBlur={handleTitleBlur}
-              className="w-full text-xl text-white bg-transparent border-none outline-none focus:opacity-80 transition-opacity mb-4"
-              placeholder="Add a title..."
-            />
+            {/* Title with loading state */}
+            {isStreamingSummary && !notes && localTitle.includes('Data Summary') ? (
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-xl text-[#6B7280]">Generating title</span>
+                <BouncingDots />
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={localTitle}
+                onChange={(e) => setLocalTitle(e.target.value)}
+                onBlur={handleTitleBlur}
+                className="w-full text-xl text-white bg-transparent border-none outline-none focus:opacity-80 transition-opacity mb-4"
+                placeholder="Add a title..."
+              />
+            )}
             
             {/* AI Quick Actions Bar */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -1958,16 +2001,24 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
             )}
             
             <div className="bg-[#1A1A1A] rounded-lg min-h-[400px]">
-              <RichTextEditor
-                ref={editorRef}
-                key={activeTabId}
-                content={notes}
-                onChange={setNotes}
-                onSelectionChange={setCanvasSelection}
-                onRefineSelection={handleRefineSelection}
-                aiConsentEnabled={aiLearningConsent}
-                placeholder="Start writing your insight..."
-              />
+              {/* Show bouncing dots loading state when streaming and no content yet */}
+              {isStreamingSummary && !notes ? (
+                <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+                  <BouncingDots />
+                  <span className="text-sm text-[#6B7280]">Analyzing your data...</span>
+                </div>
+              ) : (
+                <RichTextEditor
+                  ref={editorRef}
+                  key={activeTabId}
+                  content={notes}
+                  onChange={setNotes}
+                  onSelectionChange={setCanvasSelection}
+                  onRefineSelection={handleRefineSelection}
+                  aiConsentEnabled={aiLearningConsent}
+                  placeholder="Start writing your insight..."
+                />
+              )}
             </div>
           </div>
         )}
