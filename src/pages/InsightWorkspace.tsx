@@ -502,10 +502,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   // Fetch sheets (captures) for this workspace
   const { data: workspaceSheets = [] } = useWorkspaceSheets(spaceId, workspaceId ?? null);
   
-  // Batch completion tracking state for new capture mode
-  const [pendingCaptureBatchId, setPendingCaptureBatchId] = useState<string | null>(null);
-  const [isWaitingForBatchCompletion, setIsWaitingForBatchCompletion] = useState(false);
-  const [batchSheets, setBatchSheets] = useState<any[]>([]);
+  // Streaming summary state tracking (batch completion tracking removed - now using instant summary)
   
   // Streaming summary state
   const [isStreamingSummary, setIsStreamingSummary] = useState(false);
@@ -805,63 +802,68 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     };
   }, [onSidebarCollapse]);
   
-  // Read batch ID from URL on mount - for new capture mode
+  // Read batch ID from URL on mount - IMMEDIATELY trigger summary (ChatGPT-like speed)
+  // Don't wait for data cleaning - use raw data for instant insights
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const batchId = urlParams.get('batchId');
-    if (batchId) {
-      setPendingCaptureBatchId(batchId);
-      setIsWaitingForBatchCompletion(true);
+    if (batchId && spaceId && workspaceId) {
+      // Expand panels immediately
       setChatManuallyCollapsed(false);
       chatPanelRef.current?.resize(30);
       handleExpandCanvas();
-    }
-  }, []);
-  
-  // Batch completion watcher - polls sheets when there's a pending batch
-  useEffect(() => {
-    if (!pendingCaptureBatchId || !isWaitingForBatchCompletion || !spaceId) return;
-    
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`/api/spaces/${spaceId}/sheets?batchId=${pendingCaptureBatchId}`, {
-          credentials: 'include'
-        });
-        if (!response.ok) return;
-        
-        const sheets = await response.json();
-        setBatchSheets(sheets);
-        
-        // Check processing status
-        const allCompleted = sheets.every((s: any) => s.cleaningStatus === 'completed');
-        const anyFailed = sheets.some((s: any) => s.cleaningStatus === 'failed' || s.cleaningStatus === 'validation_failed');
-        const stillProcessing = sheets.some((s: any) => s.cleaningStatus === 'pending' || s.cleaningStatus === 'processing');
-        
-        // Only proceed when all sheets have finished processing (success or failure)
-        if (!stillProcessing && sheets.length > 0) {
-          setIsWaitingForBatchCompletion(false);
-          clearInterval(pollInterval);
+      
+      // Create insight tab and start streaming IMMEDIATELY - don't wait for cleaning!
+      // This gives ChatGPT-like instant response times
+      const startInstantSummary = async () => {
+        try {
+          const insightTitle = `Data Summary - ${new Date().toLocaleDateString()}`;
           
-          if (allCompleted) {
-            // All sheets processed successfully - generate summary
-            triggerAutoSummary(sheets);
-          } else if (anyFailed) {
-            // Some sheets failed - show error and allow manual retry
-            const failedCount = sheets.filter((s: any) => s.cleaningStatus === 'failed' || s.cleaningStatus === 'validation_failed').length;
-            toast.error(`${failedCount} of ${sheets.length} items failed to process. Check the Data panel for details.`);
-            // Clean up URL but don't block the user
-            const newUrl = window.location.pathname;
-            window.history.replaceState({}, '', newUrl);
-            setPendingCaptureBatchId(null);
-          }
+          // Create the insight immediately
+          const newInsight = await createInsightMutation.mutateAsync({
+            spaceId,
+            workspaceId,
+            data: {
+              title: insightTitle,
+              summary: '',
+              status: 'Open',
+            }
+          });
+          
+          if (!newInsight?.id) return;
+          
+          // Add tab and switch to it instantly
+          const newTab: InsightTab = {
+            id: newInsight.id,
+            title: insightTitle,
+            summary: '',
+            isSaved: true,
+            dbId: newInsight.id,
+          };
+          setOpenTabs(prev => [...prev, newTab]);
+          setActiveTabSafe(newInsight.id);
+          setLocalTitle(insightTitle);
+          setNotes('');
+          lastSavedContentRef.current = { title: insightTitle, summary: '' };
+          
+          // Start streaming summary IMMEDIATELY with raw data
+          await streamSummaryToCanvas(newInsight.id, insightTitle, batchId);
+          
+          // Clean up URL
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, '', newUrl);
+        } catch (error) {
+          console.error('[InstantSummary] Failed:', error);
+          toast.error('Failed to generate summary');
         }
-      } catch (error) {
-        console.error('Error polling batch sheets:', error);
-      }
-    }, 1000);
-    
-    return () => clearInterval(pollInterval);
-  }, [pendingCaptureBatchId, isWaitingForBatchCompletion, spaceId]);
+      };
+      
+      startInstantSummary();
+    }
+  }, [spaceId, workspaceId]);
+  
+  // Old batch completion watcher removed - summary now triggers immediately with raw data
+  // Data cleaning happens in background via BackgroundProcessor, users see cleaned data when ready
   
   // Stream summary to canvas with typewriter effect
   // Uses a ref to store the insight title to avoid stale closure issues
@@ -960,50 +962,6 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     }
   }, [updateInsightMutation]);
 
-  // Auto-create insight and trigger streaming summary
-  const triggerAutoSummary = useCallback(async (completedSheets: any[]) => {
-    if (!spaceId || !workspaceId) return;
-    
-    try {
-      const insightTitle = `Data Summary - ${new Date().toLocaleDateString()}`;
-      
-      const newInsight = await createInsightMutation.mutateAsync({
-        spaceId,
-        workspaceId,
-        data: {
-          title: insightTitle,
-          summary: '',
-          status: 'Open',
-        }
-      });
-      
-      if (!newInsight?.id) return;
-      
-      const newTab: InsightTab = {
-        id: newInsight.id,
-        title: insightTitle,
-        summary: '',
-        isSaved: true,
-        dbId: newInsight.id,
-      };
-      setOpenTabs(prev => [...prev, newTab]);
-      setActiveTabSafe(newInsight.id);
-      setLocalTitle(insightTitle);
-      setNotes('');
-      lastSavedContentRef.current = { title: insightTitle, summary: '' };
-      
-      await streamSummaryToCanvas(newInsight.id, insightTitle, pendingCaptureBatchId!);
-      
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
-      setPendingCaptureBatchId(null);
-      
-    } catch (error) {
-      console.error('[AutoSummary] Failed to create insight:', error);
-      toast.error('Failed to generate summary');
-    }
-  }, [spaceId, workspaceId, pendingCaptureBatchId, createInsightMutation, streamSummaryToCanvas]);
-  
   // Load insight data and mark as saved (for existing insights from DB)
   useEffect(() => {
     if (insight && insightId) {
