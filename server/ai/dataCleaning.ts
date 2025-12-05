@@ -733,7 +733,25 @@ export async function cleanTabularData(
       
       const systemPrompt = buildSourceAwarePrompt(sourceType, columnHeuristics, templateHints);
       
+      // Build explicit column order instruction if headers are provided
+      const columnOrderInstruction = headers && headers.length > 0 
+        ? `
+CRITICAL - ORIGINAL COLUMN ORDER (must be preserved):
+The source document has columns in this EXACT order from left to right:
+${headers.map((h, i) => `  ${i + 1}. "${h || '(empty - use as metric_name/label)'}"${h === '' ? ' - This is the FIRST column with row labels/metric names' : ''}`).join('\n')}
+
+You MUST output your cleaned data with columns in this same order:
+- The first column (${headers[0] || 'metric_name'}) should be FIRST in your output
+- Month/date columns should maintain chronological order as shown above
+- Notes columns should remain at the END
+
+In your columnOrder array, list columns in the order they appear in the source (left to right).
+`
+        : '';
+      
       const prompt = `${TABULAR_CLEANING_PROMPT}
+
+${columnOrderInstruction}
 
 ${isLargeDataset ? `NOTE: This is a preview of ${rows.length} total rows. Apply the same cleaning rules to understand the structure.` : ''}
 
@@ -818,17 +836,87 @@ ${isLargeDataset ? `Full row count: ${rows.length}` : ''}`;
           }
         }
         
-        // Get column order from AI response, or infer from first row
-        let columnOrder = parsed.columnOrder;
-        if (!columnOrder && cleanedRows.length > 0) {
-          columnOrder = Object.keys(cleanedRows[0]);
+        // CRITICAL: Prioritize original headers for column order to match source document
+        // The headers parameter contains the original column order from the CSV/Google Sheet
+        let columnOrder: string[] | undefined;
+        
+        if (headers && headers.length > 0) {
+          // Use original headers as the authoritative column order
+          // Build a mapping from AI's column names to original headers
+          const aiColumns = cleanedRows.length > 0 ? Object.keys(cleanedRows[0]) : [];
+          const originalColumnOrder: string[] = [];
+          const usedAiColumns = new Set<string>();
+          
+          // First, match original headers to AI columns (exact or normalized)
+          for (const originalHeader of headers) {
+            const normalizedOriginal = originalHeader.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+            
+            // Try to find matching AI column
+            let matchedAiColumn: string | null = null;
+            
+            for (const aiCol of aiColumns) {
+              if (usedAiColumns.has(aiCol)) continue;
+              
+              const normalizedAi = aiCol.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+              
+              // Exact match
+              if (aiCol === originalHeader || normalizedAi === normalizedOriginal) {
+                matchedAiColumn = aiCol;
+                break;
+              }
+              
+              // Check for common transformations (notes → row_notes, empty header → metric_name)
+              if (originalHeader === '' && (aiCol === 'metric_name' || aiCol === 'name' || aiCol === 'label' || aiCol === 'row_label')) {
+                matchedAiColumn = aiCol;
+                break;
+              }
+              
+              // Fuzzy match for similar names
+              if (normalizedAi.includes(normalizedOriginal) || normalizedOriginal.includes(normalizedAi)) {
+                matchedAiColumn = aiCol;
+                break;
+              }
+            }
+            
+            if (matchedAiColumn) {
+              originalColumnOrder.push(matchedAiColumn);
+              usedAiColumns.add(matchedAiColumn);
+            }
+          }
+          
+          // Add any remaining AI columns that weren't matched (like notes columns added by AI)
+          for (const aiCol of aiColumns) {
+            if (!usedAiColumns.has(aiCol)) {
+              // Notes columns should go at the end
+              if (aiCol.toLowerCase().includes('note')) {
+                originalColumnOrder.push(aiCol);
+              } else {
+                // Insert before notes if possible
+                const notesIdx = originalColumnOrder.findIndex(c => c.toLowerCase().includes('note'));
+                if (notesIdx >= 0) {
+                  originalColumnOrder.splice(notesIdx, 0, aiCol);
+                } else {
+                  originalColumnOrder.push(aiCol);
+                }
+              }
+            }
+          }
+          
+          columnOrder = originalColumnOrder;
+          console.log(`[DataCleaning] Enforcing original column order: ${columnOrder.join(', ')}`);
+        } else {
+          // Fall back to AI-provided order or infer from first row
+          columnOrder = parsed.columnOrder;
+          if (!columnOrder && cleanedRows.length > 0) {
+            columnOrder = Object.keys(cleanedRows[0]);
+          }
         }
         
-        // Reorder data columns based on columnOrder if provided
+        // Reorder data columns based on columnOrder
         if (columnOrder && cleanedRows.length > 0) {
           cleanedRows = cleanedRows.map((row: Record<string, any>) => {
             const orderedRow: Record<string, any> = {};
-            for (const col of columnOrder) {
+            for (const col of columnOrder!) {
               if (col in row) {
                 orderedRow[col] = row[col];
               }
@@ -1225,9 +1313,32 @@ export async function cleanSheetData(sheetId: string): Promise<CleanedDataResult
         return result;
       }
       
-      if (Array.isArray(sheetData)) {
-        result = await cleanTabularData(sheetData, undefined, sheet.name, sourceType, templateHints);
+      // Handle different data formats
+      if (sheetData && typeof sheetData === 'object' && 'headers' in sheetData && 'rows' in sheetData) {
+        // Google Sheets format: { headers: string[], rows: string[][] }
+        // This is the raw CSV parsed format - convert to row objects while preserving column order
+        const headers: string[] = sheetData.headers;
+        const rawRows: string[][] = sheetData.rows;
+        
+        console.log(`[DataCleaning] Detected Google Sheets format with ${headers.length} columns: ${headers.join(', ')}`);
+        
+        // Convert raw rows to objects, preserving header order
+        const rowObjects: Record<string, string>[] = rawRows.map((values: string[]) => {
+          const row: Record<string, string> = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index] || '';
+          });
+          return row;
+        });
+        
+        // Pass the original headers to preserve column order
+        result = await cleanTabularData(rowObjects, headers, sheet.name, sourceType, templateHints);
+      } else if (Array.isArray(sheetData)) {
+        // Array of row objects - infer headers from first row
+        const inferredHeaders = sheetData.length > 0 ? Object.keys(sheetData[0]) : undefined;
+        result = await cleanTabularData(sheetData, inferredHeaders, sheet.name, sourceType, templateHints);
       } else if (sheetData && typeof sheetData === "object") {
+        // Single object - use its keys as headers
         result = await cleanTabularData([sheetData], Object.keys(sheetData), sheet.name, sourceType, templateHints);
       } else {
         result = { success: false, error: "No link data found to clean", failureType: 'no_data_found' };
