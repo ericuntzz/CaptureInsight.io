@@ -295,8 +295,27 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   const isCanvasCollapsed = canvasSize < 8;
   const isDataCollapsed = dataSize < 8;
   
-  // Track if chat was manually collapsed by user
-  const [chatManuallyCollapsed, setChatManuallyCollapsed] = useState(false);
+  // Track if chat was manually collapsed by user - persisted to localStorage
+  const chatCollapsedStorageKey = getStorageKey('insight-workspace-chat-collapsed', workspaceId);
+  const getInitialChatCollapsed = (): boolean => {
+    try {
+      const saved = localStorage.getItem(chatCollapsedStorageKey);
+      return saved === 'true';
+    } catch (e) {
+      console.error('Failed to load chat collapsed state from localStorage:', e);
+    }
+    return false;
+  };
+  const [chatManuallyCollapsed, setChatManuallyCollapsed] = useState(getInitialChatCollapsed);
+  
+  // Persist chat collapsed state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(chatCollapsedStorageKey, String(chatManuallyCollapsed));
+    } catch (e) {
+      console.error('Failed to save chat collapsed state to localStorage:', e);
+    }
+  }, [chatManuallyCollapsed, chatCollapsedStorageKey]);
   
   // Right panels order - Chat is always fixed on left, only Canvas and Data can swap
   // 'canvas-data' = Chat | Canvas | Data (default)
@@ -327,6 +346,24 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
       console.error('Failed to save panel order to localStorage:', e);
     }
   }, [rightPanelOrder, panelOrderStorageKey]);
+  
+  // Enforce chat collapsed state after panel layout restoration
+  // When rightPanelOrder changes, the ResizablePanelGroup restores panel sizes from its autoSaveId
+  // We need to override the chat size to match the user's manual collapsed preference
+  useEffect(() => {
+    // Wait a tick for the panel group to restore its layout
+    const timeoutId = setTimeout(() => {
+      if (chatManuallyCollapsed) {
+        chatPanelRef.current?.resize(3);
+      } else if (chatSize < 8) {
+        // Chat was restored to collapsed state but user hasn't manually collapsed it
+        // Expand it to default size
+        chatPanelRef.current?.resize(30);
+      }
+    }, 50);
+    
+    return () => clearTimeout(timeoutId);
+  }, [rightPanelOrder]); // Only run when panel order changes (layout restoration happens)
   
   // DnD sensors - only for canvas and data panels
   const sensors = useSensors(
