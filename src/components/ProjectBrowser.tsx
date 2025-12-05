@@ -140,6 +140,8 @@ export function ProjectBrowser({
   const workspaceInputRef = useRef<HTMLInputElement>(null);
   const [showWorkspaceFlyout, setShowWorkspaceFlyout] = useState(false);
   const workspaceButtonRef = useRef<HTMLButtonElement>(null);
+  const workspaceFlyoutRef = useRef<HTMLDivElement>(null);
+  const flyoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number }>({ top: 0, left: 60 });
   
   // Workspace delete dialog state
@@ -459,12 +461,25 @@ export function ProjectBrowser({
       <div className="px-2 flex-1 overflow-hidden flex flex-col">
         {/* Workspaces Header - Collapsed Mode with Flyout */}
         {isCollapsed ? (
-          <div className="relative">
+          <div 
+            className="relative"
+            onMouseEnter={() => {
+              if (flyoutTimeoutRef.current) {
+                clearTimeout(flyoutTimeoutRef.current);
+                flyoutTimeoutRef.current = null;
+              }
+              setShowWorkspaceFlyout(true);
+            }}
+            onMouseLeave={() => {
+              flyoutTimeoutRef.current = setTimeout(() => {
+                setShowWorkspaceFlyout(false);
+              }, 150);
+            }}
+          >
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   ref={workspaceButtonRef}
-                  onClick={() => setShowWorkspaceFlyout(!showWorkspaceFlyout)}
                   className={`w-full h-10 flex items-center justify-center rounded-lg transition-all mb-2 group ${
                     activeView === 'workspace'
                       ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
@@ -474,28 +489,36 @@ export function ProjectBrowser({
                   <LayoutGrid className="w-4 h-4 flex-shrink-0" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
-                Workspaces
-              </TooltipContent>
+              {!showWorkspaceFlyout && (
+                <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+                  Workspaces
+                </TooltipContent>
+              )}
             </Tooltip>
 
             {/* Flyout Menu for Collapsed Mode */}
             <AnimatePresence>
               {showWorkspaceFlyout && (
-                <>
-                  {/* Backdrop to close flyout */}
-                  <div 
-                    className="fixed inset-0 z-40" 
-                    onClick={() => setShowWorkspaceFlyout(false)}
-                  />
-                  <motion.div
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    transition={{ duration: 0.15 }}
-                    style={{ top: flyoutPosition.top, left: flyoutPosition.left }}
-                    className="fixed w-56 bg-[#1A1F2E] border border-[#2A2F3E] rounded-lg shadow-xl z-50 py-2"
-                  >
+                <motion.div
+                  ref={workspaceFlyoutRef}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.15 }}
+                  style={{ top: flyoutPosition.top, left: flyoutPosition.left }}
+                  className="fixed w-56 bg-[#1A1F2E] border border-[#2A2F3E] rounded-lg shadow-xl z-50 py-2"
+                  onMouseEnter={() => {
+                    if (flyoutTimeoutRef.current) {
+                      clearTimeout(flyoutTimeoutRef.current);
+                      flyoutTimeoutRef.current = null;
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    flyoutTimeoutRef.current = setTimeout(() => {
+                      setShowWorkspaceFlyout(false);
+                    }, 150);
+                  }}
+                >
                     {/* Header */}
                     <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 border-b border-[#2A2F3E] mb-1">
                       Workspaces
@@ -537,7 +560,6 @@ export function ProjectBrowser({
                       )}
                     </div>
                   </motion.div>
-                </>
               )}
             </AnimatePresence>
           </div>
