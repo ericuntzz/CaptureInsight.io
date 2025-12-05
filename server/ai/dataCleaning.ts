@@ -293,7 +293,7 @@ IMPORTANT: Extract everything you can see, not just a summary.`;
 const TABULAR_CLEANING_PROMPT = `Clean and normalize this tabular data into structured JSON.
 
 Tasks:
-1. Standardize column names (lowercase, underscores, no special chars)
+1. Standardize column names (Title Case with spaces, capitalize first letter of each word, e.g., "Payment Type", "Item Description", "Billing Frequency")
 2. Convert numeric strings to numbers
 3. Parse dates to ISO format
 4. Clean text values (trim, normalize)
