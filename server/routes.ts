@@ -486,35 +486,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const spreadsheetId = spreadsheetIdMatch[1];
       
       // Try to fetch the sheet's CSV export (only works if publicly accessible)
+      // Use GET request with AbortController for timeout - HEAD requests don't work reliably with Google
       const exportUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
       
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
         const response = await fetch(exportUrl, {
-          method: 'HEAD',
-          redirect: 'manual',
+          method: 'GET',
+          signal: controller.signal,
+          headers: {
+            // Request only first byte to minimize data transfer
+            'Range': 'bytes=0-100',
+          },
         });
         
-        // If we get a 200 or redirect to the actual file, it's public
-        // If we get a 302 to accounts.google.com, it's private
-        const isPublic = response.status === 200 || 
-          (response.status === 302 && 
-           !response.headers.get('location')?.includes('accounts.google.com'));
+        clearTimeout(timeoutId);
+        
+        // Check if we got a successful response or partial content
+        // 200 = full success, 206 = partial content (our range request worked)
+        const isPublic = response.status === 200 || response.status === 206;
+        
+        // Also check if the response redirected to a login page
+        const finalUrl = response.url;
+        const redirectedToLogin = finalUrl.includes('accounts.google.com') || 
+                                   finalUrl.includes('ServiceLogin');
+        
+        const accessible = isPublic && !redirectedToLogin;
+        
+        console.log(`[Validation] Google Sheet ${spreadsheetId}: status=${response.status}, accessible=${accessible}`);
         
         return res.json({
-          isPublic,
-          message: isPublic 
+          isPublic: accessible,
+          message: accessible 
             ? 'Google Sheet is publicly accessible' 
             : 'Google Sheet is not publicly shared',
-          solution: isPublic 
+          solution: accessible 
             ? null 
             : 'Open your Google Sheet, click "Share", then change access to "Anyone with the link can view"',
         });
-      } catch (fetchError) {
+      } catch (fetchError: any) {
+        // If it's an abort error (timeout), treat as potentially accessible
+        // since the server might just be slow
+        if (fetchError.name === 'AbortError') {
+          console.log(`[Validation] Google Sheet ${spreadsheetId}: timeout, assuming accessible`);
+          return res.json({
+            isPublic: true,
+            message: 'Google Sheet validation timed out, assuming accessible',
+          });
+        }
+        
         console.error('Error checking Google Sheet accessibility:', fetchError);
+        // Default to allowing the user to proceed - we'll catch any real issues during actual import
         return res.json({
-          isPublic: false,
-          message: 'Could not verify Google Sheet accessibility',
-          solution: 'Make sure the sheet is shared publicly: Open the sheet, click "Share", then set "Anyone with the link" to "Viewer"',
+          isPublic: true,
+          message: 'Could not verify, proceeding with capture',
         });
       }
     } catch (error) {
