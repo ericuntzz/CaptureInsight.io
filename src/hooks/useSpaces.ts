@@ -341,8 +341,52 @@ export function useDeleteSheet() {
   return useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/sheets/${id}`);
+      return id;
     },
-    onSuccess: () => {
+    onMutate: async (id: string) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/spaces"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/sheets"] });
+      
+      // Snapshot previous values
+      const previousSpaces = queryClient.getQueryData(["/api/spaces"]);
+      const previousSheets = queryClient.getQueryData(["/api/sheets"]);
+      
+      // Optimistically remove the sheet from cache
+      queryClient.setQueryData(["/api/sheets"], (old: any) => {
+        if (!old) return old;
+        return old.filter((sheet: any) => sheet.id !== id);
+      });
+      
+      // Also update spaces cache if it contains sheets
+      queryClient.setQueryData(["/api/spaces"], (old: any) => {
+        if (!old) return old;
+        return old.map((space: any) => ({
+          ...space,
+          workspaces: space.workspaces?.map((ws: any) => ({
+            ...ws,
+            sheets: ws.sheets?.filter((s: any) => s.id !== id)
+          })),
+          folders: space.folders?.map((folder: any) => ({
+            ...folder,
+            sheets: folder.sheets?.filter((s: any) => s.id !== id)
+          }))
+        }));
+      });
+      
+      return { previousSpaces, previousSheets };
+    },
+    onError: (_err, _id, context) => {
+      // Rollback on error
+      if (context?.previousSpaces) {
+        queryClient.setQueryData(["/api/spaces"], context.previousSpaces);
+      }
+      if (context?.previousSheets) {
+        queryClient.setQueryData(["/api/sheets"], context.previousSheets);
+      }
+    },
+    onSettled: () => {
+      // Refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
     },
