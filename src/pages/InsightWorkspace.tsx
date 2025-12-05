@@ -2094,7 +2094,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   // Handle sheet selection with unsaved changes protection
   const handleSelectSheet = (sheetId: string) => {
     if (sheetId === selectedSheetId) {
-      // If clicking same sheet, just toggle collapse
+      // If clicking same sheet, do nothing
       return;
     }
     
@@ -2102,9 +2102,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       // Store pending switch and show confirmation
       setPendingSheetSwitch(sheetId);
     } else {
-      // No unsaved changes, switch immediately and auto-collapse sidebar
+      // No unsaved changes, switch immediately (keep sidebar open for easy toggling)
       setSelectedSheetId(sheetId);
-      setIsSourcesListCollapsed(true);
     }
   };
 
@@ -2115,7 +2114,6 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       setEditingCell(null);
       setSelectedCell(null);
       setSelectedSheetId(pendingSheetSwitch);
-      setIsSourcesListCollapsed(true);
       setPendingSheetSwitch(null);
     }
   };
