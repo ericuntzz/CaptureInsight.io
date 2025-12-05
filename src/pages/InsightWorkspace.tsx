@@ -2992,10 +2992,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         clearTimeout(autoSaveTimeoutRef.current);
       }
       
-      // Set a short timeout for auto-save (300ms after leaving cell)
-      autoSaveTimeoutRef.current = setTimeout(() => {
-        performAutoSave();
-      }, 300);
+      // Save immediately when leaving a cell (no delay to prevent data loss on refresh)
+      performAutoSave();
     }
     
     return () => {
@@ -3004,6 +3002,20 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       }
     };
   }, [hasTableChanges, editableTableData, selectedSheetId, editingCell]);
+  
+  // Warn user before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasTableChanges || hasJsonChanges) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasTableChanges, hasJsonChanges]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
