@@ -2992,8 +2992,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         clearTimeout(autoSaveTimeoutRef.current);
       }
       
-      // Save immediately when leaving a cell (no delay to prevent data loss on refresh)
-      performAutoSave();
+      // Use a very short timeout (10ms) to batch rapid changes and ensure state is settled
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        performAutoSave();
+      }, 10);
     }
     
     return () => {
@@ -3001,7 +3003,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, [hasTableChanges, editableTableData, selectedSheetId, editingCell]);
+  }, [hasTableChanges, editableTableData, selectedSheetId, editingCell, cleanedData]);
   
   // Warn user before leaving page with unsaved changes
   useEffect(() => {
