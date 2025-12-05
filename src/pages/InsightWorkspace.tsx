@@ -3542,19 +3542,42 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         <ChevronDown className={`w-3 h-3 transition-transform ${showQualityDetails ? 'rotate-180' : ''}`} />
                       </button>
                     )}
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      cleaningStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
-                      cleaningStatus === 'processing' ? 'bg-amber-500/20 text-amber-400' :
-                      cleaningStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
-                      'bg-gray-500/20 text-gray-400'
-                    }`}>
-                      {cleaningStatus === 'completed' 
-                        ? cleanedData?.metadata?.extractedAt 
-                          ? `Processed ${new Date(cleanedData.metadata.extractedAt).toLocaleDateString()}`
-                          : 'AI Processed'
-                        : cleaningStatus === 'processing' ? 'Processing...' :
-                          cleaningStatus === 'failed' ? 'Processing Failed' : 'Awaiting Processing'}
-                    </span>
+                    {cleaningStatus === 'completed' && cleanedData?.metadata?.extractedAt ? (
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 cursor-default">
+                              Processed {new Date(cleanedData.metadata.extractedAt).toLocaleDateString()}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="bg-[#2A2A2A] border-[#3A3A3A] text-white">
+                            <p className="text-xs">
+                              {new Date(cleanedData.metadata.extractedAt).toLocaleString(undefined, {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                              })}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        cleaningStatus === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
+                        cleaningStatus === 'processing' ? 'bg-amber-500/20 text-amber-400' :
+                        cleaningStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
+                        'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {cleaningStatus === 'completed' 
+                          ? 'AI Processed'
+                          : cleaningStatus === 'processing' ? 'Processing...' :
+                            cleaningStatus === 'failed' ? 'Processing Failed' : 'Awaiting Processing'}
+                      </span>
+                    )}
                   </div>
                   
                   {/* Expandable Quality Details Panel */}
