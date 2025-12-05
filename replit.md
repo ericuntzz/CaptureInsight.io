@@ -102,21 +102,26 @@ Validates data sources before capturing to prevent upload failures:
 -   **Key Files**: `src/lib/captureValidation.ts`, `server/routes.ts` (validation endpoint), `src/components/CaptureAssignmentPanel.tsx`, `src/components/FloatingCaptureToolbar.tsx`
 
 **Data Editing Capabilities (Excel/Google Sheets-like):**
--   **Single-Click Selection**: Click any cell to select it (subtle border-only highlight, no background fill).
+-   **Multi-Cell Selection**: Select multiple cells for batch operations:
+    -   Click: Select single cell
+    -   Shift+Click: Select range from last clicked cell to current cell
+    -   Ctrl/Cmd+Click: Toggle individual cells in/out of selection
+-   **Cell-Based Formatting**: Formatting (currency, percent, number, decimals) applies only to selected cells, not entire columns
+-   **Selection Anchor**: System tracks the "anchor" cell for consistent keyboard navigation after multi-selection
 -   **Type-to-Edit**: Start typing immediately to replace cell content (no double-click needed).
 -   **Arrow Key Navigation**: Use arrow keys to move between cells when a cell is selected.
 -   **Edit Mode (F2/Enter)**: Press F2 or Enter to edit existing content without replacing it.
 -   **Tab Navigation**: Tab moves right, Shift+Tab moves left, wrapping to next/previous row.
 -   **Enter Navigation**: Enter moves down, Shift+Enter moves up after editing.
--   **Delete/Backspace**: Clears the selected cell content.
--   **Escape**: Cancel editing or deselect cell.
+-   **Delete/Backspace**: Clears all selected cells content.
+-   **Escape**: Cancel editing or deselect all cells.
 -   **Undo/Redo**: Ctrl+Z to undo, Ctrl+Y or Ctrl+Shift+Z to redo. Unlimited undo history per session.
 -   **Undo/Redo Buttons**: Visible arrow buttons appear next to "Edit Data" when changes are made.
 -   **Column Resizing**: Drag column header edges to resize columns (60px-500px range).
 -   **Stable Cell Size**: Cells maintain consistent height during editing (no size jumps).
 -   **Sticky Header**: Column headers stay visible with solid background when scrolling.
 -   **JSON Editing**: Full JSON editor for advanced data modifications.
--   **Visual Indicators**: Row numbers and zebra striping for easy navigation.
+-   **Visual Indicators**: Row numbers, zebra striping, and subtle highlight on selected cells for easy navigation.
 -   **Unsaved Changes Protection**: Confirmation dialog when switching data sources with pending edits.
 -   **Add/Delete Rows**: Row management with hover-revealed delete buttons and "Add Row" functionality.
 -   **Optimistic Updates**: Changes are immediately visible with automatic rollback on errors.

@@ -1913,6 +1913,13 @@ interface CellPosition {
   columnKey: string;
 }
 
+// Helper to create a cell key for Set storage
+const makeCellKey = (rowIndex: number, columnKey: string) => `${rowIndex}:${columnKey}`;
+const parseCellKey = (key: string): CellPosition => {
+  const [rowStr, ...colParts] = key.split(':');
+  return { rowIndex: parseInt(rowStr), columnKey: colParts.join(':') };
+};
+
 type EditMode = 'replace' | 'edit';
 
 // Cell-level edit entry
@@ -1971,7 +1978,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const jsonAutoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const [editableTableData, setEditableTableData] = useState<any[] | null>(null);
-  const [selectedCell, setSelectedCell] = useState<CellPosition | null>(null);
+  // Multi-cell selection: Set of cell keys in format "rowIndex:columnKey"
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
+  // Selection anchor for Shift+Click range selection
+  const [selectionAnchor, setSelectionAnchor] = useState<CellPosition | null>(null);
   const [editingCell, setEditingCell] = useState<CellPosition | null>(null);
   const [editMode, setEditMode] = useState<EditMode>('replace');
   const [hasTableChanges, setHasTableChanges] = useState(false);
@@ -2005,10 +2015,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   // Table zoom level
   const [tableZoom, setTableZoom] = useState<number>(100);
   
-  // Column number formats: column key -> format type
+  // Cell-specific number formats: cell key (rowIndex:columnKey) -> format type
   type NumberFormat = 'auto' | 'number' | 'currency' | 'percent' | 'scientific';
-  const [columnFormats, setColumnFormats] = useState<Record<string, NumberFormat>>({});
-  const [columnDecimals, setColumnDecimals] = useState<Record<string, number>>({});
+  const [cellFormats, setCellFormats] = useState<Record<string, NumberFormat>>({});
+  const [cellDecimals, setCellDecimals] = useState<Record<string, number>>({});
   
   const updateCleanedDataMutation = useUpdateSheetCleanedData();
   const retryProcessingMutation = useRetrySheetProcessing();
@@ -2117,7 +2127,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       setHasTableChanges(false);
       setModifiedCells(new Set());
       setEditingCell(null);
-      setSelectedCell(null);
+      setSelectedCells(new Set());
+      setSelectionAnchor(null);
       setSelectedSheetId(pendingSheetSwitch);
       setPendingSheetSwitch(null);
     }
@@ -2180,7 +2191,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     setHasTableChanges(false);
     setModifiedCells(new Set());
     setEditingCell(null);
-    setSelectedCell(null);
+    setSelectedCells(new Set());
+    setSelectionAnchor(null);
     // Only clear undo/redo stacks when explicitly requested (e.g., switching sheets)
     // This preserves undo history during background updates after auto-save
     if (clearUndoHistory) {
@@ -2188,6 +2200,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       setRedoStack([]);
     }
     setColumnWidths({});
+    // Clear cell-specific formatting when switching sheets
+    setCellFormats({});
+    setCellDecimals({});
   }, []);
 
   // Initialize table data when:
@@ -2198,7 +2213,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     if (cleanedData?.data && Array.isArray(cleanedData.data) && selectedSheetId) {
       const isNewSheet = lastInitializedSheetId !== selectedSheetId;
       const needsInitialLoad = editableTableData === null;
-      const isCurrentlyEditing = editingCell !== null || selectedCell !== null;
+      const isCurrentlyEditing = editingCell !== null || selectedCells.size > 0;
       const canAcceptBackgroundUpdate = !hasTableChanges && !isSaving && !isCurrentlyEditing;
       
       // For new sheets: reinitialize (user has already confirmed via handleSelectSheet)
@@ -2222,12 +2237,30 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         setLastInitializedSheetId(selectedSheetId);
       }
     }
-  }, [cleanedData?.data, selectedSheetId, lastInitializedSheetId, hasTableChanges, isSaving, editableTableData, editingCell, selectedCell, initializeTableEditing]);
+  }, [cleanedData?.data, selectedSheetId, lastInitializedSheetId, hasTableChanges, isSaving, editableTableData, editingCell, selectedCells.size, initializeTableEditing]);
 
   const getColumnKeys = useCallback(() => {
     if (!editableTableData || editableTableData.length === 0) return [];
     return Object.keys(editableTableData[0] || {});
   }, [editableTableData]);
+
+  // Helper to get range of cells between two positions
+  const getCellsInRange = useCallback((anchor: CellPosition, target: CellPosition, columnKeys: string[]): Set<string> => {
+    const cells = new Set<string>();
+    const minRow = Math.min(anchor.rowIndex, target.rowIndex);
+    const maxRow = Math.max(anchor.rowIndex, target.rowIndex);
+    const anchorColIdx = columnKeys.indexOf(anchor.columnKey);
+    const targetColIdx = columnKeys.indexOf(target.columnKey);
+    const minCol = Math.min(anchorColIdx, targetColIdx);
+    const maxCol = Math.max(anchorColIdx, targetColIdx);
+    
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let c = minCol; c <= maxCol; c++) {
+        cells.add(makeCellKey(r, columnKeys[c]));
+      }
+    }
+    return cells;
+  }, []);
 
   const handleCellClick = (e: React.MouseEvent, rowIndex: number, columnKey: string) => {
     e.preventDefault();
@@ -2235,7 +2268,41 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     if (editingCell) {
       commitCellEdit(editingCell.rowIndex, editingCell.columnKey, editCellValue);
     }
-    setSelectedCell({ rowIndex, columnKey });
+    
+    const cellKey = makeCellKey(rowIndex, columnKey);
+    const columnKeys = getColumnKeys();
+    
+    if (e.shiftKey && selectionAnchor && columnKeys.length > 0) {
+      // Shift+Click: select range from anchor to clicked cell
+      const rangeCells = getCellsInRange(selectionAnchor, { rowIndex, columnKey }, columnKeys);
+      setSelectedCells(rangeCells);
+    } else if (e.ctrlKey || e.metaKey) {
+      // Ctrl/Cmd+Click: toggle cell in selection
+      const wasSelected = selectedCells.has(cellKey);
+      setSelectedCells(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(cellKey)) {
+          newSet.delete(cellKey);
+        } else {
+          newSet.add(cellKey);
+        }
+        return newSet;
+      });
+      // Update anchor only when adding a cell; when removing, keep anchor if still selected
+      if (!wasSelected) {
+        setSelectionAnchor({ rowIndex, columnKey });
+      } else {
+        // If we removed the anchor cell, clear it (getActiveCell will pick a valid fallback)
+        if (selectionAnchor?.rowIndex === rowIndex && selectionAnchor?.columnKey === columnKey) {
+          setSelectionAnchor(null);
+        }
+      }
+    } else {
+      // Regular click: select only this cell
+      setSelectedCells(new Set([cellKey]));
+      setSelectionAnchor({ rowIndex, columnKey });
+    }
+    
     setEditingCell(null);
     setTimeout(() => {
       tableContainerRef.current?.focus();
@@ -2243,7 +2310,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   };
 
   const handleCellDoubleClick = (rowIndex: number, columnKey: string, currentValue: any) => {
-    setSelectedCell({ rowIndex, columnKey });
+    const cellKey = makeCellKey(rowIndex, columnKey);
+    setSelectedCells(new Set([cellKey]));
+    setSelectionAnchor({ rowIndex, columnKey });
     setEditingCell({ rowIndex, columnKey });
     setEditMode('edit');
     setEditCellValue(currentValue === null ? '' : String(currentValue));
@@ -2252,7 +2321,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const startEditing = (rowIndex: number, columnKey: string, initialValue: string = '', mode: EditMode = 'replace') => {
     if (!editableTableData) return;
     const currentValue = editableTableData[rowIndex]?.[columnKey];
-    setSelectedCell({ rowIndex, columnKey });
+    const cellKey = makeCellKey(rowIndex, columnKey);
+    setSelectedCells(new Set([cellKey]));
+    setSelectionAnchor({ rowIndex, columnKey });
     setEditingCell({ rowIndex, columnKey });
     setEditMode(mode);
     if (mode === 'replace') {
@@ -2413,10 +2484,15 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     setHasTableChanges(newModified.size > 0);
   }, [redoStack, editableTableData, cleanedData, modifiedCells]);
 
-  const clearSelectedCell = () => {
-    if (!selectedCell || !editableTableData) return;
-    const { rowIndex, columnKey } = selectedCell;
-    applyEdit(rowIndex, columnKey, null);
+  // Clear all selected cells (set them to null)
+  const clearSelectedCells = () => {
+    if (selectedCells.size === 0 || !editableTableData) return;
+    
+    // Apply null to each selected cell
+    selectedCells.forEach(cellKey => {
+      const { rowIndex, columnKey } = parseCellKey(cellKey);
+      applyEdit(rowIndex, columnKey, null);
+    });
   };
 
   // Column resize handlers
@@ -2454,7 +2530,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const handleHeaderClick = (columnKey: string) => {
     setEditingHeader(columnKey);
     setEditHeaderValue(columnKey);
-    setSelectedCell(null);
+    setSelectedCells(new Set());
+    setSelectionAnchor(null);
     setEditingCell(null);
   };
 
@@ -2497,21 +2574,29 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       return newWidths;
     });
 
-    // Update column formats if they exist
-    setColumnFormats(prev => {
-      const newFormats = { ...prev };
-      if (oldKey in newFormats) {
-        newFormats[trimmedNewKey] = newFormats[oldKey];
-        delete newFormats[oldKey];
+    // Update cell formats - rename all cell keys that used the old column
+    setCellFormats(prev => {
+      const newFormats: Record<string, typeof prev[string]> = {};
+      for (const [cellKey, format] of Object.entries(prev)) {
+        const { rowIndex, columnKey } = parseCellKey(cellKey);
+        if (columnKey === oldKey) {
+          newFormats[makeCellKey(rowIndex, trimmedNewKey)] = format;
+        } else {
+          newFormats[cellKey] = format;
+        }
       }
       return newFormats;
     });
 
-    setColumnDecimals(prev => {
-      const newDecimals = { ...prev };
-      if (oldKey in newDecimals) {
-        newDecimals[trimmedNewKey] = newDecimals[oldKey];
-        delete newDecimals[oldKey];
+    setCellDecimals(prev => {
+      const newDecimals: Record<string, number> = {};
+      for (const [cellKey, decimals] of Object.entries(prev)) {
+        const { rowIndex, columnKey } = parseCellKey(cellKey);
+        if (columnKey === oldKey) {
+          newDecimals[makeCellKey(rowIndex, trimmedNewKey)] = decimals;
+        } else {
+          newDecimals[cellKey] = decimals;
+        }
       }
       return newDecimals;
     });
@@ -2543,10 +2628,29 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     }
   };
 
+  // Get the "active" cell for navigation (anchor must be in selectedCells, else use last selected cell)
+  const getActiveCell = useCallback((): CellPosition | null => {
+    if (selectedCells.size === 0) return null;
+    
+    // Validate anchor is still selected
+    if (selectionAnchor) {
+      const anchorKey = makeCellKey(selectionAnchor.rowIndex, selectionAnchor.columnKey);
+      if (selectedCells.has(anchorKey)) {
+        return selectionAnchor;
+      }
+    }
+    
+    // Fallback to the last selected cell
+    const cellKeys = Array.from(selectedCells);
+    const lastKey = cellKeys[cellKeys.length - 1];
+    return parseCellKey(lastKey);
+  }, [selectionAnchor, selectedCells]);
+
   const navigateCell = (direction: 'up' | 'down' | 'left' | 'right') => {
-    if (!selectedCell || !editableTableData) return;
+    const activeCell = getActiveCell();
+    if (!activeCell || !editableTableData) return;
     const columnKeys = getColumnKeys();
-    const { rowIndex, columnKey } = selectedCell;
+    const { rowIndex, columnKey } = activeCell;
     const colIndex = columnKeys.indexOf(columnKey);
     
     let newRow = rowIndex;
@@ -2567,7 +2671,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
         break;
     }
     
-    setSelectedCell({ rowIndex: newRow, columnKey: columnKeys[newCol] });
+    const newCellKey = makeCellKey(newRow, columnKeys[newCol]);
+    setSelectedCells(new Set([newCellKey]));
+    setSelectionAnchor({ rowIndex: newRow, columnKey: columnKeys[newCol] });
   };
 
   const handleTableKeyDown = (e: React.KeyboardEvent) => {
@@ -2587,9 +2693,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       return;
     }
     
-    if (!selectedCell || !editableTableData) return;
+    const activeCell = getActiveCell();
+    if (!activeCell || !editableTableData) return;
     const columnKeys = getColumnKeys();
-    const { rowIndex, columnKey } = selectedCell;
+    const { rowIndex, columnKey } = activeCell;
     
     if (editingCell) return;
     
@@ -2607,25 +2714,35 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       navigateCell('right');
     } else if (e.key === 'Tab') {
       e.preventDefault();
+      const colIndex = columnKeys.indexOf(columnKey);
       if (e.shiftKey) {
-        const colIndex = columnKeys.indexOf(columnKey);
         if (colIndex > 0) {
-          setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex - 1] });
+          const newCellKey = makeCellKey(rowIndex, columnKeys[colIndex - 1]);
+          setSelectedCells(new Set([newCellKey]));
+          setSelectionAnchor({ rowIndex, columnKey: columnKeys[colIndex - 1] });
         } else if (rowIndex > 0) {
-          setSelectedCell({ rowIndex: rowIndex - 1, columnKey: columnKeys[columnKeys.length - 1] });
+          const newCellKey = makeCellKey(rowIndex - 1, columnKeys[columnKeys.length - 1]);
+          setSelectedCells(new Set([newCellKey]));
+          setSelectionAnchor({ rowIndex: rowIndex - 1, columnKey: columnKeys[columnKeys.length - 1] });
         }
       } else {
-        const colIndex = columnKeys.indexOf(columnKey);
         if (colIndex < columnKeys.length - 1) {
-          setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex + 1] });
+          const newCellKey = makeCellKey(rowIndex, columnKeys[colIndex + 1]);
+          setSelectedCells(new Set([newCellKey]));
+          setSelectionAnchor({ rowIndex, columnKey: columnKeys[colIndex + 1] });
         } else if (rowIndex < editableTableData.length - 1) {
-          setSelectedCell({ rowIndex: rowIndex + 1, columnKey: columnKeys[0] });
+          const newCellKey = makeCellKey(rowIndex + 1, columnKeys[0]);
+          setSelectedCells(new Set([newCellKey]));
+          setSelectionAnchor({ rowIndex: rowIndex + 1, columnKey: columnKeys[0] });
         }
       }
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (e.shiftKey) {
-        setSelectedCell({ rowIndex: Math.max(0, rowIndex - 1), columnKey });
+        const newRow = Math.max(0, rowIndex - 1);
+        const newCellKey = makeCellKey(newRow, columnKey);
+        setSelectedCells(new Set([newCellKey]));
+        setSelectionAnchor({ rowIndex: newRow, columnKey });
       } else {
         startEditing(rowIndex, columnKey, '', 'edit');
       }
@@ -2634,14 +2751,22 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       startEditing(rowIndex, columnKey, '', 'edit');
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
-      clearSelectedCell();
+      clearSelectedCells();
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      setSelectedCell(null);
+      setSelectedCells(new Set());
+      setSelectionAnchor(null);
     } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       startEditing(rowIndex, columnKey, e.key, 'replace');
     }
+  };
+
+  // Helper to select a single cell and update anchor
+  const selectSingleCell = (newRowIndex: number, newColumnKey: string) => {
+    const cellKey = makeCellKey(newRowIndex, newColumnKey);
+    setSelectedCells(new Set([cellKey]));
+    setSelectionAnchor({ rowIndex: newRowIndex, columnKey: newColumnKey });
   };
 
   const handleCellInputKeyDown = (e: React.KeyboardEvent, rowIndex: number, columnKey: string) => {
@@ -2652,10 +2777,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       e.preventDefault();
       commitCellEdit(rowIndex, columnKey, editCellValue);
       if (e.shiftKey) {
-        setSelectedCell({ rowIndex: Math.max(0, rowIndex - 1), columnKey });
+        selectSingleCell(Math.max(0, rowIndex - 1), columnKey);
       } else {
         const nextRow = Math.min((editableTableData?.length || 1) - 1, rowIndex + 1);
-        setSelectedCell({ rowIndex: nextRow, columnKey });
+        selectSingleCell(nextRow, columnKey);
       }
       tableContainerRef.current?.focus();
     } else if (e.key === 'Tab') {
@@ -2663,15 +2788,15 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       commitCellEdit(rowIndex, columnKey, editCellValue);
       if (e.shiftKey) {
         if (colIndex > 0) {
-          setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex - 1] });
+          selectSingleCell(rowIndex, columnKeys[colIndex - 1]);
         } else if (rowIndex > 0) {
-          setSelectedCell({ rowIndex: rowIndex - 1, columnKey: columnKeys[columnKeys.length - 1] });
+          selectSingleCell(rowIndex - 1, columnKeys[columnKeys.length - 1]);
         }
       } else {
         if (colIndex < columnKeys.length - 1) {
-          setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex + 1] });
+          selectSingleCell(rowIndex, columnKeys[colIndex + 1]);
         } else if (rowIndex < (editableTableData?.length || 1) - 1) {
-          setSelectedCell({ rowIndex: rowIndex + 1, columnKey: columnKeys[0] });
+          selectSingleCell(rowIndex + 1, columnKeys[0]);
         }
       }
       tableContainerRef.current?.focus();
@@ -2683,27 +2808,27 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       e.preventDefault();
       commitCellEdit(rowIndex, columnKey, editCellValue);
       if (rowIndex > 0) {
-        setSelectedCell({ rowIndex: rowIndex - 1, columnKey });
+        selectSingleCell(rowIndex - 1, columnKey);
       }
       tableContainerRef.current?.focus();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       commitCellEdit(rowIndex, columnKey, editCellValue);
       const nextRow = Math.min((editableTableData?.length || 1) - 1, rowIndex + 1);
-      setSelectedCell({ rowIndex: nextRow, columnKey });
+      selectSingleCell(nextRow, columnKey);
       tableContainerRef.current?.focus();
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       commitCellEdit(rowIndex, columnKey, editCellValue);
       if (colIndex > 0) {
-        setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex - 1] });
+        selectSingleCell(rowIndex, columnKeys[colIndex - 1]);
       }
       tableContainerRef.current?.focus();
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
       commitCellEdit(rowIndex, columnKey, editCellValue);
       if (colIndex < columnKeys.length - 1) {
-        setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex + 1] });
+        selectSingleCell(rowIndex, columnKeys[colIndex + 1]);
       }
       tableContainerRef.current?.focus();
     }
@@ -2890,12 +3015,13 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     setEditingCell(null);
   };
 
-  // Format value based on column format settings
-  const formatCellValue = (value: any, columnKey: string): string => {
+  // Format value based on cell-specific format settings
+  const formatCellValue = (value: any, rowIndex: number, columnKey: string): string => {
     if (value === null || value === undefined) return 'null';
     
-    const format = columnFormats[columnKey] || 'auto';
-    const decimals = columnDecimals[columnKey] ?? 2;
+    const cellKey = makeCellKey(rowIndex, columnKey);
+    const format = cellFormats[cellKey] || 'auto';
+    const decimals = cellDecimals[cellKey] ?? 2;
     
     // If not a number, return as-is
     const num = typeof value === 'number' ? value : parseFloat(String(value));
@@ -2916,32 +3042,38 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     }
   };
 
-  // Apply format to selected column
-  const applyColumnFormat = (format: NumberFormat) => {
-    if (!selectedCell || !editableTableData) {
-      toast.error('Select a cell first');
+  // Apply format to all selected cells
+  const applyCellFormat = (format: NumberFormat) => {
+    if (selectedCells.size === 0 || !editableTableData) {
+      toast.error('Select cells first');
       return;
     }
-    const columnKey = selectedCell.columnKey;
-    if (!columnKey) return;
     
-    setColumnFormats(prev => ({ ...prev, [columnKey]: format }));
-    toast.success(`Applied ${format} format to column`);
+    setCellFormats(prev => {
+      const newFormats = { ...prev };
+      selectedCells.forEach(cellKey => {
+        newFormats[cellKey] = format;
+      });
+      return newFormats;
+    });
+    toast.success(`Applied ${format} format to ${selectedCells.size} cell${selectedCells.size > 1 ? 's' : ''}`);
   };
 
-  // Increase/decrease decimal places for selected column
+  // Increase/decrease decimal places for all selected cells
   const adjustDecimals = (delta: number) => {
-    if (!selectedCell || !editableTableData) {
-      toast.error('Select a cell first');
+    if (selectedCells.size === 0 || !editableTableData) {
+      toast.error('Select cells first');
       return;
     }
-    const columnKey = selectedCell.columnKey;
-    if (!columnKey) return;
     
-    setColumnDecimals(prev => {
-      const current = prev[columnKey] ?? 2;
-      const newValue = Math.max(0, Math.min(10, current + delta));
-      return { ...prev, [columnKey]: newValue };
+    setCellDecimals(prev => {
+      const newDecimals = { ...prev };
+      selectedCells.forEach(cellKey => {
+        const current = prev[cellKey] ?? 2;
+        const newValue = Math.max(0, Math.min(10, current + delta));
+        newDecimals[cellKey] = newValue;
+      });
+      return newDecimals;
     });
   };
 
@@ -3442,7 +3574,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                onClick={() => applyColumnFormat('currency')}
+                                onClick={() => applyCellFormat('currency')}
                                 className="p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
                               >
                                 <DollarSign className="w-3.5 h-3.5" />
@@ -3456,7 +3588,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                onClick={() => applyColumnFormat('percent')}
+                                onClick={() => applyCellFormat('percent')}
                                 className="p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
                               >
                                 <Percent className="w-3.5 h-3.5" />
@@ -3500,7 +3632,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                onClick={() => applyColumnFormat('number')}
+                                onClick={() => applyCellFormat('number')}
                                 className="p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded transition-colors"
                               >
                                 <Hash className="w-3.5 h-3.5" />
@@ -3849,7 +3981,8 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                         </td>
                                         {columnKeys.map((columnKey) => {
                                           const value = row[columnKey];
-                                          const isSelectedCell = selectedCell?.rowIndex === rowIndex && selectedCell?.columnKey === columnKey;
+                                          const cellKey = makeCellKey(rowIndex, columnKey);
+                                          const isSelectedCell = selectedCells.has(cellKey);
                                           const isEditingThisCell = editingCell?.rowIndex === rowIndex && editingCell?.columnKey === columnKey;
                                           
                                           return (
@@ -3857,7 +3990,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                               key={columnKey} 
                                               className={`h-9 text-gray-300 cursor-cell relative select-none overflow-hidden ${
                                                 isSelectedCell 
-                                                  ? 'outline outline-2 outline-[#FF6B35] outline-offset-[-2px]' 
+                                                  ? 'outline outline-2 outline-[#FF6B35] outline-offset-[-2px] bg-[#FF6B35]/10' 
                                                   : 'hover:bg-[#2A2A2A]/30'
                                               }`}
                                               style={{ width: columnWidths[columnKey] || 150 }}
@@ -3880,7 +4013,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                                   <span className="truncate">
                                                     {value === null ? <span className="text-gray-500 italic">null</span> :
                                                      typeof value === 'object' ? JSON.stringify(value) :
-                                                     formatCellValue(value, columnKey)}
+                                                     formatCellValue(value, rowIndex, columnKey)}
                                                   </span>
                                                 </div>
                                               )}
@@ -3927,7 +4060,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                         
                         {/* Hint text */}
                         <p className="shrink-0 text-xs text-gray-500 text-center">
-                          Click to select • Type to edit • Arrow keys to navigate • Ctrl+Z undo • Drag column edges to resize
+                          Click to select • Shift+Click for range • Cmd/Ctrl+Click to add • Type to edit • Ctrl+Z undo
                         </p>
                       </div>
                     )}
