@@ -148,36 +148,38 @@ function CollapsedChatPanel({ onClick }: { onClick: () => void }) {
 }
 
 // Helper functions for opacity and transform calculation (must be outside component)
-// Smoother easing - start transitioning earlier and finish later
+// Content fades out QUICKLY when panel starts shrinking (disappears by size 12)
+// Content fades in more gradually when panel expands
 const getContentOpacity = (size: number) => {
-  if (size <= 5) return 0;
-  if (size >= 15) return 1;
-  // Use easeOutQuart for smoother fade-in
-  const t = (size - 5) / 10;
-  return 1 - Math.pow(1 - t, 3);
+  // Fade out early and fast when collapsing (fully gone by size 12)
+  if (size <= 8) return 0;
+  if (size >= 18) return 1;
+  // Faster fade - content disappears quickly as panel shrinks
+  const t = (size - 8) / 10;
+  return Math.pow(t, 1.5); // Faster curve - disappears early
 };
 
 const getCollapsedOpacity = (size: number) => {
-  if (size <= 5) return 1;
-  if (size >= 15) return 0;
-  // Use easeInQuart for smoother fade-out
-  const t = (size - 5) / 10;
-  return Math.pow(1 - t, 3);
+  // Collapsed content appears quickly as expanded content disappears
+  if (size <= 8) return 1;
+  if (size >= 14) return 0;
+  const t = (size - 8) / 6;
+  return 1 - t;
 };
 
 // Scale for a subtle zoom effect during transition
 const getContentScale = (size: number) => {
-  if (size <= 5) return 0.96;
-  if (size >= 15) return 1;
-  const t = (size - 5) / 10;
-  return 0.96 + (0.04 * t);
+  if (size <= 8) return 0.94;
+  if (size >= 18) return 1;
+  const t = (size - 8) / 10;
+  return 0.94 + (0.06 * t);
 };
 
 const getCollapsedScale = (size: number) => {
-  if (size <= 5) return 1;
-  if (size >= 15) return 1.04;
-  const t = (size - 5) / 10;
-  return 1 + (0.04 * t);
+  if (size <= 8) return 1;
+  if (size >= 14) return 1.06;
+  const t = (size - 8) / 6;
+  return 1 + (0.06 * t);
 };
 
 // PanelContentWrapper - MUST be outside the main component to prevent remounting on re-render
@@ -201,7 +203,7 @@ function PanelContentWrapper({
   
   return (
     <div className="relative h-full w-full overflow-hidden">
-      {/* Collapsed content - fades out and scales up slightly as panel grows */}
+      {/* Collapsed content - fades in as panel shrinks */}
       <div 
         className="absolute inset-0 z-10"
         style={{ 
@@ -210,12 +212,12 @@ function PanelContentWrapper({
           pointerEvents: collapsedOpacity > 0.3 ? 'auto' : 'none',
           visibility: isCollapsedVisible ? 'visible' : 'hidden',
           willChange: 'opacity, transform',
-          transition: 'opacity 400ms cubic-bezier(0.4, 0, 0.2, 1), transform 400ms cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'opacity 250ms cubic-bezier(0.4, 0, 0.2, 1), transform 250ms cubic-bezier(0.4, 0, 0.2, 1)'
         }}
       >
         {collapsedContent}
       </div>
-      {/* Expanded content - fades in and scales up slightly as panel grows */}
+      {/* Expanded content - fades out FAST when panel shrinks, fades in slower when expanding */}
       <div 
         className="absolute inset-0 z-0"
         style={{ 
@@ -224,7 +226,7 @@ function PanelContentWrapper({
           pointerEvents: contentOpacity > 0.3 ? 'auto' : 'none',
           visibility: isExpandedVisible ? 'visible' : 'hidden',
           willChange: 'opacity, transform',
-          transition: 'opacity 400ms cubic-bezier(0.4, 0, 0.2, 1), transform 400ms cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'opacity 200ms cubic-bezier(0.4, 0, 0.2, 1), transform 200ms cubic-bezier(0.4, 0, 0.2, 1)'
         }}
       >
         {expandedContent}
