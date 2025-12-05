@@ -540,18 +540,34 @@ export function ProjectBrowser({
                     {/* Workspace List */}
                     <div className="max-h-64 overflow-y-auto">
                       {(currentSpace?.workspaces || currentSpace?.folders || []).map((workspace) => (
-                        <button
+                        <div
                           key={workspace.id}
-                          onClick={() => handleSelectWorkspace(workspace.id)}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                          className={`group w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
                             activeWorkspaceId === workspace.id
                               ? 'bg-[rgba(255,107,53,0.15)] text-[#FF6B35]'
                               : 'text-gray-300 hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
                           }`}
                         >
-                          <LayoutGrid className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate">{workspace.name}</span>
-                        </button>
+                          <button
+                            onClick={() => handleSelectWorkspace(workspace.id)}
+                            className="flex-1 flex items-center gap-2 text-left"
+                          >
+                            <LayoutGrid className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate">{workspace.name}</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setWorkspaceToDelete({ id: workspace.id, name: workspace.name });
+                              setShowDeleteDialog(true);
+                              setShowWorkspaceFlyout(false);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-all flex-shrink-0"
+                            title="Delete workspace"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       ))}
                       {(currentSpace?.workspaces || currentSpace?.folders || []).length === 0 && (
                         <div className="px-3 py-2 text-sm text-gray-500 italic">
