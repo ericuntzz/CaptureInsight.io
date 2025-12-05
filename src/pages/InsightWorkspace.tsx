@@ -1340,9 +1340,16 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
                     />
                   ) : (
                     <>
-                      <span className="text-sm whitespace-nowrap truncate" title={chat.title}>
-                        {chat.title}
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-sm whitespace-nowrap truncate">
+                            {chat.title}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                          {chat.title}
+                        </TooltipContent>
+                      </Tooltip>
                       {chatConversations.length > 1 && (
                         <button
                           onClick={(e) => handleDeleteChat(chat.id, e)}
@@ -1527,9 +1534,16 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
                     />
                   ) : (
                     <>
-                      <span className="text-sm whitespace-nowrap truncate" title={tab.title}>
-                        {tab.title}
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-sm whitespace-nowrap truncate">
+                            {tab.title}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                          {tab.title}
+                        </TooltipContent>
+                      </Tooltip>
                       {openTabs.length > 1 && (
                         <button
                           onClick={(e) => {
@@ -3420,9 +3434,16 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                     />
                   ) : (
                     <>
-                      <span className="text-sm whitespace-nowrap truncate" title={displayTitle}>
-                        {displayTitle}
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-sm whitespace-nowrap truncate">
+                            {displayTitle}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="bg-[#2A2A2A] text-white border-[#3A3A3A]">
+                          {displayTitle}
+                        </TooltipContent>
+                      </Tooltip>
                       {/* Status indicator for processing/failed */}
                       {viewMode === 'data' && sheetCleaningStatus !== 'completed' && (
                         <span className={`text-[10px] px-1 py-0.5 rounded flex-shrink-0 ${
