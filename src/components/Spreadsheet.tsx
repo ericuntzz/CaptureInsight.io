@@ -1027,9 +1027,9 @@ export function Spreadsheet({
                               wrapMode === 'wrap' ? 'whitespace-normal break-words' : 
                               wrapMode === 'clip' ? 'whitespace-nowrap overflow-hidden' :
                               'whitespace-nowrap overflow-hidden text-ellipsis'
-                            }`}
+                            } ${(value === null || value === undefined || value === 'null' || value === '') ? 'text-[#4B5563]' : ''}`}
                           >
-                            {value}
+                            {value === null || value === undefined || value === 'null' || value === '' ? '-' : value}
                           </div>
                         )}
                       </td>
