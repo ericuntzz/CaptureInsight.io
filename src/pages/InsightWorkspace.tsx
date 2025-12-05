@@ -3927,9 +3927,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                     ))}
                                     <col style={{ width: '40px' }} />
                                   </colgroup>
-                                  <thead>
-                                    <tr className="bg-[#4b2e24]">
-                                      <th className="sticky top-0 z-20 px-3 h-9 text-center text-xs font-semibold text-gray-400 whitespace-nowrap border-r border-b border-[#5a3a2e]" style={{ backgroundColor: '#4b2e24' }}>
+                                  <thead className="sticky top-0 z-30">
+                                    <tr>
+                                      <th className="px-3 h-9 text-center text-xs font-semibold text-gray-400 whitespace-nowrap border-r border-b border-[#5a3a2e] bg-[#4b2e24]">
                                         #
                                       </th>
                                       {columnKeys.map((key) => {
@@ -3937,12 +3937,12 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                         return (
                                           <th 
                                             key={key} 
-                                            className={`sticky top-0 z-20 h-9 text-left text-xs font-semibold whitespace-nowrap border-b border-[#5a3a2e] relative group cursor-cell ${
+                                            className={`h-9 text-left text-xs font-semibold whitespace-nowrap border-b border-[#5a3a2e] bg-[#4b2e24] relative group cursor-cell ${
                                               isEditingThisHeader 
                                                 ? 'outline outline-2 outline-[#FF6B35] outline-offset-[-2px]' 
                                                 : 'text-gray-200 hover:bg-[#5a3a2e]'
                                             }`}
-                                            style={{ width: columnWidths[key] || 150, backgroundColor: '#4b2e24' }}
+                                            style={{ width: columnWidths[key] || 150 }}
                                             onClick={() => !isEditingThisHeader && handleHeaderClick(key)}
                                           >
                                             {isEditingThisHeader ? (
@@ -3966,7 +3966,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                           </th>
                                         );
                                       })}
-                                      <th className="sticky top-0 z-20 h-9 text-center text-xs font-semibold text-gray-400 whitespace-nowrap border-b border-[#5a3a2e]" style={{ backgroundColor: '#4b2e24' }}>
+                                      <th className="h-9 text-center text-xs font-semibold text-gray-400 whitespace-nowrap border-b border-[#5a3a2e] bg-[#4b2e24]">
                                       </th>
                                     </tr>
                                   </thead>
@@ -3988,7 +3988,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                           return (
                                             <td 
                                               key={columnKey} 
-                                              className={`h-9 text-gray-300 cursor-cell relative select-none overflow-hidden ${
+                                              className={`h-9 text-gray-300 cursor-cell relative z-10 select-none overflow-hidden ${
                                                 isSelectedCell 
                                                   ? 'outline outline-2 outline-[#FF6B35] outline-offset-[-2px] bg-[#FF6B35]/10' 
                                                   : 'hover:bg-[#2A2A2A]/30'
