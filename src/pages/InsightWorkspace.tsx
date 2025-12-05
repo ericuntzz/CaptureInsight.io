@@ -1974,6 +1974,10 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   const [editingCell, setEditingCell] = useState<CellPosition | null>(null);
   const [editMode, setEditMode] = useState<EditMode>('replace');
   const [hasTableChanges, setHasTableChanges] = useState(false);
+  
+  // Header editing state
+  const [editingHeader, setEditingHeader] = useState<string | null>(null);
+  const [editHeaderValue, setEditHeaderValue] = useState('');
   const [modifiedCells, setModifiedCells] = useState<Set<string>>(new Set());
   const [editCellValue, setEditCellValue] = useState<string>('');
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -2444,6 +2448,99 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [resizingColumn]);
+
+  // Header editing handlers
+  const handleHeaderClick = (columnKey: string) => {
+    setEditingHeader(columnKey);
+    setEditHeaderValue(columnKey);
+    setSelectedCell(null);
+    setEditingCell(null);
+  };
+
+  const commitHeaderEdit = (oldKey: string, newKey: string) => {
+    if (!editableTableData || !newKey.trim() || newKey === oldKey) {
+      setEditingHeader(null);
+      return;
+    }
+
+    const trimmedNewKey = newKey.trim();
+    
+    // Check if new column name already exists
+    const columnKeys = getColumnKeys();
+    if (columnKeys.includes(trimmedNewKey)) {
+      toast.error('Column name already exists');
+      setEditingHeader(null);
+      return;
+    }
+
+    // Update all rows to use the new column key
+    const updatedData = editableTableData.map(row => {
+      const newRow: Record<string, any> = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (key === oldKey) {
+          newRow[trimmedNewKey] = value;
+        } else {
+          newRow[key] = value;
+        }
+      }
+      return newRow;
+    });
+
+    // Update column widths
+    setColumnWidths(prev => {
+      const newWidths = { ...prev };
+      if (oldKey in newWidths) {
+        newWidths[trimmedNewKey] = newWidths[oldKey];
+        delete newWidths[oldKey];
+      }
+      return newWidths;
+    });
+
+    // Update column formats if they exist
+    setColumnFormats(prev => {
+      const newFormats = { ...prev };
+      if (oldKey in newFormats) {
+        newFormats[trimmedNewKey] = newFormats[oldKey];
+        delete newFormats[oldKey];
+      }
+      return newFormats;
+    });
+
+    setColumnDecimals(prev => {
+      const newDecimals = { ...prev };
+      if (oldKey in newDecimals) {
+        newDecimals[trimmedNewKey] = newDecimals[oldKey];
+        delete newDecimals[oldKey];
+      }
+      return newDecimals;
+    });
+
+    setEditableTableData(updatedData);
+    setHasTableChanges(true);
+    setEditingHeader(null);
+    toast.success(`Column renamed to "${trimmedNewKey}"`);
+  };
+
+  const handleHeaderKeyDown = (e: React.KeyboardEvent, oldKey: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitHeaderEdit(oldKey, editHeaderValue);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingHeader(null);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      commitHeaderEdit(oldKey, editHeaderValue);
+      // Move to next/prev header
+      const columnKeys = getColumnKeys();
+      const colIndex = columnKeys.indexOf(oldKey);
+      if (e.shiftKey && colIndex > 0) {
+        handleHeaderClick(columnKeys[colIndex - 1]);
+      } else if (!e.shiftKey && colIndex < columnKeys.length - 1) {
+        handleHeaderClick(columnKeys[colIndex + 1]);
+      }
+    }
+  };
 
   const navigateCell = (direction: 'up' | 'down' | 'left' | 'right') => {
     if (!selectedCell || !editableTableData) return;
@@ -3698,24 +3795,45 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                                     <col style={{ width: '40px' }} />
                                   </colgroup>
                                   <thead className="sticky top-0 z-20">
-                                    <tr className="bg-[#252525]">
-                                      <th className="px-3 h-9 text-center text-xs font-semibold text-gray-500 whitespace-nowrap border-r border-b border-[#2A2A2A] bg-[#252525]">
+                                    <tr className="bg-[#4b2e24]">
+                                      <th className="px-3 h-9 text-center text-xs font-semibold text-gray-400 whitespace-nowrap border-r border-b border-[#5a3a2e] bg-[#4b2e24]">
                                         #
                                       </th>
-                                      {columnKeys.map((key) => (
-                                        <th 
-                                          key={key} 
-                                          className="h-9 text-left text-xs font-semibold text-gray-300 whitespace-nowrap border-b border-[#2A2A2A] bg-[#252525] relative group"
-                                          style={{ width: columnWidths[key] || 150 }}
-                                        >
-                                          <div className="px-3 truncate">{key}</div>
-                                          <div 
-                                            className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#FF6B35] bg-transparent group-hover:bg-[#3A3A3A] transition-colors"
-                                            onMouseDown={(e) => handleResizeStart(e, key)}
-                                          />
-                                        </th>
-                                      ))}
-                                      <th className="h-9 text-center text-xs font-semibold text-gray-500 whitespace-nowrap border-b border-[#2A2A2A] bg-[#252525]">
+                                      {columnKeys.map((key) => {
+                                        const isEditingThisHeader = editingHeader === key;
+                                        return (
+                                          <th 
+                                            key={key} 
+                                            className={`h-9 text-left text-xs font-semibold whitespace-nowrap border-b border-[#5a3a2e] bg-[#4b2e24] relative group cursor-cell ${
+                                              isEditingThisHeader 
+                                                ? 'outline outline-2 outline-[#FF6B35] outline-offset-[-2px]' 
+                                                : 'text-gray-200 hover:bg-[#5a3a2e]'
+                                            }`}
+                                            style={{ width: columnWidths[key] || 150 }}
+                                            onClick={() => !isEditingThisHeader && handleHeaderClick(key)}
+                                          >
+                                            {isEditingThisHeader ? (
+                                              <input
+                                                type="text"
+                                                value={editHeaderValue}
+                                                onChange={(e) => setEditHeaderValue(e.target.value)}
+                                                onBlur={() => commitHeaderEdit(key, editHeaderValue)}
+                                                onKeyDown={(e) => handleHeaderKeyDown(e, key)}
+                                                className="absolute inset-0 w-full h-full px-3 bg-transparent text-white outline-none text-xs font-semibold"
+                                                autoFocus
+                                              />
+                                            ) : (
+                                              <div className="px-3 truncate">{key}</div>
+                                            )}
+                                            <div 
+                                              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#FF6B35] bg-transparent group-hover:bg-[#6a4a3e] transition-colors"
+                                              onMouseDown={(e) => handleResizeStart(e, key)}
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                          </th>
+                                        );
+                                      })}
+                                      <th className="h-9 text-center text-xs font-semibold text-gray-400 whitespace-nowrap border-b border-[#5a3a2e] bg-[#4b2e24]">
                                       </th>
                                     </tr>
                                   </thead>
