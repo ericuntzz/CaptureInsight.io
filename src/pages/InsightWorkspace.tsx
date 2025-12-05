@@ -58,6 +58,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  TooltipProvider,
 } from '../components/ui/tooltip';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
 import {
