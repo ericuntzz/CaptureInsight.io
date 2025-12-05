@@ -2550,6 +2550,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
 
   const handleCellInputKeyDown = (e: React.KeyboardEvent, rowIndex: number, columnKey: string) => {
     const columnKeys = getColumnKeys();
+    const colIndex = columnKeys.indexOf(columnKey);
     
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -2564,7 +2565,6 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     } else if (e.key === 'Tab') {
       e.preventDefault();
       commitCellEdit(rowIndex, columnKey, editCellValue);
-      const colIndex = columnKeys.indexOf(columnKey);
       if (e.shiftKey) {
         if (colIndex > 0) {
           setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex - 1] });
@@ -2582,6 +2582,33 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setEditingCell(null);
+      tableContainerRef.current?.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      commitCellEdit(rowIndex, columnKey, editCellValue);
+      if (rowIndex > 0) {
+        setSelectedCell({ rowIndex: rowIndex - 1, columnKey });
+      }
+      tableContainerRef.current?.focus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      commitCellEdit(rowIndex, columnKey, editCellValue);
+      const nextRow = Math.min((editableTableData?.length || 1) - 1, rowIndex + 1);
+      setSelectedCell({ rowIndex: nextRow, columnKey });
+      tableContainerRef.current?.focus();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      commitCellEdit(rowIndex, columnKey, editCellValue);
+      if (colIndex > 0) {
+        setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex - 1] });
+      }
+      tableContainerRef.current?.focus();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      commitCellEdit(rowIndex, columnKey, editCellValue);
+      if (colIndex < columnKeys.length - 1) {
+        setSelectedCell({ rowIndex, columnKey: columnKeys[colIndex + 1] });
+      }
       tableContainerRef.current?.focus();
     }
   };
