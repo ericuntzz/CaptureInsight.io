@@ -302,8 +302,8 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
         role: 'assistant',
         content: data.response,
         timestamp: new Date(),
-        citations: citations?.length > 0 ? citations : undefined,
-        editProposals: editProposals?.length > 0 ? editProposals : undefined,
+        citations: citations && citations.length > 0 ? citations : undefined,
+        editProposals: editProposals && editProposals.length > 0 ? editProposals : undefined,
       };
 
       // Persist AI message to the ORIGINAL chat
@@ -407,7 +407,9 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
           suggestedText: p.suggestedText,
           rationale: p.rationale,
         };
-        if (p.targetType === 'selection' && canvasContext.selection) {
+        if (p.targetType === 'selection' && canvasContext.selection && 
+            canvasContext.selection.start !== undefined && 
+            canvasContext.selection.end !== undefined) {
           proposal.originalSelection = {
             from: canvasContext.selection.start,
             to: canvasContext.selection.end,
@@ -426,7 +428,7 @@ export function useChat({ spaceId, insightId: _insightId, chatId }: UseChatOptio
         role: 'assistant',
         content: data.response,
         timestamp: new Date(),
-        editProposals: editProposals?.length > 0 ? editProposals : undefined,
+        editProposals: editProposals && editProposals.length > 0 ? editProposals : undefined,
         source: 'canvas',
       };
 

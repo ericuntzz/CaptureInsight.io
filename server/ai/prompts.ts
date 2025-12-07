@@ -403,7 +403,7 @@ export function buildCanvasEditPrompt(action: string, canvasContext: { title: st
   prompt += `Title: ${canvasContext.title}\n\n`;
   prompt += `Notes:\n${canvasContext.notes}\n\n`;
   
-  if (hasSelection) {
+  if (hasSelection && canvasContext.selection) {
     prompt += `SELECTED TEXT TO EDIT:\n${canvasContext.selection.text}\n\n`;
     prompt += `Apply the "${action}" transformation to ONLY the selected text.`;
   } else {

@@ -2065,6 +2065,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const insight = await storage.createInsight(insightData);
+      
+      // Generate embeddings for RAG search (async, non-blocking)
+      if (insight.spaceId) {
+        embedAndStoreInsight(insight, insight.spaceId).catch(err => {
+          console.error('Failed to generate insight embedding on create:', err);
+        });
+      }
+      
       res.status(201).json(insight);
     } catch (error) {
       console.error("Error creating insight:", error);
