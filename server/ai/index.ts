@@ -19,11 +19,11 @@ import {
   createEmbedding,
   createEmbeddings,
   cosineSimilarity,
-  isOpenAIConfigured,
+  isGoogleEmbeddingsConfigured,
   getEmbeddingDimensions,
   type EmbeddingResult,
   type BatchEmbeddingResult,
-} from "./openai";
+} from "./googleEmbeddings";
 
 import {
   filterPII,
@@ -92,7 +92,7 @@ export {
   createEmbedding,
   createEmbeddings,
   cosineSimilarity,
-  isOpenAIConfigured,
+  isGoogleEmbeddingsConfigured,
   getEmbeddingDimensions,
   filterPII,
   filterPIIFromData,
@@ -206,7 +206,7 @@ export async function analyzeCapture(
 }
 
 export async function generateEmbedding(text: string): Promise<number[] | null> {
-  if (!isOpenAIConfigured()) {
+  if (!isGoogleEmbeddingsConfigured()) {
     console.warn("OpenAI is not configured. Embeddings are disabled.");
     return null;
   }
@@ -221,7 +221,7 @@ export async function generateEmbedding(text: string): Promise<number[] | null> 
 }
 
 export async function generateEmbeddings(texts: string[]): Promise<number[][] | null> {
-  if (!isOpenAIConfigured()) {
+  if (!isGoogleEmbeddingsConfigured()) {
     console.warn("OpenAI is not configured. Embeddings are disabled.");
     return null;
   }
@@ -249,7 +249,7 @@ export async function searchSimilar(
   spaceId: string,
   limit: number = 10
 ): Promise<SimilarityResult[]> {
-  if (!isOpenAIConfigured()) {
+  if (!isGoogleEmbeddingsConfigured()) {
     console.warn("OpenAI is not configured. Vector search is disabled.");
     return [];
   }
@@ -284,15 +284,15 @@ export async function searchSimilar(
 
 export function getAIStatus(): {
   gemini: { configured: boolean };
-  openai: { configured: boolean; embeddingsEnabled: boolean };
+  embeddings: { configured: boolean; provider: string };
 } {
   return {
     gemini: {
       configured: isGeminiConfigured(),
     },
-    openai: {
-      configured: isOpenAIConfigured(),
-      embeddingsEnabled: isOpenAIConfigured(),
+    embeddings: {
+      configured: isGoogleEmbeddingsConfigured(),
+      provider: "google",
     },
   };
 }
@@ -378,7 +378,7 @@ export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
     piiRedacted = { count: filtered.redactedCount, types: filtered.redactedTypes };
   }
 
-  if (useRag && spaceId && isOpenAIConfigured() && messagesToSend.length > 0) {
+  if (useRag && spaceId && isGoogleEmbeddingsConfigured() && messagesToSend.length > 0) {
     const lastUserMessage = messagesToSend.filter(m => m.role === "user").pop();
     if (lastUserMessage) {
       try {

@@ -48,7 +48,7 @@ export async function embedAndStoreContent(
           success: false,
           entityType,
           entityId,
-          error: "Failed to generate embedding - OpenAI not configured or embedding generation failed",
+          error: "Failed to generate embedding - Gemini not configured or embedding generation failed",
         };
       }
 
@@ -83,7 +83,7 @@ export async function embedAndStoreContent(
         success: false,
         entityType,
         entityId,
-        error: "Failed to generate embeddings - OpenAI not configured or embedding generation failed",
+        error: "Failed to generate embeddings - Gemini not configured or embedding generation failed",
       };
     }
 
