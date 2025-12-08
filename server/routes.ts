@@ -1809,7 +1809,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { spaceId } = req.params;
       const userId = req.user.claims.sub;
-      const { fileData, filename, mimeType, name, workspaceId } = req.body;
+      const { fileData, filename, mimeType, name, workspaceId, captureBatchId } = req.body;
       
       if (!fileData || !filename || !mimeType) {
         return res.status(400).json({ 
@@ -1887,6 +1887,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         data: { headers, rows: rawRows },
         rowCount: rows.length,
         createdBy: userId,
+        captureBatchId: captureBatchId || null,
       };
       
       const securityMode = await serverEncryption.getSecurityMode(userId);

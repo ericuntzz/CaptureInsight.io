@@ -811,6 +811,10 @@ export default function App() {
               workspaceId: dest.folderId,
               file: fileData.file,
               name: item.name,
+              captureBatchId,
+              analysisType: settings?.analysisType,
+              llmProvider: settings?.llmProvider,
+              schedule: settings?.schedule,
             });
           } else {
             console.error('[Capture Flow] File not found for item:', item.id);
