@@ -1,0 +1,13 @@
+Date,Product Category,Product Name,SKU,Units Sold,Unit Price USD,Gross Revenue USD,Discount Percentage,Net Revenue USD,Cost of Goods USD,Profit USD,Profit Margin Percentage,Channel,Region
+2024-12-01,Electronics,Wireless Earbuds Pro,WE-PRO-001,45,79.99,3599.55,10,3239.60,1800.00,1439.60,44.43,Website,North America
+2024-12-01,Electronics,Bluetooth Speaker,BT-SPK-002,28,49.99,1399.72,0,1399.72,560.00,839.72,59.99,Amazon,North America
+2024-12-01,Home & Garden,Smart Plant Monitor,SPM-003,15,34.99,524.85,15,446.12,150.00,296.12,66.38,Website,Europe
+2024-12-01,Accessories,Phone Case Premium,PC-PRM-004,120,24.99,2998.80,5,2848.86,600.00,2248.86,78.94,Website,North America
+2024-12-02,Electronics,Wireless Earbuds Pro,WE-PRO-001,52,79.99,4159.48,10,3743.53,2080.00,1663.53,44.44,Website,North America
+2024-12-02,Electronics,USB-C Hub 7-in-1,USB-HUB-005,33,59.99,1979.67,0,1979.67,495.00,1484.67,75.00,Amazon,Europe
+2024-12-02,Home & Garden,LED Grow Light,LED-GRW-006,8,89.99,719.92,20,575.94,240.00,335.94,58.33,Website,North America
+2024-12-02,Accessories,Laptop Stand Aluminum,LS-ALU-007,22,44.99,989.78,0,989.78,330.00,659.78,66.66,Amazon,Asia Pacific
+2024-12-03,Electronics,Wireless Mouse Ergonomic,WM-ERG-008,67,39.99,2679.33,5,2545.36,670.00,1875.36,73.69,Website,North America
+2024-12-03,Electronics,Mechanical Keyboard RGB,MK-RGB-009,19,129.99,2469.81,10,2222.83,665.00,1557.83,70.08,Website,Europe
+2024-12-03,Home & Garden,Air Purifier Compact,AP-CMP-010,12,149.99,1799.88,15,1529.90,600.00,929.90,60.78,Amazon,North America
+2024-12-03,Accessories,Cable Organizer Set,CO-SET-011,85,14.99,1274.15,0,1274.15,255.00,1019.15,79.99,Website,Asia Pacific

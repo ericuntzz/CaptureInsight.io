@@ -1,0 +1,11 @@
+Response ID,Submission Date,Customer Segment,Product Purchased,Overall Satisfaction Score,Product Quality Score,Customer Service Score,Value for Money Score,Would Recommend Score,NPS Category,Feedback Category,Verbatim Feedback,Response Time Days,Resolution Status
+R-10001,2024-12-01,Enterprise,Widget Pro,5,5,4,4,5,Promoter,Product Quality,Excellent product that exceeded our expectations. The integration was seamless.,0,N/A
+R-10002,2024-12-01,SMB,Widget Basic,4,4,5,5,4,Promoter,Customer Service,Great support team helped us get started quickly. Very responsive.,0,N/A
+R-10003,2024-12-02,Enterprise,Widget Pro,3,4,2,3,3,Passive,Customer Service,Product is good but had to wait too long for support response.,2,Resolved
+R-10004,2024-12-02,Consumer,Widget Lite,2,2,3,2,1,Detractor,Product Quality,Product stopped working after 2 weeks. Disappointed with durability.,1,Resolved
+R-10005,2024-12-03,SMB,Widget Basic,5,5,5,4,5,Promoter,Value,Best value product in this category. Highly recommend to other businesses.,0,N/A
+R-10006,2024-12-03,Enterprise,Widget Enterprise,4,5,4,3,4,Promoter,Product Quality,Powerful features but pricing could be more competitive.,0,N/A
+R-10007,2024-12-04,Consumer,Widget Lite,1,1,2,1,1,Detractor,Product Quality,Does not work as advertised. Requesting full refund.,1,In Progress
+R-10008,2024-12-04,SMB,Widget Pro,4,4,4,4,4,Promoter,General,Solid product overall. Looking forward to new features.,0,N/A
+R-10009,2024-12-05,Enterprise,Widget Enterprise,5,5,5,5,5,Promoter,Customer Service,Outstanding product and support. Your team went above and beyond.,0,N/A
+R-10010,2024-12-05,Consumer,Widget Basic,3,3,4,3,3,Passive,Value,Product is okay but expected more features at this price point.,0,N/A
