@@ -19,7 +19,7 @@ import {
   embedAndStoreContent,
   reindexSpace,
 } from "./ai/embeddings";
-import { ingestOnCreate, isGoogleSheetsUrl, parseUploadedFile, MAX_FILE_SIZE_BYTES, MAX_CSV_SIZE_BYTES } from "./ai/dataIngestion";
+import { isGoogleSheetsUrl, parseUploadedFile, MAX_FILE_SIZE_BYTES, MAX_CSV_SIZE_BYTES } from "./ai/dataIngestion";
 import { triggerDataCleaning } from "./ai/dataCleaning";
 import * as templateService from "./ai/templateService";
 import { serverEncryption } from "./encryption";
@@ -1711,27 +1711,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const sheet = await storage.createSheet(sheetData);
       
-      // Trigger data ingestion for Google Sheets links (async, non-blocking)
-      const sourceUrl = (sheet.dataSourceMeta as any)?.url;
-      if (sheet.dataSourceType === 'link' && sourceUrl && isGoogleSheetsUrl(sourceUrl)) {
-        console.log(`[Routes] Triggering data ingestion for Google Sheet: ${sheet.id}`);
-        ingestOnCreate(sheet.id, spaceId, sourceUrl)
-          .then(result => {
-            if (result.success) {
-              console.log(`[Routes] Data ingestion completed for sheet ${sheet.id}: ${result.rowCount} rows`);
-              // After ingestion, trigger AI data cleaning
-              triggerDataCleaning(sheet.id);
-            } else {
-              console.warn(`[Routes] Data ingestion failed for sheet ${sheet.id}: ${result.error}`);
-            }
-          })
-          .catch(err => {
-            console.error(`[Routes] Data ingestion error for sheet ${sheet.id}:`, err);
-          });
-      } else {
-        // For non-Google Sheets sources, trigger data cleaning directly
-        triggerDataCleaning(sheet.id);
-      }
+      // Create ingestion job for background processing
+      await storage.createIngestionJob({
+        sheetId: sheet.id,
+        spaceId,
+        status: 'pending',
+        currentStage: 'pending',
+        metadata: {
+          sourceType: sheet.dataSourceType || 'unknown',
+        },
+      });
+      console.log(`[Routes] Created ingestion job for sheet ${sheet.id}`);
       
       res.status(201).json(sheet);
     } catch (error) {
@@ -1915,27 +1905,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sheet = await storage.createSheet(sheetData);
       console.log(`[Routes] Created sheet ${sheet.id} from uploaded file: ${filename}`);
       
-      triggerDataCleaning(sheet.id)
-        .then(async () => {
-          console.log(`[Routes] Data cleaning completed for uploaded file sheet ${sheet.id}`);
-          // Generate embeddings after cleaning
-          try {
-            const updatedSheet = await storage.getSheet(sheet.id);
-            if (updatedSheet) {
-              const embeddingResult = await embedAndStoreSheet(updatedSheet, spaceId, workspaceId);
-              if (embeddingResult.success) {
-                console.log(`[Routes] Embeddings created for uploaded file sheet ${sheet.id}: ${embeddingResult.chunksCreated} chunks`);
-              } else {
-                console.warn(`[Routes] Embedding failed for uploaded file sheet ${sheet.id}: ${embeddingResult.error}`);
-              }
-            }
-          } catch (embeddingError) {
-            console.error(`[Routes] Embedding error for sheet ${sheet.id}:`, embeddingError);
-          }
-        })
-        .catch((err) => {
-          console.error(`[Routes] Data cleaning error for sheet ${sheet.id}:`, err);
-        });
+      // Create ingestion job for background processing
+      await storage.createIngestionJob({
+        sheetId: sheet.id,
+        spaceId,
+        status: 'pending',
+        currentStage: 'pending',
+        metadata: {
+          filename,
+          fileSize: buffer.length,
+          mimeType,
+          sourceType: 'file',
+        },
+      });
+      console.log(`[Routes] Created ingestion job for uploaded file sheet ${sheet.id}`);
       
       res.status(201).json(sheet);
     } catch (error) {
@@ -3097,26 +3080,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdBy: userId
       });
 
-      // Trigger data ingestion for Google Sheets links (async, non-blocking)
-      if (isLinkOnly && sourceUrl && isGoogleSheetsUrl(sourceUrl)) {
-        console.log(`[Routes] Triggering data ingestion for Google Sheet: ${sheet.id}`);
-        ingestOnCreate(sheet.id, targetSpaceId, sourceUrl)
-          .then(result => {
-            if (result.success) {
-              console.log(`[Routes] Data ingestion completed for sheet ${sheet.id}: ${result.rowCount} rows`);
-              // After ingestion, trigger AI data cleaning
-              triggerDataCleaning(sheet.id);
-            } else {
-              console.warn(`[Routes] Data ingestion failed for sheet ${sheet.id}: ${result.error}`);
-            }
-          })
-          .catch(err => {
-            console.error(`[Routes] Data ingestion error for sheet ${sheet.id}:`, err);
-          });
-      } else if (isLinkOnly) {
-        // For non-Google Sheets links, trigger data cleaning directly
-        triggerDataCleaning(sheet.id);
-      }
+      // Create ingestion job for background processing
+      await storage.createIngestionJob({
+        sheetId: sheet.id,
+        spaceId: targetSpaceId,
+        status: 'pending',
+        currentStage: 'pending',
+        metadata: {
+          sourceType: isLinkOnly ? 'link' : 'screenshot',
+        },
+      });
+      console.log(`[Routes] Created ingestion job for capture sheet ${sheet.id}`);
 
       // Create an insight linked to this capture
       const insight = await storage.createInsight({
