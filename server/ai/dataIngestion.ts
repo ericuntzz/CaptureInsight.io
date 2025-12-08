@@ -12,6 +12,10 @@ import { storage } from "../storage";
 import { embedAndStoreSheet } from "./embeddings";
 import * as XLSX from "xlsx";
 
+export const MAX_ROW_COUNT = 50000;
+export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
+export const MAX_CSV_SIZE_BYTES = 10 * 1024 * 1024; // 10MB for CSV
+
 export interface IngestionResult {
   success: boolean;
   sheetId: string;
@@ -59,7 +63,7 @@ export function buildCsvExportUrl(spreadsheetId: string, gid: string = "0"): str
  * Handles multi-line quoted fields correctly
  * Preserves whitespace in quoted fields (CSV semantics)
  */
-export function parseCsv(csvText: string): { headers: string[]; rows: Record<string, string>[]; rawRows: string[][] } {
+export function parseCsv(csvText: string, maxRows: number = MAX_ROW_COUNT): { headers: string[]; rows: Record<string, string>[]; rawRows: string[][] } {
   if (!csvText || csvText.trim().length === 0) {
     return { headers: [], rows: [], rawRows: [] };
   }
@@ -153,6 +157,10 @@ export function parseCsv(csvText: string): { headers: string[]; rows: Record<str
       row[header] = values[index] || '';
     });
     rows.push(row);
+  }
+
+  if (rows.length > maxRows) {
+    throw new Error(`Data has ${rows.length.toLocaleString()} rows, which exceeds the maximum of ${maxRows.toLocaleString()} rows. Please split your data into smaller files.`);
   }
 
   return { headers, rows, rawRows };
@@ -341,7 +349,7 @@ export async function ingestOnCreate(
  * Parse Excel file buffer into structured data
  * Uses xlsx package to read .xlsx and .xls files
  */
-export function parseExcel(buffer: Buffer): { headers: string[]; rows: Record<string, string>[]; rawRows: string[][] } {
+export function parseExcel(buffer: Buffer, maxRows: number = MAX_ROW_COUNT): { headers: string[]; rows: Record<string, string>[]; rawRows: string[][] } {
   try {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     
@@ -386,6 +394,10 @@ export function parseExcel(buffer: Buffer): { headers: string[]; rows: Record<st
       rows.push(row);
     }
     
+    if (rows.length > maxRows) {
+      throw new Error(`Data has ${rows.length.toLocaleString()} rows, which exceeds the maximum of ${maxRows.toLocaleString()} rows. Please split your data into smaller files.`);
+    }
+    
     console.log(`[DataIngestion] Parsed Excel file: ${rows.length} rows with ${headers.length} columns`);
     return { headers, rows, rawRows };
   } catch (error) {
@@ -409,7 +421,16 @@ export function parseUploadedFile(
   
   console.log(`[DataIngestion] Parsing uploaded file: ${filename}, mimeType: ${mimeType}, extension: ${extension}`);
   
-  if (extension === 'csv' || mimeType === 'text/csv' || mimeType === 'application/csv') {
+  const isCsv = extension === 'csv' || mimeType === 'text/csv' || mimeType === 'application/csv';
+  const maxSizeBytes = isCsv ? MAX_CSV_SIZE_BYTES : MAX_FILE_SIZE_BYTES;
+  const maxSizeMB = maxSizeBytes / (1024 * 1024);
+  const fileSizeMB = buffer.length / (1024 * 1024);
+  
+  if (buffer.length > maxSizeBytes) {
+    throw new Error(`File size (${fileSizeMB.toFixed(2)} MB) exceeds the maximum allowed size of ${maxSizeMB} MB`);
+  }
+  
+  if (isCsv) {
     const csvText = buffer.toString('utf-8');
     
     if (csvText.trim().startsWith('<!DOCTYPE') || csvText.trim().startsWith('<html')) {

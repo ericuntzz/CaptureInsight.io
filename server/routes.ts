@@ -19,7 +19,7 @@ import {
   embedAndStoreContent,
   reindexSpace,
 } from "./ai/embeddings";
-import { ingestOnCreate, isGoogleSheetsUrl, parseUploadedFile } from "./ai/dataIngestion";
+import { ingestOnCreate, isGoogleSheetsUrl, parseUploadedFile, MAX_FILE_SIZE_BYTES, MAX_CSV_SIZE_BYTES } from "./ai/dataIngestion";
 import { triggerDataCleaning } from "./ai/dataCleaning";
 import * as templateService from "./ai/templateService";
 import { serverEncryption } from "./encryption";
@@ -1831,12 +1831,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "fileData must be a base64 encoded string" });
       }
       
+      const lowercaseFilename = filename.toLowerCase();
+      const isCsv = lowercaseFilename.endsWith('.csv') || mimeType === 'text/csv' || mimeType === 'application/csv';
+      const maxSizeBytes = isCsv ? MAX_CSV_SIZE_BYTES : MAX_FILE_SIZE_BYTES;
+      const maxSizeMB = maxSizeBytes / (1024 * 1024);
+      
+      const estimatedDecodedSize = Math.ceil(fileData.length * 0.75);
+      if (estimatedDecodedSize > maxSizeBytes) {
+        const estimatedMB = (estimatedDecodedSize / (1024 * 1024)).toFixed(2);
+        return res.status(413).json({ 
+          message: `File size (${estimatedMB} MB) exceeds the maximum allowed size of ${maxSizeMB} MB`,
+          error: 'FILE_SIZE_EXCEEDED',
+          details: { estimatedSize: estimatedDecodedSize, maxSize: maxSizeBytes }
+        });
+      }
+      
       const buffer = Buffer.from(fileData, 'base64');
       
-      const MAX_FILE_SIZE = 10 * 1024 * 1024;
-      if (buffer.length > MAX_FILE_SIZE) {
-        return res.status(400).json({ 
-          message: `File size exceeds limit of 10MB. Received: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB` 
+      if (buffer.length > maxSizeBytes) {
+        const fileSizeMB = (buffer.length / (1024 * 1024)).toFixed(2);
+        return res.status(413).json({ 
+          message: `File size (${fileSizeMB} MB) exceeds the maximum allowed size of ${maxSizeMB} MB`,
+          error: 'FILE_SIZE_EXCEEDED',
+          details: { actualSize: buffer.length, maxSize: maxSizeBytes }
         });
       }
       
