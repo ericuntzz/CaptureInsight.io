@@ -329,11 +329,19 @@ export function useUploadFile() {
       workspaceId,
       file,
       name,
+      captureBatchId,
+      analysisType,
+      llmProvider,
+      schedule,
     }: { 
       spaceId: string; 
       workspaceId?: string;
       file: File;
       name?: string;
+      captureBatchId?: string;
+      analysisType?: string;
+      llmProvider?: string;
+      schedule?: string;
     }) => {
       const fileData = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -351,6 +359,10 @@ export function useUploadFile() {
         filename: file.name,
         mimeType: file.type,
         name: name || file.name.replace(/\.[^/.]+$/, ''),
+        captureBatchId,
+        analysisType,
+        llmProvider,
+        schedule,
       });
       return res.json();
     },
