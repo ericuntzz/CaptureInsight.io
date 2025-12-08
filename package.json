@@ -45,6 +45,7 @@
             "@types/express-session": "^1.18.2",
             "@types/memoizee": "^0.4.12",
             "@types/passport": "^1.0.17",
+            "@types/supertest": "^6.0.3",
             "class-variance-authority": "^0.7.1",
             "clsx": "*",
             "cmdk": "^1.1.1",
@@ -74,10 +75,12 @@
             "react-resizable-panels": "^2.1.7",
             "recharts": "^2.15.2",
             "sonner": "^2.0.3",
+            "supertest": "^7.1.4",
             "tailwind-merge": "*",
             "tippy.js": "*",
             "tsx": "^4.20.6",
             "vaul": "^1.1.2",
+            "vitest": "^4.0.15",
             "ws": "^8.18.3",
             "xlsx": "^0.18.5"
       },
@@ -94,6 +97,8 @@
             "server:dev": "tsx watch server/index.ts",
             "build:extension": "cd extension && npm run build",
             "dev:extension": "cd extension && npm run dev",
-            "extension:icons": "cd extension && node scripts/generate-icons.js"
+            "extension:icons": "cd extension && node scripts/generate-icons.js",
+            "test": "vitest run",
+            "test:watch": "vitest"
       }
 }

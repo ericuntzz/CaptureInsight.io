@@ -28,6 +28,7 @@ import { userEncryptionKeys, serverEncryptionKeys, users, aiFeedback, chatMessag
 import { eq } from "drizzle-orm";
 import * as OTPAuth from "otpauth";
 import { filterPII } from "./ai/piiFilter";
+import { validateWorkspaceForSpace } from "./utils/workspaceValidation";
 
 interface CleaningPipelineStep {
   id: string;
@@ -1667,15 +1668,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let sheetData = { ...restBody, spaceId, createdBy: userId, captureBatchId: captureBatchId || null };
       
       // Validate workspaceId exists and belongs to this space if provided
-      if (sheetData.workspaceId) {
-        const workspace = await storage.getWorkspace(sheetData.workspaceId);
-        if (!workspace) {
-          console.warn(`[Routes] Invalid workspaceId provided: ${sheetData.workspaceId}, setting to null`);
-          sheetData.workspaceId = null;
-        } else if (workspace.spaceId !== spaceId) {
-          console.warn(`[Routes] Workspace ${sheetData.workspaceId} belongs to different space, setting to null`);
-          sheetData.workspaceId = null;
-        }
+      const workspaceValidation = await validateWorkspaceForSpace(sheetData.workspaceId, spaceId);
+      if (!workspaceValidation.valid && workspaceValidation.error) {
+        return res.status(workspaceValidation.error.status).json({ 
+          message: workspaceValidation.error.message,
+          error: workspaceValidation.error.errorCode,
+          details: workspaceValidation.error.details
+        });
       }
       
       // For link type sheets, ensure we have a valid URL in dataSourceMeta
@@ -1859,21 +1858,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sheetName = name || filename.replace(/\.[^/.]+$/, '');
       
       // Validate workspaceId exists and belongs to this space if provided
-      let validatedWorkspaceId = workspaceId || null;
-      if (validatedWorkspaceId) {
-        const workspace = await storage.getWorkspace(validatedWorkspaceId);
-        if (!workspace) {
-          console.warn(`[Routes] Invalid workspaceId provided for upload: ${validatedWorkspaceId}, setting to null`);
-          validatedWorkspaceId = null;
-        } else if (workspace.spaceId !== spaceId) {
-          console.warn(`[Routes] Workspace ${validatedWorkspaceId} belongs to different space, setting to null`);
-          validatedWorkspaceId = null;
-        }
+      const uploadWorkspaceValidation = await validateWorkspaceForSpace(workspaceId, spaceId);
+      if (!uploadWorkspaceValidation.valid && uploadWorkspaceValidation.error) {
+        return res.status(uploadWorkspaceValidation.error.status).json({ 
+          message: uploadWorkspaceValidation.error.message,
+          error: uploadWorkspaceValidation.error.errorCode,
+          details: uploadWorkspaceValidation.error.details
+        });
       }
       
       let sheetData: any = {
         spaceId,
-        workspaceId: validatedWorkspaceId,
+        workspaceId: workspaceId || null,
         name: sheetName,
         dataSourceType: 'file',
         dataSourceMeta: {
