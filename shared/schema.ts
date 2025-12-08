@@ -445,6 +445,7 @@ export const changeLogsRelations = relations(changeLogs, ({ one }) => ({
 }));
 
 // Document embeddings table with pgvector support for semantic search
+// Enhanced for chunking, hybrid search (BM25), and workspace emphasis
 export const documentEmbeddings = pgTable("document_embeddings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   entityType: varchar("entity_type").notNull(),
@@ -453,9 +454,13 @@ export const documentEmbeddings = pgTable("document_embeddings", {
   embedding: vector("embedding"),
   metadata: jsonb("metadata"),
   spaceId: varchar("space_id").references(() => spaces.id),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  chunkIndex: integer("chunk_index").default(0),
+  totalChunks: integer("total_chunks").default(1),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_document_embeddings_space").on(table.spaceId),
+  index("idx_document_embeddings_workspace").on(table.workspaceId),
   index("idx_document_embeddings_entity").on(table.entityType, table.entityId),
 ]);
 

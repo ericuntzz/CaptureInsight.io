@@ -6,6 +6,8 @@ import {
   ChevronDown,
   Image,
   FileText,
+  FileSpreadsheet,
+  Lightbulb,
   Link2,
   Copy,
   Plus,
@@ -33,6 +35,8 @@ import {
   Percent,
   Hash,
   ZoomIn,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -60,6 +64,11 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from '../components/ui/tooltip';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../components/ui/collapsible';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
 import {
   DndContext,
@@ -487,6 +496,9 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   // Simple animation trigger: detect when AI finishes responding
   const wasTypingRef = useRef(false);
   const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(null);
+  
+  // Track which messages have been rated (messageId -> rating: 1=thumbsdown, 2=thumbsup)
+  const [ratedMessages, setRatedMessages] = useState<Record<string, 1 | 2>>({});
   
   // Chat tabs state
   const activeChatStorageKey = getStorageKey('insight-workspace-active-chat', workspaceId);
@@ -1287,6 +1299,54 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
     toast.success('Message copied!');
   };
   
+  const handleFeedback = async (messageId: string, rating: 1 | 2, response: string) => {
+    if (ratedMessages[messageId]) return;
+    
+    const visibleMessages = chatMessages.filter(m => m.source !== 'canvas');
+    const messageIndex = visibleMessages.findIndex(m => m.id === messageId);
+    let query = '';
+    
+    if (messageIndex > 0) {
+      for (let i = messageIndex - 1; i >= 0; i--) {
+        if (visibleMessages[i].role === 'user') {
+          query = visibleMessages[i].content;
+          break;
+        }
+      }
+    }
+    
+    try {
+      const res = await fetch('/api/ai/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          messageId,
+          threadId: activeChatId,
+          rating,
+          feedbackType: rating === 2 ? 'helpful' : 'not_helpful',
+          query,
+          response,
+        }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        if (errorData.requiresConsent) {
+          toast.error('Please enable AI learning consent in settings to provide feedback.');
+          return;
+        }
+        throw new Error(errorData.message || 'Failed to submit feedback');
+      }
+      
+      setRatedMessages(prev => ({ ...prev, [messageId]: rating }));
+      toast.success('Thanks for your feedback!');
+    } catch (err) {
+      console.error('Failed to submit feedback:', err);
+      toast.error('Failed to submit feedback. Please try again.');
+    }
+  };
+  
   // Chat tab handlers
   const handleCreateNewChat = () => {
     if (!spaceId) return;
@@ -1650,6 +1710,35 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
                     message.content
                   )}
                 </div>
+                
+                {!isUser && message.citations && message.citations.length > 0 && (
+                  <Collapsible className="mt-2">
+                    <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-[#9CA3AF] hover:text-[#FF6B35] transition-colors group/sources">
+                      <span>📚</span>
+                      <span>Sources ({message.citations.length})</span>
+                      <ChevronDown className="w-3 h-3 transition-transform group-data-[state=open]/sources:rotate-180" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-2 space-y-1.5">
+                      {message.citations.map((citation, idx) => (
+                        <div 
+                          key={`${citation.entityId}-${idx}`}
+                          className="flex items-center gap-2 px-2 py-1.5 bg-[#1A1A1A] rounded text-xs"
+                        >
+                          {citation.entityType === 'sheet' ? (
+                            <FileSpreadsheet className="w-3.5 h-3.5 text-[#FF6B35] flex-shrink-0" />
+                          ) : (
+                            <Lightbulb className="w-3.5 h-3.5 text-[#FF6B35] flex-shrink-0" />
+                          )}
+                          <span className="text-[#E5E7EB] truncate flex-1">{citation.name}</span>
+                          <span className="text-[#6B7280] flex-shrink-0">
+                            {Math.round(citation.relevanceScore * 100)}%
+                          </span>
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+                
                 <p className={`text-xs mt-1 ${isUser ? 'opacity-70' : 'opacity-50 text-[#9CA3AF]'}`}>
                   {formatRelativeTime(message.timestamp)}
                 </p>
@@ -1662,6 +1751,34 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
                       title="Copy message"
                     >
                       <Copy className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => handleFeedback(message.id, 2, message.content)}
+                      disabled={!!ratedMessages[message.id] || !aiLearningConsent}
+                      className={`p-1 transition-colors ${
+                        ratedMessages[message.id] === 2
+                          ? 'text-green-500'
+                          : (ratedMessages[message.id] || !aiLearningConsent)
+                            ? 'text-[#4B5563] cursor-not-allowed'
+                            : 'text-[#6B7280] hover:text-green-500'
+                      }`}
+                      title={!aiLearningConsent ? "Enable AI learning consent in Settings to provide feedback" : "Helpful"}
+                    >
+                      <ThumbsUp className="w-3 h-3" fill={ratedMessages[message.id] === 2 ? 'currentColor' : 'none'} />
+                    </button>
+                    <button
+                      onClick={() => handleFeedback(message.id, 1, message.content)}
+                      disabled={!!ratedMessages[message.id] || !aiLearningConsent}
+                      className={`p-1 transition-colors ${
+                        ratedMessages[message.id] === 1
+                          ? 'text-red-500'
+                          : (ratedMessages[message.id] || !aiLearningConsent)
+                            ? 'text-[#4B5563] cursor-not-allowed'
+                            : 'text-[#6B7280] hover:text-red-500'
+                      }`}
+                      title={!aiLearningConsent ? "Enable AI learning consent in Settings to provide feedback" : "Not helpful"}
+                    >
+                      <ThumbsDown className="w-3 h-3" fill={ratedMessages[message.id] === 1 ? 'currentColor' : 'none'} />
                     </button>
                   </div>
                 )}

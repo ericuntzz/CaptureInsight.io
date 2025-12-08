@@ -75,6 +75,12 @@ import {
   type StreamInsightSummaryOptions,
 } from "./insightSummary";
 
+import {
+  rerankResults,
+  isRerankerConfigured,
+  type RerankOptions,
+} from "./reranker";
+
 import { storage } from "../storage";
 
 export {
@@ -304,9 +310,14 @@ export interface CanvasContext {
 export interface RagChatOptions {
   messages: ChatMessage[];
   spaceId?: string;
+  workspaceId?: string;
+  allSpaceIds?: string[];
   spaceGoals?: string;
   additionalContext?: string;
   useRag?: boolean;
+  useHybridSearch?: boolean;
+  useReranking?: boolean;
+  rerankInstructions?: string;
   piiFilter?: PIIFilterOptions;
   canvasContext?: CanvasContext;
   quickAction?: string;
@@ -335,7 +346,21 @@ export interface RagChatResponse extends ChatResponse {
 }
 
 export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
-  const { messages, spaceId, spaceGoals, additionalContext, useRag = true, piiFilter, canvasContext, quickAction } = options;
+  const { 
+    messages, 
+    spaceId, 
+    workspaceId,
+    allSpaceIds,
+    spaceGoals, 
+    additionalContext, 
+    useRag = true, 
+    useHybridSearch = true,
+    useReranking = true,
+    rerankInstructions,
+    piiFilter, 
+    canvasContext, 
+    quickAction 
+  } = options;
   
   if (!isGeminiConfigured()) {
     throw new Error("Gemini AI is not configured");
@@ -357,10 +382,53 @@ export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
     const lastUserMessage = messagesToSend.filter(m => m.role === "user").pop();
     if (lastUserMessage) {
       try {
-        ragContext = await searchSimilar(lastUserMessage.content, spaceId, 5);
+        const candidateSpaceIds = allSpaceIds?.length ? allSpaceIds : [spaceId];
+        const spaceIdsToSearch = candidateSpaceIds.filter((id): id is string => id != null && id !== '');
+        
+        if (useHybridSearch && spaceIdsToSearch.length > 0) {
+          const embedding = await createEmbedding(lastUserMessage.content);
+          if (embedding?.embedding) {
+            const hybridResults = await storage.searchHybridDocuments({
+              query: lastUserMessage.content,
+              embedding: embedding.embedding,
+              spaceIds: spaceIdsToSearch,
+              currentWorkspaceId: workspaceId,
+              limit: 20,
+              vectorWeight: 0.7,
+              keywordWeight: 0.3,
+              workspaceBoost: 1.5,
+            });
+            
+            ragContext = hybridResults.map(doc => ({
+              id: doc.id,
+              entityType: doc.entityType,
+              entityId: doc.entityId,
+              score: doc.combinedScore,
+              content: doc.content,
+              metadata: doc.metadata,
+            }));
+          }
+        } else {
+          ragContext = await searchSimilar(lastUserMessage.content, spaceId, 20);
+        }
+        
+        if (useReranking && ragContext.length > 3 && isRerankerConfigured()) {
+          const reranked = await rerankResults(
+            lastUserMessage.content,
+            ragContext,
+            {
+              instructions: rerankInstructions,
+              topK: 5,
+              minScore: 0.3,
+            }
+          );
+          ragContext = reranked.results;
+        } else {
+          ragContext = ragContext.slice(0, 5);
+        }
         
         if (ragContext.length > 0) {
-          const relevantResults = ragContext.filter(r => r.score > 0.7);
+          const relevantResults = ragContext.filter(r => r.score > 0.3);
           
           relevantResults.forEach(r => {
             const name = r.metadata?.title || r.metadata?.name || r.entityId;

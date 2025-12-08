@@ -136,6 +136,18 @@ export interface IStorage {
   getDocumentEmbedding(entityType: string, entityId: string): Promise<DocumentEmbedding | undefined>;
   deleteDocumentEmbedding(entityType: string, entityId: string): Promise<boolean>;
   searchSimilarDocuments(embedding: number[], spaceId: string, limit?: number): Promise<Array<DocumentEmbedding & { similarity: number }>>;
+  searchHybridDocuments(options: HybridSearchOptions): Promise<Array<DocumentEmbedding & { similarity: number; keywordScore: number; combinedScore: number }>>;
+}
+
+export interface HybridSearchOptions {
+  query: string;
+  embedding: number[];
+  spaceIds: string[];
+  currentWorkspaceId?: string;
+  limit?: number;
+  vectorWeight?: number;
+  keywordWeight?: number;
+  workspaceBoost?: number;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -697,7 +709,10 @@ export class DatabaseStorage implements IStorage {
         entity_id as "entityId", 
         content, 
         metadata, 
-        space_id as "spaceId", 
+        space_id as "spaceId",
+        workspace_id as "workspaceId",
+        chunk_index as "chunkIndex",
+        total_chunks as "totalChunks",
         created_at as "createdAt",
         embedding,
         1 - (embedding <=> $1::vector) as similarity
@@ -716,8 +731,97 @@ export class DatabaseStorage implements IStorage {
       embedding: row.embedding ? row.embedding.slice(1, -1).split(',').map(Number) : null,
       metadata: row.metadata,
       spaceId: row.spaceId,
+      workspaceId: row.workspaceId,
+      chunkIndex: row.chunkIndex,
+      totalChunks: row.totalChunks,
       createdAt: row.createdAt,
       similarity: parseFloat(row.similarity),
+    }));
+  }
+
+  async searchHybridDocuments(
+    options: HybridSearchOptions
+  ): Promise<Array<DocumentEmbedding & { similarity: number; keywordScore: number; combinedScore: number }>> {
+    const {
+      query,
+      embedding,
+      spaceIds,
+      currentWorkspaceId,
+      limit = 20,
+      vectorWeight = 0.7,
+      keywordWeight = 0.3,
+      workspaceBoost = 1.5,
+    } = options;
+
+    const validSpaceIds = spaceIds.filter(id => id != null && id !== '');
+    if (validSpaceIds.length === 0) {
+      return [];
+    }
+    
+    const boostAdditive = Math.max(0, workspaceBoost - 1);
+
+    const embeddingStr = `[${embedding.join(',')}]`;
+    const spacePlaceholders = validSpaceIds.map((_, i) => `$${i + 3}`).join(', ');
+    
+    const result = await pool.query(
+      `WITH vector_search AS (
+        SELECT 
+          id,
+          entity_type as "entityType",
+          entity_id as "entityId",
+          content,
+          metadata,
+          space_id as "spaceId",
+          workspace_id as "workspaceId",
+          chunk_index as "chunkIndex",
+          total_chunks as "totalChunks",
+          created_at as "createdAt",
+          embedding,
+          1 - (embedding <=> $1::vector) as vector_similarity
+        FROM document_embeddings
+        WHERE space_id IN (${spacePlaceholders})
+          AND embedding IS NOT NULL
+        ORDER BY embedding <=> $1::vector
+        LIMIT 100
+      ),
+      keyword_search AS (
+        SELECT 
+          id,
+          ts_rank(to_tsvector('english', COALESCE(content, '')), plainto_tsquery('english', $2)) as keyword_rank
+        FROM document_embeddings
+        WHERE space_id IN (${spacePlaceholders})
+          AND to_tsvector('english', COALESCE(content, '')) @@ plainto_tsquery('english', $2)
+      )
+      SELECT 
+        v.*,
+        COALESCE(k.keyword_rank, 0) as keyword_score,
+        (
+          v.vector_similarity * ${vectorWeight} + 
+          COALESCE(k.keyword_rank, 0) * ${keywordWeight} +
+          CASE WHEN v."workspaceId" = $${validSpaceIds.length + 3} AND v."workspaceId" IS NOT NULL THEN ${boostAdditive} ELSE 0 END
+        ) as combined_score
+      FROM vector_search v
+      LEFT JOIN keyword_search k ON v.id = k.id
+      ORDER BY combined_score DESC
+      LIMIT $${validSpaceIds.length + 4}`,
+      [embeddingStr, query, ...validSpaceIds, currentWorkspaceId || '', limit]
+    );
+
+    return result.rows.map(row => ({
+      id: row.id,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      content: row.content,
+      embedding: row.embedding ? row.embedding.slice(1, -1).split(',').map(Number) : null,
+      metadata: row.metadata,
+      spaceId: row.spaceId,
+      workspaceId: row.workspaceId,
+      chunkIndex: row.chunkIndex,
+      totalChunks: row.totalChunks,
+      createdAt: row.createdAt,
+      similarity: parseFloat(row.vector_similarity || 0),
+      keywordScore: parseFloat(row.keyword_score || 0),
+      combinedScore: parseFloat(row.combined_score || 0),
     }));
   }
 

@@ -2622,11 +2622,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ai/chat', isAuthenticated, async (req: any, res) => {
     try {
-      const { messages, context, spaceGoals, spaceId, useRag, piiFilter, canvasContext, quickAction } = req.body;
+      const { messages, context, spaceGoals, spaceId, workspaceId, allSpaceIds, useRag, useHybridSearch, useReranking, piiFilter, canvasContext, quickAction } = req.body;
 
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({ message: "Messages must be an array" });
       }
+      
+      const hasValidSpaceContext = spaceId || (allSpaceIds && Array.isArray(allSpaceIds) && allSpaceIds.length > 0);
 
       if (!isGeminiConfigured()) {
         return res.status(503).json({ 
@@ -2696,9 +2698,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await chat({
         messages: chatMessages,
         spaceId,
+        workspaceId,
+        allSpaceIds: Array.isArray(allSpaceIds) ? allSpaceIds.filter((id: any) => id != null) : undefined,
         spaceGoals,
         additionalContext: context,
-        useRag: useRag !== false,
+        useRag: useRag !== false && hasValidSpaceContext,
+        useHybridSearch: useHybridSearch !== false,
+        useReranking: useReranking !== false,
         piiFilter: piiFilterOptions,
         canvasContext: filteredCanvasContext,
         quickAction: quickAction,
