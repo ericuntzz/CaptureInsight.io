@@ -27,8 +27,6 @@ export async function embedAndStoreContent(
   workspaceId?: string
 ): Promise<EmbeddingResult> {
   try {
-    await storage.deleteDocumentEmbedding(entityType, entityId);
-
     const chunks = chunkText(content, { maxChunkSize: 1500, overlapSize: 150 });
     
     if (chunks.length === 0) {
@@ -39,6 +37,8 @@ export async function embedAndStoreContent(
         error: "No content to embed",
       };
     }
+
+    let generatedEmbeddings: number[][] = [];
 
     if (chunks.length === 1) {
       const embedding = await generateEmbedding(chunks[0].content);
@@ -51,45 +51,27 @@ export async function embedAndStoreContent(
           error: "Failed to generate embedding - Gemini not configured or embedding generation failed",
         };
       }
-
-      await storage.createDocumentEmbedding({
-        entityType,
-        entityId,
-        content: chunks[0].content,
-        embedding,
-        spaceId,
-        workspaceId,
-        chunkIndex: 0,
-        totalChunks: 1,
-        metadata: {
-          ...metadata,
-          ...chunks[0].metadata,
-        },
-      });
-
-      return {
-        success: true,
-        entityType,
-        entityId,
-        chunksCreated: 1,
-      };
+      generatedEmbeddings = [embedding];
+    } else {
+      const chunkContents = chunks.map(c => c.content);
+      const embeddings = await generateEmbeddings(chunkContents);
+      
+      if (!embeddings) {
+        return {
+          success: false,
+          entityType,
+          entityId,
+          error: "Failed to generate embeddings - Gemini not configured or embedding generation failed",
+        };
+      }
+      generatedEmbeddings = embeddings;
     }
 
-    const chunkContents = chunks.map(c => c.content);
-    const embeddings = await generateEmbeddings(chunkContents);
-    
-    if (!embeddings) {
-      return {
-        success: false,
-        entityType,
-        entityId,
-        error: "Failed to generate embeddings - Gemini not configured or embedding generation failed",
-      };
-    }
+    await storage.deleteDocumentEmbedding(entityType, entityId);
 
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
-      const embedding = embeddings[i];
+      const embedding = generatedEmbeddings[i];
       
       await storage.createDocumentEmbedding({
         entityType,

@@ -15,6 +15,7 @@ import {
   companies,
   companyMembers,
   userSettings,
+  ingestionJobs,
   type User,
   type UpsertUser,
   type Space,
@@ -47,9 +48,11 @@ import {
   type InsertCompanyMember,
   type UserSettings,
   type InsertUserSettings,
+  type IngestionJob,
+  type InsertIngestionJob,
 } from "../shared/schema";
 import { db, pool } from "./db";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, lte, lt, inArray, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -82,6 +85,17 @@ export interface IStorage {
   createSheet(sheet: InsertSheet): Promise<Sheet>;
   updateSheet(id: string, sheet: Partial<InsertSheet>): Promise<Sheet | undefined>;
   deleteSheet(id: string): Promise<boolean>;
+
+  // Ingestion Job operations
+  getIngestionJob(id: string): Promise<IngestionJob | undefined>;
+  getIngestionJobBySheet(sheetId: string): Promise<IngestionJob | undefined>;
+  getPendingIngestionJobs(limit?: number): Promise<IngestionJob[]>;
+  getRetryableJobs(limit?: number): Promise<IngestionJob[]>;
+  createIngestionJob(job: InsertIngestionJob): Promise<IngestionJob>;
+  updateIngestionJob(id: string, job: Partial<InsertIngestionJob>): Promise<IngestionJob | undefined>;
+  markJobCompleted(id: string): Promise<IngestionJob | undefined>;
+  markJobFailed(id: string, error: string, errorCode?: string): Promise<IngestionJob | undefined>;
+  incrementJobRetry(id: string, nextRetryAt: Date): Promise<IngestionJob | undefined>;
 
   // Tag operations
   getTags(spaceId: string): Promise<Tag[]>;
@@ -441,6 +455,106 @@ export class DatabaseStorage implements IStorage {
   async deleteSheet(id: string): Promise<boolean> {
     const result = await db.delete(sheets).where(eq(sheets.id, id));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // Ingestion Job operations
+  async getIngestionJob(id: string): Promise<IngestionJob | undefined> {
+    const [job] = await db.select().from(ingestionJobs).where(eq(ingestionJobs.id, id));
+    return job;
+  }
+
+  async getIngestionJobBySheet(sheetId: string): Promise<IngestionJob | undefined> {
+    const [job] = await db.select().from(ingestionJobs).where(eq(ingestionJobs.sheetId, sheetId));
+    return job;
+  }
+
+  async getPendingIngestionJobs(limit: number = 10): Promise<IngestionJob[]> {
+    return await db
+      .select()
+      .from(ingestionJobs)
+      .where(eq(ingestionJobs.status, 'pending'))
+      .orderBy(asc(ingestionJobs.createdAt))
+      .limit(limit);
+  }
+
+  async getRetryableJobs(limit: number = 10): Promise<IngestionJob[]> {
+    const now = new Date();
+    return await db
+      .select()
+      .from(ingestionJobs)
+      .where(
+        and(
+          eq(ingestionJobs.status, 'failed'),
+          lt(ingestionJobs.retryCount, ingestionJobs.maxRetries),
+          lte(ingestionJobs.nextRetryAt, now)
+        )
+      )
+      .orderBy(asc(ingestionJobs.nextRetryAt))
+      .limit(limit);
+  }
+
+  async createIngestionJob(job: InsertIngestionJob): Promise<IngestionJob> {
+    const [created] = await db.insert(ingestionJobs).values(job).returning();
+    return created;
+  }
+
+  async updateIngestionJob(id: string, job: Partial<InsertIngestionJob>): Promise<IngestionJob | undefined> {
+    const [updated] = await db
+      .update(ingestionJobs)
+      .set({ ...job, updatedAt: new Date() })
+      .where(eq(ingestionJobs.id, id))
+      .returning();
+    return updated;
+  }
+
+  async markJobCompleted(id: string): Promise<IngestionJob | undefined> {
+    const now = new Date();
+    const [updated] = await db
+      .update(ingestionJobs)
+      .set({
+        status: 'completed',
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(ingestionJobs.id, id))
+      .returning();
+    return updated;
+  }
+
+  async markJobFailed(id: string, error: string, errorCode?: string): Promise<IngestionJob | undefined> {
+    const job = await this.getIngestionJob(id);
+    if (!job) return undefined;
+
+    const now = new Date();
+    const [updated] = await db
+      .update(ingestionJobs)
+      .set({
+        status: 'failed',
+        lastError: error,
+        errorCode: errorCode ?? null,
+        retryCount: (job.retryCount ?? 0) + 1,
+        updatedAt: now,
+      })
+      .where(eq(ingestionJobs.id, id))
+      .returning();
+    return updated;
+  }
+
+  async incrementJobRetry(id: string, nextRetryAt: Date): Promise<IngestionJob | undefined> {
+    const job = await this.getIngestionJob(id);
+    if (!job) return undefined;
+
+    const [updated] = await db
+      .update(ingestionJobs)
+      .set({
+        retryCount: (job.retryCount ?? 0) + 1,
+        nextRetryAt: nextRetryAt,
+        status: 'pending',
+        updatedAt: new Date(),
+      })
+      .where(eq(ingestionJobs.id, id))
+      .returning();
+    return updated;
   }
 
   // Tag operations

@@ -232,6 +232,54 @@ export const sheetsRelations = relations(sheets, ({ one }) => ({
   }),
 }));
 
+// Ingestion Jobs table - Durable ETL job tracking with states, retries, and checkpoints
+export const ingestionJobs = pgTable("ingestion_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sheetId: varchar("sheet_id").references(() => sheets.id).notNull(),
+  spaceId: varchar("space_id").references(() => spaces.id).notNull(),
+  status: varchar("status").notNull().default("pending"), // pending, extracting, cleaning, embedding, completed, failed
+  currentStage: varchar("current_stage").default("pending"), // More granular: pending, parsing, validating, template_matching, ai_cleaning, quality_scoring, embedding, finalizing
+  retryCount: integer("retry_count").default(0),
+  maxRetries: integer("max_retries").default(3),
+  lastError: text("last_error"),
+  errorCode: varchar("error_code"), // Structured error code for programmatic handling
+  checkpoint: jsonb("checkpoint").$type<{
+    stage: string;
+    data?: any; // Intermediate data for resumability
+    parsedRowCount?: number;
+    embeddingsCreated?: number;
+    templateApplied?: string;
+  }>(),
+  metadata: jsonb("metadata").$type<{
+    filename?: string;
+    fileSize?: number;
+    mimeType?: string;
+    sourceType?: string;
+    rowCount?: number;
+    columnCount?: number;
+  }>(),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  nextRetryAt: timestamp("next_retry_at"), // For exponential backoff
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_ingestion_jobs_status").on(table.status),
+  index("idx_ingestion_jobs_sheet").on(table.sheetId),
+  index("idx_ingestion_jobs_next_retry").on(table.nextRetryAt),
+]);
+
+export const ingestionJobsRelations = relations(ingestionJobs, ({ one }) => ({
+  sheet: one(sheets, {
+    fields: [ingestionJobs.sheetId],
+    references: [sheets.id],
+  }),
+  space: one(spaces, {
+    fields: [ingestionJobs.spaceId],
+    references: [spaces.id],
+  }),
+}));
+
 // Tags table
 export const tags = pgTable("tags", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -849,3 +897,6 @@ export type TemplateApplication = typeof templateApplications.$inferSelect;
 
 export type InsertSystemColumnAlias = typeof systemColumnAliases.$inferInsert;
 export type SystemColumnAlias = typeof systemColumnAliases.$inferSelect;
+
+export type InsertIngestionJob = typeof ingestionJobs.$inferInsert;
+export type IngestionJob = typeof ingestionJobs.$inferSelect;
