@@ -34,7 +34,16 @@ CaptureInsight is a full-stack application. The frontend uses React 18 (TypeScri
 -   **AI Consent & PII Filtering**: Configurable PII scrubbing and explicit AI feature consent per space.
 
 **AI Integration:**
-A hybrid AI architecture leverages Gemini 2.5 Pro/Flash (via Replit AI Integrations) for screenshot/data analysis and chat. OpenAI (text-embedding-3-small) is used for text embeddings with `pgvector` for semantic search.
+A hybrid AI architecture leverages Gemini 2.5 Pro/Flash (via Replit AI Integrations) for screenshot/data analysis and chat. Google text-embedding-004 (768 dimensions, via Gemini API) is used for text embeddings with `pgvector` for semantic search.
+
+**Excel/CSV File Upload:**
+Direct file upload support for Excel (.xlsx, .xls) and CSV files:
+-   **Backend Endpoint**: `POST /api/spaces/:spaceId/sheets/upload` accepts base64-encoded file data
+-   **File Validation**: Validates file contents (not just extension/MIME) to prevent spoofed files - detects HTML/JSON disguised as CSV
+-   **Size Limit**: 10MB maximum file size
+-   **Full Pipeline Integration**: Upload → Parse → Clean (AI) → Embed (vectorize for RAG)
+-   **Background Processing**: Cleaning and embedding run asynchronously after sheet creation
+-   **Key Files**: `server/ai/dataIngestion.ts` (parseUploadedFile, parseExcel), `server/routes.ts`
 
 **AI Canvas Editing (ChatGPT Canvas-like):**
 The Insight Workspace features AI-powered canvas editing similar to ChatGPT's Canvas mode:

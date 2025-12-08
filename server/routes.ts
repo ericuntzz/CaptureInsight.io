@@ -8,7 +8,7 @@ import {
   extractInsights,
   getAIStatus,
   isGeminiConfigured,
-  isOpenAIConfigured,
+  isGoogleEmbeddingsConfigured,
   searchSimilar,
   getAvailablePIIPatterns,
   type ChatMessage,
@@ -19,7 +19,7 @@ import {
   embedAndStoreContent,
   reindexSpace,
 } from "./ai/embeddings";
-import { ingestOnCreate, isGoogleSheetsUrl } from "./ai/dataIngestion";
+import { ingestOnCreate, isGoogleSheetsUrl, parseUploadedFile } from "./ai/dataIngestion";
 import { triggerDataCleaning } from "./ai/dataCleaning";
 import * as templateService from "./ai/templateService";
 import { serverEncryption } from "./encryption";
@@ -1813,6 +1813,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/spaces/:spaceId/sheets/upload', isAuthenticated, requireSpaceOwner('spaceId'), async (req: any, res) => {
+    try {
+      const { spaceId } = req.params;
+      const userId = req.user.claims.sub;
+      const { fileData, filename, mimeType, name, workspaceId } = req.body;
+      
+      if (!fileData || !filename || !mimeType) {
+        return res.status(400).json({ 
+          message: "Missing required fields: fileData, filename, and mimeType are required" 
+        });
+      }
+      
+      if (typeof fileData !== 'string') {
+        return res.status(400).json({ message: "fileData must be a base64 encoded string" });
+      }
+      
+      const buffer = Buffer.from(fileData, 'base64');
+      
+      const MAX_FILE_SIZE = 10 * 1024 * 1024;
+      if (buffer.length > MAX_FILE_SIZE) {
+        return res.status(400).json({ 
+          message: `File size exceeds limit of 10MB. Received: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB` 
+        });
+      }
+      
+      console.log(`[Routes] Parsing uploaded file: ${filename} (${buffer.length} bytes)`);
+      
+      let parsed;
+      try {
+        parsed = parseUploadedFile(buffer, filename, mimeType);
+      } catch (parseError) {
+        console.error(`[Routes] File parsing failed for ${filename}:`, parseError);
+        return res.status(400).json({ 
+          message: parseError instanceof Error ? parseError.message : "Failed to parse file" 
+        });
+      }
+      
+      const { headers, rows, rawRows } = parsed;
+      console.log(`[Routes] Parsed ${rows.length} rows with ${headers.length} columns from ${filename}`);
+      
+      const sheetName = name || filename.replace(/\.[^/.]+$/, '');
+      
+      let sheetData: any = {
+        spaceId,
+        workspaceId: workspaceId || null,
+        name: sheetName,
+        dataSourceType: 'file',
+        dataSourceMeta: {
+          filename,
+          mimeType,
+          size: buffer.length,
+        },
+        data: { headers, rows: rawRows },
+        rowCount: rows.length,
+        createdBy: userId,
+      };
+      
+      const securityMode = await serverEncryption.getSecurityMode(userId);
+      if (securityMode === 0 && sheetData.data !== undefined && sheetData.data !== null) {
+        const dataString = JSON.stringify(sheetData.data);
+        const { encrypted, iv } = await serverEncryption.encryptForUser(userId, dataString);
+        sheetData = {
+          ...sheetData,
+          data: null,
+          encryptedData: encrypted,
+          encryptionIv: iv,
+          encryptionVersion: 1,
+        };
+      }
+      
+      const sheet = await storage.createSheet(sheetData);
+      console.log(`[Routes] Created sheet ${sheet.id} from uploaded file: ${filename}`);
+      
+      triggerDataCleaning(sheet.id)
+        .then(async () => {
+          console.log(`[Routes] Data cleaning completed for uploaded file sheet ${sheet.id}`);
+          // Generate embeddings after cleaning
+          try {
+            const updatedSheet = await storage.getSheet(sheet.id);
+            if (updatedSheet) {
+              const embeddingResult = await embedAndStoreSheet(updatedSheet, spaceId, workspaceId);
+              if (embeddingResult.success) {
+                console.log(`[Routes] Embeddings created for uploaded file sheet ${sheet.id}: ${embeddingResult.chunksCreated} chunks`);
+              } else {
+                console.warn(`[Routes] Embedding failed for uploaded file sheet ${sheet.id}: ${embeddingResult.error}`);
+              }
+            }
+          } catch (embeddingError) {
+            console.error(`[Routes] Embedding error for sheet ${sheet.id}:`, embeddingError);
+          }
+        })
+        .catch((err) => {
+          console.error(`[Routes] Data cleaning error for sheet ${sheet.id}:`, err);
+        });
+      
+      res.status(201).json(sheet);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      res.status(500).json({ 
+        message: "Failed to upload file",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Update cleaned data (user corrections)
   app.put('/api/sheets/:id/cleaned-data', isAuthenticated, requireEntityOwner('sheet'), async (req: any, res) => {
     try {
@@ -2800,7 +2905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      if (!isOpenAIConfigured()) {
+      if (!isGoogleEmbeddingsConfigured()) {
         return res.status(503).json({ 
           message: "Embeddings service not configured. OpenAI API key is required." 
         });
@@ -2847,7 +2952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { spaceId } = req.params;
 
-      if (!isOpenAIConfigured()) {
+      if (!isGoogleEmbeddingsConfigured()) {
         return res.status(503).json({ 
           message: "Embeddings service not configured. OpenAI API key is required." 
         });
@@ -2877,7 +2982,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      if (!isOpenAIConfigured()) {
+      if (!isGoogleEmbeddingsConfigured()) {
         return res.status(503).json({ 
           message: "Search service not configured. OpenAI API key is required." 
         });

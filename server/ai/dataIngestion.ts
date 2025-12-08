@@ -4,11 +4,13 @@
  * Fetches and parses data from various sources:
  * - Google Sheets (via CSV export - no API key needed for public sheets)
  * - CSV files
+ * - Excel files (.xlsx, .xls)
  * - Screenshots (placeholder for OCR)
  */
 
 import { storage } from "../storage";
 import { embedAndStoreSheet } from "./embeddings";
+import * as XLSX from "xlsx";
 
 export interface IngestionResult {
   success: boolean;
@@ -333,4 +335,106 @@ export async function ingestOnCreate(
   }
 
   return ingestSheetData(sheetId, spaceId);
+}
+
+/**
+ * Parse Excel file buffer into structured data
+ * Uses xlsx package to read .xlsx and .xls files
+ */
+export function parseExcel(buffer: Buffer): { headers: string[]; rows: Record<string, string>[]; rawRows: string[][] } {
+  try {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    
+    if (workbook.SheetNames.length === 0) {
+      console.log('[DataIngestion] Excel file has no sheets');
+      return { headers: [], rows: [], rawRows: [] };
+    }
+    
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    
+    const rawData: string[][] = XLSX.utils.sheet_to_json(worksheet, { 
+      header: 1, 
+      defval: "" 
+    });
+    
+    if (rawData.length === 0) {
+      console.log('[DataIngestion] Excel sheet is empty');
+      return { headers: [], rows: [], rawRows: [] };
+    }
+    
+    const nonEmptyRows = rawData.filter(row => 
+      row.some(cell => cell !== null && cell !== undefined && String(cell).length > 0)
+    );
+    
+    if (nonEmptyRows.length === 0) {
+      return { headers: [], rows: [], rawRows: [] };
+    }
+    
+    const headers = nonEmptyRows[0].map(cell => String(cell ?? ''));
+    const rawRows: string[][] = [];
+    const rows: Record<string, string>[] = [];
+    
+    for (let i = 1; i < nonEmptyRows.length; i++) {
+      const values = nonEmptyRows[i].map(cell => String(cell ?? ''));
+      rawRows.push(values);
+      
+      const row: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index] || '';
+      });
+      rows.push(row);
+    }
+    
+    console.log(`[DataIngestion] Parsed Excel file: ${rows.length} rows with ${headers.length} columns`);
+    return { headers, rows, rawRows };
+  } catch (error) {
+    console.error('[DataIngestion] Error parsing Excel file:', error);
+    throw new Error(`Failed to parse Excel file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Parse uploaded file based on file type
+ * Supports CSV and Excel formats
+ * Validates file contents to prevent spoofed files
+ */
+export function parseUploadedFile(
+  buffer: Buffer, 
+  filename: string, 
+  mimeType: string
+): { headers: string[]; rows: Record<string, string>[]; rawRows: string[][] } {
+  const lowercaseFilename = filename.toLowerCase();
+  const extension = lowercaseFilename.split('.').pop() || '';
+  
+  console.log(`[DataIngestion] Parsing uploaded file: ${filename}, mimeType: ${mimeType}, extension: ${extension}`);
+  
+  if (extension === 'csv' || mimeType === 'text/csv' || mimeType === 'application/csv') {
+    const csvText = buffer.toString('utf-8');
+    
+    if (csvText.trim().startsWith('<!DOCTYPE') || csvText.trim().startsWith('<html')) {
+      throw new Error('Invalid CSV file: file appears to be HTML, not CSV data');
+    }
+    
+    if (csvText.trim().startsWith('{') || csvText.trim().startsWith('[')) {
+      throw new Error('Invalid CSV file: file appears to be JSON, not CSV data');
+    }
+    
+    return parseCsv(csvText);
+  }
+  
+  if (
+    extension === 'xlsx' || 
+    extension === 'xls' || 
+    mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    mimeType === 'application/vnd.ms-excel'
+  ) {
+    try {
+      return parseExcel(buffer);
+    } catch (error) {
+      throw new Error(`Invalid Excel file: ${error instanceof Error ? error.message : 'file could not be parsed as Excel format'}`);
+    }
+  }
+  
+  throw new Error(`Unsupported file type: ${extension || mimeType}. Supported formats: CSV, Excel (.xlsx, .xls)`);
 }
