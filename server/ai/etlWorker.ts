@@ -38,9 +38,11 @@ export interface ETLResult {
 interface Checkpoint {
   stage: string;
   data?: {
-    parsedData?: any[];
+    rows?: any[];         // Primary key for parsed data (new format)
+    parsedData?: any[];   // Legacy key for backward compatibility
     rowCount?: number;
     headers?: string[];
+    templateApplied?: string;
     [key: string]: any;
   };
   parsedRowCount?: number;
@@ -132,17 +134,27 @@ export async function processIngestionJob(jobId: string): Promise<ETLResult> {
 
     if (!shouldSkipStage(checkpoint, 'parsing_complete')) {
       parsedData = await parseStage(job, sheet);
+      const headers = parsedData.length > 0 ? Object.keys(parsedData[0] || {}) : [];
       await saveCheckpoint(jobId, 'parsing_complete', { 
-        parsedData: parsedData, 
-        rowCount: parsedData?.length || 0 
+        rows: parsedData,
+        rowCount: parsedData?.length || 0,
+        headers: headers,
+      }, {
+        parsedRowCount: parsedData?.length || 0,
       });
       stagesCompleted.push('PARSING');
     } else {
       stagesCompleted.push('PARSING (skipped)');
-      if (checkpoint?.data?.parsedData && Array.isArray(checkpoint.data.parsedData)) {
+      // Try to load from checkpoint first (consistent keys: rows, rowCount, headers)
+      if (checkpoint?.data?.rows && Array.isArray(checkpoint.data.rows)) {
+        parsedData = checkpoint.data.rows;
+        console.log(`[ETLWorker] Loaded ${parsedData.length} rows from checkpoint.data.rows`);
+      } else if (checkpoint?.data?.parsedData && Array.isArray(checkpoint.data.parsedData)) {
+        // Backward compatibility with old checkpoint format
         parsedData = checkpoint.data.parsedData;
-        console.log(`[ETLWorker] Loaded ${parsedData.length} rows from checkpoint`);
+        console.log(`[ETLWorker] Loaded ${parsedData.length} rows from checkpoint.data.parsedData (legacy)`);
       } else {
+        // Fall back to sheet.data
         const currentSheet = await storage.getSheet(job.sheetId);
         if (currentSheet?.data) {
           parsedData = Array.isArray(currentSheet.data) 
