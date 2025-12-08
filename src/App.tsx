@@ -39,6 +39,7 @@ import {
   useDeleteWorkspace,
   useCreateSheet,
   useUpdateSheet,
+  useUploadFile,
   useCreateTag,
   useUpdateTag,
   useDeleteTag,
@@ -333,6 +334,7 @@ export default function App() {
   const deleteWorkspaceMutation = useDeleteWorkspace();
   const createSheetMutation = useCreateSheet();
   const updateSheetMutation = useUpdateSheet();
+  const uploadFileMutation = useUploadFile();
   const createTagMutation = useCreateTag();
   const updateTagMutation = useUpdateTag();
   const deleteTagMutation = useDeleteTag();
@@ -798,21 +800,37 @@ export default function App() {
         const dest = destinations[index];
         const settings = analysisSettings[index];
         
-        console.log('[Capture Flow] Creating sheet:', item.name, 'in workspace:', dest.folderId, item.type === 'link' ? `URL: ${item.url}` : '');
+        console.log('[Capture Flow] Creating sheet:', item.name, 'in workspace:', dest.folderId, item.type === 'link' ? `URL: ${item.url}` : '', item.type === 'file' ? '(file upload)' : '');
         
-        await createSheetMutation.mutateAsync({
-          spaceId: dest.spaceId,
-          folderId: dest.folderId,
-          name: item.name,
-          dataSourceType: item.type,
-          dataSourceMeta: {
-            analysisType: settings?.analysisType,
-            llmProvider: settings?.llmProvider,
-            schedule: settings?.schedule,
-            url: item.url,
-          },
-          captureBatchId,
-        });
+        if (item.type === 'file') {
+          const fileData = uploadedFiles.find(f => f.id === item.id);
+          if (fileData?.file) {
+            console.log('[Capture Flow] Uploading file:', fileData.file.name, 'size:', fileData.file.size);
+            await uploadFileMutation.mutateAsync({
+              spaceId: dest.spaceId,
+              workspaceId: dest.folderId,
+              file: fileData.file,
+              name: item.name,
+            });
+          } else {
+            console.error('[Capture Flow] File not found for item:', item.id);
+            toast.error(`File not found: ${item.name}`);
+          }
+        } else {
+          await createSheetMutation.mutateAsync({
+            spaceId: dest.spaceId,
+            folderId: dest.folderId,
+            name: item.name,
+            dataSourceType: item.type,
+            dataSourceMeta: {
+              analysisType: settings?.analysisType,
+              llmProvider: settings?.llmProvider,
+              schedule: settings?.schedule,
+              url: item.url,
+            },
+            captureBatchId,
+          });
+        }
       }
       
       // Step 6: Navigate to workspace view with batch ID

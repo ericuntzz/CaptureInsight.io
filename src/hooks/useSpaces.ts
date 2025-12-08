@@ -321,6 +321,46 @@ export function useCreateSheet() {
   });
 }
 
+export function useUploadFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ 
+      spaceId, 
+      workspaceId,
+      file,
+      name,
+    }: { 
+      spaceId: string; 
+      workspaceId?: string;
+      file: File;
+      name?: string;
+    }) => {
+      const fileData = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      
+      const res = await apiRequest("POST", `/api/spaces/${spaceId}/sheets/upload`, { 
+        workspaceId,
+        fileData,
+        filename: file.name,
+        mimeType: file.type,
+        name: name || file.name.replace(/\.[^/.]+$/, ''),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
+    },
+  });
+}
+
 export function useUpdateSheet() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -335,7 +375,6 @@ export function useUpdateSheet() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/spaces"] });
-      // Also invalidate sheets query to update the UI in InsightWorkspace
       queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
     },
   });

@@ -15,6 +15,7 @@ import {
 } from "./templateService";
 import { calculateQualityScore, type QualityScore } from "./dataValidation";
 import { MAX_ROW_COUNT } from "./dataIngestion";
+import { serverEncryption } from "../encryption";
 import type { IngestionJob, Sheet } from "../../shared/schema";
 
 const MAX_ROWS = MAX_ROW_COUNT;
@@ -299,7 +300,52 @@ function getCurrentStage(stagesCompleted: string[]): ETLStage {
 async function parseStage(job: IngestionJob, sheet: Sheet): Promise<any[]> {
   console.log(`[ETLWorker] Stage PARSING for sheet ${sheet.id}`);
   
-  const rawData = sheet.data;
+  let rawData = sheet.data;
+  
+  // Handle encrypted data - decrypt if needed
+  if (!rawData && (sheet as any).encryptedData && (sheet as any).encryptionIv) {
+    console.log(`[ETLWorker] Sheet ${sheet.id} has encrypted data, decrypting...`);
+    const userId = sheet.createdBy;
+    if (!userId) {
+      throw new ETLError(
+        'Cannot decrypt data: sheet has no owner',
+        ETLErrorCode.PARSE_ERROR,
+        ETLStage.PARSING,
+        false,
+        { sheetId: sheet.id }
+      );
+    }
+    
+    try {
+      const decryptedString = await serverEncryption.decryptForUser(
+        userId, 
+        (sheet as any).encryptedData, 
+        (sheet as any).encryptionIv
+      );
+      
+      if (!decryptedString) {
+        throw new ETLError(
+          'Failed to decrypt sheet data',
+          ETLErrorCode.PARSE_ERROR,
+          ETLStage.PARSING,
+          false,
+          { sheetId: sheet.id }
+        );
+      }
+      
+      rawData = JSON.parse(decryptedString);
+      console.log(`[ETLWorker] Successfully decrypted data for sheet ${sheet.id}`);
+    } catch (err) {
+      if (err instanceof ETLError) throw err;
+      throw new ETLError(
+        `Decryption failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        ETLErrorCode.PARSE_ERROR,
+        ETLStage.PARSING,
+        false,
+        { sheetId: sheet.id }
+      );
+    }
+  }
   
   if (!rawData) {
     throw new ETLError(
