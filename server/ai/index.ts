@@ -19,11 +19,11 @@ import {
   createEmbedding,
   createEmbeddings,
   cosineSimilarity,
-  isGoogleEmbeddingsConfigured,
+  isOpenAIConfigured as isOpenAIEmbeddingsConfigured,
   getEmbeddingDimensions,
   type EmbeddingResult,
   type BatchEmbeddingResult,
-} from "./googleEmbeddings";
+} from "./openai";
 
 import {
   filterPII,
@@ -92,7 +92,7 @@ export {
   createEmbedding,
   createEmbeddings,
   cosineSimilarity,
-  isGoogleEmbeddingsConfigured,
+  isOpenAIEmbeddingsConfigured,
   getEmbeddingDimensions,
   filterPII,
   filterPIIFromData,
@@ -206,7 +206,7 @@ export async function analyzeCapture(
 }
 
 export async function generateEmbedding(text: string): Promise<number[] | null> {
-  if (!isGoogleEmbeddingsConfigured()) {
+  if (!isOpenAIEmbeddingsConfigured()) {
     console.warn("OpenAI is not configured. Embeddings are disabled.");
     return null;
   }
@@ -221,7 +221,7 @@ export async function generateEmbedding(text: string): Promise<number[] | null> 
 }
 
 export async function generateEmbeddings(texts: string[]): Promise<number[][] | null> {
-  if (!isGoogleEmbeddingsConfigured()) {
+  if (!isOpenAIEmbeddingsConfigured()) {
     console.warn("OpenAI is not configured. Embeddings are disabled.");
     return null;
   }
@@ -249,7 +249,7 @@ export async function searchSimilar(
   spaceId: string,
   limit: number = 10
 ): Promise<SimilarityResult[]> {
-  if (!isGoogleEmbeddingsConfigured()) {
+  if (!isOpenAIEmbeddingsConfigured()) {
     console.warn("OpenAI is not configured. Vector search is disabled.");
     return [];
   }
@@ -291,8 +291,8 @@ export function getAIStatus(): {
       configured: isGeminiConfigured(),
     },
     embeddings: {
-      configured: isGoogleEmbeddingsConfigured(),
-      provider: "google",
+      configured: isOpenAIEmbeddingsConfigured(),
+      provider: "openai",
     },
   };
 }
@@ -378,7 +378,7 @@ export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
     piiRedacted = { count: filtered.redactedCount, types: filtered.redactedTypes };
   }
 
-  if (useRag && spaceId && isGoogleEmbeddingsConfigured() && messagesToSend.length > 0) {
+  if (useRag && spaceId && isOpenAIEmbeddingsConfigured() && messagesToSend.length > 0) {
     const lastUserMessage = messagesToSend.filter(m => m.role === "user").pop();
     if (lastUserMessage) {
       try {

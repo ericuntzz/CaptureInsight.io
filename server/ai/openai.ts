@@ -19,7 +19,7 @@ function getOpenAIClient(): OpenAI | null {
 const rateLimiter = pLimit(5);
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
-const EMBEDDING_DIMENSIONS = 1536;
+const EMBEDDING_DIMENSIONS = 768;
 
 function isRateLimitError(error: unknown): boolean {
   const errorMsg = error instanceof Error ? error.message : String(error);
