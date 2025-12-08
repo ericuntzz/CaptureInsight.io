@@ -14,9 +14,10 @@ import {
   type TemplateMatchResult,
 } from "./templateService";
 import { calculateQualityScore, type QualityScore } from "./dataValidation";
+import { MAX_ROW_COUNT } from "./dataIngestion";
 import type { IngestionJob, Sheet } from "../../shared/schema";
 
-const MAX_ROWS = 50000;
+const MAX_ROWS = MAX_ROW_COUNT;
 const AUTO_APPLY_CONFIDENCE_THRESHOLD = 85;
 
 export interface ETLResult {
@@ -36,7 +37,12 @@ export interface ETLResult {
 
 interface Checkpoint {
   stage: string;
-  data?: any;
+  data?: {
+    parsedData?: any[];
+    rowCount?: number;
+    headers?: string[];
+    [key: string]: any;
+  };
   parsedRowCount?: number;
   embeddingsCreated?: number;
   templateApplied?: string;
@@ -126,11 +132,28 @@ export async function processIngestionJob(jobId: string): Promise<ETLResult> {
 
     if (!shouldSkipStage(checkpoint, 'parsing_complete')) {
       parsedData = await parseStage(job, sheet);
-      await saveCheckpoint(jobId, 'parsing_complete', { rowCount: parsedData?.length || 0 });
+      await saveCheckpoint(jobId, 'parsing_complete', { 
+        parsedData: parsedData, 
+        rowCount: parsedData?.length || 0 
+      });
       stagesCompleted.push('PARSING');
     } else {
       stagesCompleted.push('PARSING (skipped)');
-      parsedData = sheet.data as any[] || [];
+      if (checkpoint?.data?.parsedData && Array.isArray(checkpoint.data.parsedData)) {
+        parsedData = checkpoint.data.parsedData;
+        console.log(`[ETLWorker] Loaded ${parsedData.length} rows from checkpoint`);
+      } else {
+        const currentSheet = await storage.getSheet(job.sheetId);
+        if (currentSheet?.data) {
+          parsedData = Array.isArray(currentSheet.data) 
+            ? currentSheet.data 
+            : [currentSheet.data];
+          console.log(`[ETLWorker] Loaded ${parsedData.length} rows from sheet data`);
+        } else {
+          parsedData = [];
+          console.warn(`[ETLWorker] No parsed data found in checkpoint or sheet`);
+        }
+      }
     }
 
     metadata.rowCount = parsedData?.length || 0;
@@ -277,16 +300,36 @@ async function parseStage(job: IngestionJob, sheet: Sheet): Promise<any[]> {
   }
 
   let parsedData: any[];
+  let headers: string[] = [];
   
   if (Array.isArray(rawData)) {
     parsedData = rawData;
+    if (parsedData.length > 0 && typeof parsedData[0] === 'object') {
+      headers = Object.keys(parsedData[0] || {});
+    }
   } else if (typeof rawData === 'object' && rawData !== null) {
-    parsedData = [rawData];
+    const rawObj = rawData as Record<string, any>;
+    if ('headers' in rawObj && 'rows' in rawObj && Array.isArray(rawObj.rows)) {
+      headers = rawObj.headers as string[];
+      parsedData = rawObj.rows.map((row: string[]) => {
+        const obj: Record<string, string> = {};
+        headers.forEach((header, index) => {
+          obj[header] = row[index] || '';
+        });
+        return obj;
+      });
+    } else {
+      parsedData = [rawObj];
+      headers = Object.keys(rawObj);
+    }
   } else if (typeof rawData === 'string') {
     try {
       parsedData = JSON.parse(rawData);
       if (!Array.isArray(parsedData)) {
         parsedData = [parsedData];
+      }
+      if (parsedData.length > 0 && typeof parsedData[0] === 'object') {
+        headers = Object.keys(parsedData[0] || {});
       }
     } catch {
       throw new ETLError(
@@ -306,11 +349,26 @@ async function parseStage(job: IngestionJob, sheet: Sheet): Promise<any[]> {
     );
   }
 
+  if (parsedData.length > MAX_ROWS) {
+    throw new ETLError(
+      `Row count (${parsedData.length}) exceeds maximum limit of ${MAX_ROWS}`,
+      ETLErrorCode.SIZE_LIMIT_EXCEEDED,
+      ETLStage.PARSING,
+      false,
+      { rowCount: parsedData.length, maxRows: MAX_ROWS }
+    );
+  }
+
+  await storage.updateSheet(sheet.id, {
+    data: parsedData,
+    rowCount: parsedData.length,
+  });
+
   await storage.updateIngestionJob(job.id, {
     metadata: {
       ...job.metadata,
       rowCount: parsedData.length,
-      columnCount: parsedData.length > 0 ? Object.keys(parsedData[0] || {}).length : 0,
+      columnCount: headers.length,
     },
   });
 
@@ -530,6 +588,16 @@ async function embedStage(
   console.log(`[ETLWorker] Stage EMBEDDING for sheet ${sheet.id}`);
   
   try {
+    const updatedSheet = await storage.getSheet(job.sheetId);
+    if (!updatedSheet) {
+      throw new ETLError(
+        'Sheet not found for embedding',
+        ETLErrorCode.STORAGE_ERROR,
+        ETLStage.EMBEDDING,
+        false
+      );
+    }
+
     await storage.updateSheet(sheet.id, {
       processingProgress: {
         currentStep: 'finalizing',
@@ -539,9 +607,9 @@ async function embedStage(
     } as any);
 
     const result = await embedAndStoreSheet(
-      sheet,
-      sheet.spaceId,
-      sheet.workspaceId || undefined
+      updatedSheet,
+      updatedSheet.spaceId,
+      updatedSheet.workspaceId || undefined
     );
 
     if (!result.success) {

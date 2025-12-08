@@ -322,8 +322,10 @@ describe('ETL Pipeline Integration Tests', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
       expect(result.error?.code).toBe(ETLErrorCode.SIZE_LIMIT_EXCEEDED);
-      expect(result.error?.stage).toBe(ETLStage.VALIDATING);
-      expect(result.stagesCompleted).toContain('PARSING');
+      // Row limit check is now done in PARSING stage (early detection is better)
+      expect(result.error?.stage).toBe(ETLStage.PARSING);
+      // PARSING is not complete because it failed during parsing
+      expect(result.stagesCompleted).not.toContain('PARSING');
     });
 
     it('should pass validation with exactly 50K rows', async () => {
