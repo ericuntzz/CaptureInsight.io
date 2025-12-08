@@ -798,13 +798,13 @@ export class DatabaseStorage implements IStorage {
         (
           v.vector_similarity * ${vectorWeight} + 
           COALESCE(k.keyword_rank, 0) * ${keywordWeight} +
-          CASE WHEN v."workspaceId" = $${validSpaceIds.length + 3} AND v."workspaceId" IS NOT NULL THEN ${boostAdditive} ELSE 0 END
+          CASE WHEN $${validSpaceIds.length + 3}::text IS NOT NULL AND v."workspaceId"::text = $${validSpaceIds.length + 3}::text THEN ${boostAdditive} ELSE 0 END
         ) as combined_score
       FROM vector_search v
       LEFT JOIN keyword_search k ON v.id = k.id
       ORDER BY combined_score DESC
       LIMIT $${validSpaceIds.length + 4}`,
-      [embeddingStr, query, ...validSpaceIds, currentWorkspaceId || '', limit]
+      [embeddingStr, query, ...validSpaceIds, currentWorkspaceId || null, limit]
     );
 
     return result.rows.map(row => ({
