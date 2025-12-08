@@ -1666,11 +1666,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { captureBatchId, ...restBody } = req.body;
       let sheetData = { ...restBody, spaceId, createdBy: userId, captureBatchId: captureBatchId || null };
       
-      // Validate workspaceId exists if provided
+      // Validate workspaceId exists and belongs to this space if provided
       if (sheetData.workspaceId) {
         const workspace = await storage.getWorkspace(sheetData.workspaceId);
         if (!workspace) {
           console.warn(`[Routes] Invalid workspaceId provided: ${sheetData.workspaceId}, setting to null`);
+          sheetData.workspaceId = null;
+        } else if (workspace.spaceId !== spaceId) {
+          console.warn(`[Routes] Workspace ${sheetData.workspaceId} belongs to different space, setting to null`);
           sheetData.workspaceId = null;
         }
       }
@@ -1855,9 +1858,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const sheetName = name || filename.replace(/\.[^/.]+$/, '');
       
+      // Validate workspaceId exists and belongs to this space if provided
+      let validatedWorkspaceId = workspaceId || null;
+      if (validatedWorkspaceId) {
+        const workspace = await storage.getWorkspace(validatedWorkspaceId);
+        if (!workspace) {
+          console.warn(`[Routes] Invalid workspaceId provided for upload: ${validatedWorkspaceId}, setting to null`);
+          validatedWorkspaceId = null;
+        } else if (workspace.spaceId !== spaceId) {
+          console.warn(`[Routes] Workspace ${validatedWorkspaceId} belongs to different space, setting to null`);
+          validatedWorkspaceId = null;
+        }
+      }
+      
       let sheetData: any = {
         spaceId,
-        workspaceId: workspaceId || null,
+        workspaceId: validatedWorkspaceId,
         name: sheetName,
         dataSourceType: 'file',
         dataSourceMeta: {
