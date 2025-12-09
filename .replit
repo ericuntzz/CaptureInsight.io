@@ -100,5 +100,5 @@ externalPort = 3003
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["npx", "vite", "preview", "--host", "0.0.0.0", "--port"]
+run = ["bash", "-c", "tsx server/index.ts & npx vite preview --host 0.0.0.0 --port 5000"]
 build = ["npm", "run", "build"]
