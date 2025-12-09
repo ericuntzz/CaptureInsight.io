@@ -3,38 +3,167 @@
 ## Overview
 CaptureInsight is a screenshot-based analytics platform designed for marketing managers. It provides tools for capturing, organizing, and analyzing data from various sources using AI, aiming to deliver comprehensive insights through a complete backend infrastructure. The platform enables hierarchical data organization, AI-powered data cleaning, and an intelligent template system for automated data processing.
 
+**Original Design**: Based on [Figma Design](https://www.figma.com/design/TUZWel1YVzoA5u9NsxuRP3/Build-CaptureInsight-Demo-Screen-1)
+
+## Quick Start (Development)
+```bash
+npm install        # Install dependencies
+npm run dev        # Start frontend dev server (port 5000)
+npm run server:dev # Start backend server (port 3001) - run in separate terminal
+```
+
+## Production Deployment
+For Replit Autoscale deployment, both frontend and backend run together:
+```bash
+npm run build      # Build frontend
+bash -c "tsx server/index.ts & npx vite preview --host 0.0.0.0 --port 5000"
+```
+- Frontend serves on port 5000 (maps to external port 80)
+- Backend runs on port 3001 (internal API calls)
+
 ## User Preferences
-- I want iterative development.
-- Ask before making major changes.
-- I prefer detailed explanations.
-- Do not make changes to the folder `Z`.
-- Do not make changes to the file `Y`.
+- Iterative development approach
+- Ask before making major changes
+- Prefer detailed explanations
+- Do not modify folder `Z` or file `Y`
 
 ## System Architecture
-CaptureInsight is a full-stack application built with React 18 (TypeScript) and Vite for the frontend, utilizing Radix UI, Tailwind CSS, TanStack React Query, TipTap, and Motion library. The backend is an Express.js (Node.js) server with PostgreSQL (Neon Serverless) and Drizzle ORM. Authentication is handled via Replit Auth (OAuth) with `connect-pg-simple` for session management.
 
-**UI/UX Decisions:**
-The design system is inspired by Stripe, featuring a premium UI with a focus on generous spacing, defined typography, and consistent component patterns (e.g., `rounded-2xl` cards, distinct button styles, gradient section dividers). Animations are implemented using the Motion library for page transitions, staggered elements, and hover effects. View states and full URL paths are persisted to `localStorage` to remember user preferences and exact navigation points across sessions, with URL restoration guarded by authentication status.
+### Tech Stack
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18 (TypeScript), Vite, Radix UI, Tailwind CSS, TanStack React Query, TipTap, Motion |
+| Backend | Express.js (Node.js), TypeScript |
+| Database | PostgreSQL (Neon Serverless), Drizzle ORM, pgvector |
+| Authentication | Replit Auth (OAuth), connect-pg-simple |
+| AI Services | See AI Integration section below |
 
-**Technical Implementations & Feature Specifications:**
--   **Hierarchical Data Organization**: Spaces > Workspaces > Insights/Chats/Sheets, with all data scoped to Workspaces.
--   **Insight Workspace**: A unified three-panel interface (Chat, Canvas, Data) with resizing, drag-and-drop reordering, and persistence of panel layouts.
--   **AI Integration**: Hybrid AI architecture leveraging Gemini 2.5 Pro/Flash for analysis and chat, and Google text-embedding-004 (768 dimensions) with `pgvector` for semantic search.
--   **Data Ingestion**: Supports direct upload of Excel/CSV files via a backend endpoint, including robust file validation, background processing for cleaning and embedding, and a maximum file size of 10MB.
--   **World-Class ETL Pipeline**: A durable, 7-stage Extract-Transform-Load pipeline (PARSING → VALIDATING → TEMPLATE_MATCHING → CLEANING → QUALITY_SCORING → EMBEDDING → FINALIZING) with idempotent stages, structured error handling, automatic retry mechanisms, and observability logging.
--   **AI Data Cleaning & Structure Detection**: AI-powered cleaning that preserves data structure, automatically detects and extracts standalone notes, and processes large datasets efficiently.
--   **Intelligent Template System**: Auto-detects and applies templates based on column similarity, aliases, and source fingerprints. Features a full-screen template editor for schema definition, cleaning pipeline configuration, and AI-suggested column mappings.
--   **Data Editing Capabilities**: Excel/Google Sheets-like data grid with multi-cell selection, cell-based formatting, in-place editing, arrow key/tab/enter navigation, undo/redo, column resizing, and JSON editing. Includes optimistic updates and unsaved changes protection.
--   **Pre-Upload Validation**: Validates Google Sheets accessibility, file types (CSV, Excel, images, PDF) and size, and URL formats before capture.
--   **Security**: `requireSpaceOwner` and `requireEntityOwner` middlewares, configurable PII filtering, and a two-tier encryption system offering server-side AES-256-GCM or end-to-end encryption (E2EE) with client-side Web Crypto API, PBKDF2, and TOTP 2FA.
--   **Chrome Extension**: A Manifest V3 React-based extension for capturing web content and integrating with the backend.
+### UI/UX Design System
+- Inspired by Stripe's premium UI
+- Generous spacing, defined typography
+- Consistent patterns: `rounded-2xl` cards, distinct button styles, gradient section dividers
+- Motion library for animations (page transitions, staggered elements, hover effects)
+- View states and URL paths persisted to `localStorage` with auth-guarded restoration
+
+## Core Features
+
+### Data Organization
+- **Hierarchy**: Spaces > Workspaces > Insights/Chats/Sheets
+- **Insight Workspace**: Three-panel interface (Chat, Canvas, Data) with resizing and drag-and-drop
+
+### ETL Pipeline (7 Stages)
+```
+PARSING → VALIDATING → TEMPLATE_MATCHING → CLEANING → QUALITY_SCORING → EMBEDDING → FINALIZING
+```
+- Durable job tracking with checkpoint resumability
+- Automatic retry with exponential backoff
+- Server-side encryption support (AES-256-GCM)
+- Background processor runs every 30 seconds, max 3 concurrent jobs
+
+### AI Integration
+| Service | Provider | Purpose | Required Key |
+|---------|----------|---------|--------------|
+| Analysis & Chat | Gemini 2.5 Pro/Flash | Data analysis, summaries, canvas editing | AI_INTEGRATIONS_GEMINI_API_KEY |
+| Semantic Search (RAG) | OpenAI text-embedding-3-small | Vector embeddings for search (768 dimensions) | OPENAI_API_KEY |
+| Hybrid Search | pgvector | Vector similarity + keyword matching | N/A (database) |
+
+**Note**: If OPENAI_API_KEY is missing, embeddings are disabled and semantic search won't work. Gemini is still required for AI analysis and chat features.
+
+### Template Matching System
+Auto-detects and applies templates using weighted scoring:
+- Column Name Similarity (40%)
+- Data Type Match (25%)
+- Source Fingerprint (20%)
+- Statistical Profile (15%)
+
+Auto-apply threshold: 85% confidence
+
+### Data Ingestion
+**Supported file types for ETL processing:**
+- CSV files (max 10MB)
+- Excel files (.xlsx, .xls) (max 50MB)
+
+**Other capture types (handled separately):**
+- Screenshots (image analysis via Gemini)
+- Links/URLs (web content capture)
+- Google Sheets (requires accessible sharing settings)
+
+### Security Features
+- `requireSpaceOwner` and `requireEntityOwner` middlewares
+- Configurable PII filtering
+- Two-tier encryption:
+  - Server-side: AES-256-GCM
+  - End-to-end: Client-side Web Crypto API, PBKDF2, TOTP 2FA
+
+### Data Editing
+- Excel/Google Sheets-like data grid
+- Multi-cell selection, in-place editing
+- Arrow key/tab/enter navigation
+- Undo/redo, column resizing
+- Optimistic updates with unsaved changes protection
+
+## Project Structure
+```
+├── src/                    # Frontend React app
+│   ├── components/         # UI components
+│   ├── hooks/              # Custom React hooks
+│   ├── contexts/           # React context providers
+│   └── lib/                # Utilities
+├── server/                 # Backend Express server
+│   ├── ai/                 # AI services (ETL, embeddings, cleaning)
+│   ├── routes.ts           # API endpoints
+│   ├── storage.ts          # Database operations
+│   └── encryption.ts       # Server-side encryption
+├── shared/                 # Shared types and schema
+│   └── schema.ts           # Drizzle database schema
+├── extension/              # Chrome extension (Manifest V3)
+└── attached_assets/        # User uploads and example data
+```
+
+## Environment Variables
+
+### Required
+| Variable | Purpose |
+|----------|---------|
+| DATABASE_URL | PostgreSQL connection string (auto-provided by Replit) |
+| PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE | PostgreSQL connection details |
+| ENCRYPTION_MASTER_KEY | Server-side AES-256-GCM encryption |
+
+### AI Services
+| Variable | Purpose | Required For |
+|----------|---------|--------------|
+| AI_INTEGRATIONS_GEMINI_API_KEY | Gemini AI analysis | Analysis, chat, data cleaning |
+| AI_INTEGRATIONS_GEMINI_BASE_URL | Gemini API endpoint | Analysis, chat, data cleaning |
+| OPENAI_API_KEY | OpenAI embeddings | Semantic search, RAG |
+
+### Authentication (Auto-configured by Replit)
+| Variable | Purpose |
+|----------|---------|
+| REPL_IDENTITY | Replit authentication identity |
+| REPL_ID | Replit project identifier |
+| ISSUER_URL | OAuth issuer URL |
+
+## Scripts
+```bash
+npm run dev          # Frontend dev server (port 5000)
+npm run build        # Build for production
+npm run server       # Production backend
+npm run server:dev   # Backend with hot reload (port 3001)
+npm run db:push      # Sync database schema
+npm run test         # Run tests
+npm run test:watch   # Run tests in watch mode
+```
+
+## Recent Changes
+- **2024-12-08**: Switched embeddings from Google text-embedding-004 to OpenAI text-embedding-3-small (768 dimensions) due to Replit Gemini proxy not supporting embedding endpoints
+- **2024-12-08**: Fixed file upload flow to properly send base64 file data with captureBatchId for batch processing
+- **2024-12-08**: ETL pipeline now completes all 7 stages successfully with embedding generation
+- **2024-12-08**: Updated deployment config to run backend and frontend together on port 5000
 
 ## External Dependencies
--   **Database**: PostgreSQL (Neon Serverless)
--   **ORM**: Drizzle ORM
--   **Authentication**: Replit Auth (Google, GitHub, X, Apple, email OAuth)
--   **Session Management**: `connect-pg-simple`
--   **AI Services**:
-    -   Gemini 2.5 Pro/Flash (via Replit AI Integrations)
-    -   Google text-embedding-004 (via Gemini API)
--   **Frontend Libraries**: React, Radix UI, Tailwind CSS, TanStack React Query, TipTap, Motion library
+- **Database**: PostgreSQL (Neon Serverless)
+- **ORM**: Drizzle ORM
+- **Authentication**: Replit Auth (Google, GitHub, X, Apple, email OAuth)
+- **Session Management**: connect-pg-simple
+- **AI Services**: Gemini 2.5 Pro/Flash (analysis), OpenAI text-embedding-3-small (embeddings)
+- **Frontend Libraries**: React, Radix UI, Tailwind CSS, TanStack React Query, TipTap, Motion
