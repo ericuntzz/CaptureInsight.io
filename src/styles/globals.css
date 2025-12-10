@@ -241,3 +241,40 @@ html {
 .pulse-glow-effect {
   animation: pulse-glow 2s ease-in-out infinite;
 }
+
+/* Chat markdown styling for proper list alignment */
+.chat-markdown ul {
+  list-style: disc;
+  list-style-position: outside;
+  padding-left: 1.25rem;
+  margin-left: 0;
+}
+
+.chat-markdown ul li {
+  padding-left: 0.25rem;
+  text-indent: 0;
+  display: list-item;
+}
+
+.chat-markdown ol {
+  list-style: decimal;
+  list-style-position: outside;
+  padding-left: 1.25rem;
+  margin-left: 0;
+}
+
+.chat-markdown ol li {
+  padding-left: 0.25rem;
+  text-indent: 0;
+  display: list-item;
+}
+
+/* Highlight animation for citation navigation */
+@keyframes citation-highlight {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.5), 0 0 20px rgba(255, 107, 53, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.7), 0 0 30px rgba(255, 107, 53, 0.5);
+  }
+}

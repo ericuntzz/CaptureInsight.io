@@ -1145,6 +1145,29 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   const handleDoubleClickExpandCanvas = handleExpandCanvas;
   const handleDoubleClickExpandData = handleExpandData;
   
+  // Listen for citation navigation from AIAssistantPanel
+  useEffect(() => {
+    const handleCitationNavigate = (e: CustomEvent<{ entityType: string; entityId: string; sheetName: string }>) => {
+      if (e.detail?.entityType === 'sheet' && e.detail?.entityId) {
+        // Expand data panel
+        const remainingSpace = 100 - chatSize;
+        const collapsedSize = 3;
+        dataPanelRef.current?.resize(remainingSpace - collapsedSize);
+        canvasPanelRef.current?.resize(collapsedSize);
+        setRightPanelOrder('data-canvas');
+        
+        // Dispatch selectSheet event with highlight flag
+        window.dispatchEvent(new CustomEvent('selectSheet', { 
+          detail: { sheetId: e.detail.entityId, highlight: true } 
+        }));
+      }
+    };
+    window.addEventListener('chatCitationNavigate', handleCitationNavigate as EventListener);
+    return () => {
+      window.removeEventListener('chatCitationNavigate', handleCitationNavigate as EventListener);
+    };
+  }, [chatSize]);
+  
   // Canvas AI handlers
   const getCanvasContext = useCallback((): CanvasContext => {
     const context: CanvasContext = {
@@ -2458,6 +2481,9 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
     return saved || null;
   });
   
+  // Highlight animation state for citation navigation
+  const [highlightedSheetId, setHighlightedSheetId] = useState<string | null>(null);
+  
   const [showRawJson, setShowRawJson] = useState(false);
   const [showQualityDetails, setShowQualityDetails] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -2536,9 +2562,16 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
   
   // Listen for selectSheet events from chat panel
   useEffect(() => {
-    const handleSelectSheet = (e: CustomEvent<{ sheetId: string }>) => {
+    const handleSelectSheet = (e: CustomEvent<{ sheetId: string; highlight?: boolean }>) => {
       if (e.detail?.sheetId) {
         setSelectedSheetId(e.detail.sheetId);
+        
+        // Trigger highlight animation if requested
+        if (e.detail.highlight) {
+          setHighlightedSheetId(e.detail.sheetId);
+          setTimeout(() => setHighlightedSheetId(null), 2000);
+        }
+        
         setTimeout(() => {
           const sheetTab = document.querySelector(`[data-sheet-tab-id="${e.detail.sheetId}"]`);
           if (sheetTab) {
@@ -4407,7 +4440,11 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
                           ref={tableContainerRef}
                           tabIndex={0}
                           onKeyDown={handleTableKeyDown}
-                          className="bg-[#212121] rounded-lg border border-[#2A2A2A] overflow-hidden focus:outline-none flex-1 flex flex-col min-h-0"
+                          className={`bg-[#212121] rounded-lg border overflow-hidden focus:outline-none flex-1 flex flex-col min-h-0 transition-all duration-300 ${
+                            highlightedSheetId === selectedSheetId 
+                              ? 'border-[#FF6B35] shadow-[0_0_20px_rgba(255,107,53,0.3)] ring-2 ring-[#FF6B35]/50' 
+                              : 'border-[#2A2A2A]'
+                          }`}
                         >
                           <div className="overflow-auto flex-1 relative">
                             {editableTableData && editableTableData.length > 0 ? (() => {

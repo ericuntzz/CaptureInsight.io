@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Send, ExternalLink, Copy, ThumbsUp, ThumbsDown, Download, RefreshCw, MoreHorizontal, Tag as TagIcon, Check, X, AlertCircle, LogIn } from 'lucide-react';
+import { Send, Copy, ThumbsUp, ThumbsDown, Download, RefreshCw, MoreHorizontal, Tag as TagIcon, Check, X, AlertCircle, LogIn, FileSpreadsheet } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Tag, Insight } from '../data/insightsData';
+import ReactMarkdown from 'react-markdown';
+import { Tag } from '../data/insightsData';
 import { TagBadge } from './TagBadge';
-import { TagSelector } from './TagSelector';
 import { CreateInsightCard } from './CreateInsightCard';
-import { TypewriterText } from './TypewriterText';
 import { GlowingDot } from './GlowingDot';
 import { toast } from 'sonner';
 import { copyToClipboard } from '../utils/clipboard';
@@ -18,8 +17,9 @@ interface Message {
   content: string;
   citations?: Citation[];
   timestamp: Date;
-  tags?: string[]; // NEW: Array of tag IDs associated with this message
-  insightId?: string; // NEW: If this message is part of an Insight
+  tags?: string[];
+  insightId?: string;
+  source?: 'chat' | 'canvas';
 }
 
 interface Citation {
@@ -77,10 +77,6 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
-  // Simple animation trigger: detect when AI finishes responding
-  const wasThinkingRef = useRef(false);
-  const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(null);
 
   // Fetch tags from real API
   const { data: tagsData = [] } = useTags(spaceId);
@@ -111,22 +107,6 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-  
-  // Trigger animation when AI finishes responding (isThinking goes from true → false)
-  useEffect(() => {
-    if (wasThinkingRef.current && !isThinking && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage.role === 'assistant') {
-        setAnimatingMessageId(lastMessage.id);
-      }
-    }
-    wasThinkingRef.current = isThinking;
-  }, [isThinking, messages]);
-  
-  // Clear animation when complete
-  const handleAnimationComplete = useCallback(() => {
-    setAnimatingMessageId(null);
-  }, []);
 
   // Show "Tag Chat" button after first user message
   useEffect(() => {
@@ -358,7 +338,6 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
           const isSelected = selectedMessageIds.includes(message.id);
           const messageTags = message.tags?.map(tagId => tags.find(t => t.id === tagId)).filter(Boolean) as Tag[];
           const isUser = message.role === 'user';
-          const shouldAnimate = !isUser && animatingMessageId === message.id;
 
           return (
             <div
@@ -393,16 +372,22 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
                     isTagSelectionMode && message.id !== '1' ? 'cursor-pointer hover:ring-1 hover:ring-[#FF6B35]' : ''
                   }`}
                 >
-                  <div className="whitespace-pre-wrap text-sm">
-                    {shouldAnimate ? (
-                      <TypewriterText 
-                        text={message.content}
-                        speed={8}
-                        onComplete={handleAnimationComplete}
-                      />
-                    ) : (
-                      message.content
-                    )}
+                  <div className="text-sm chat-markdown">
+                    <ReactMarkdown
+                      components={{
+                        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                        strong: ({ children }) => <span className="font-semibold text-white">{children}</span>,
+                        ul: ({ children }) => <ul className="mb-3 last:mb-0 space-y-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="mb-3 last:mb-0 space-y-1 list-decimal list-inside">{children}</ol>,
+                        li: ({ children }) => <li className="leading-relaxed pl-0">{children}</li>,
+                        h1: ({ children }) => <h1 className="text-lg font-semibold text-white mb-2">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-base font-semibold text-white mb-2">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-semibold text-white mb-1">{children}</h3>,
+                        code: ({ children }) => <code className="bg-[#2A2A2A] px-1.5 py-0.5 rounded text-[#FF6B35]">{children}</code>,
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
                   </div>
                   
                   {/* Message Tags */}
@@ -417,14 +402,26 @@ export function AIAssistantPanel({ projectName = 'All Projects', spaceId = null 
                   {/* Citations */}
                   {message.citations && message.citations.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-[#2D3B4E] space-y-2">
-                      <div className="text-xs text-[#9CA3AF]">Sources:</div>
+                      <div className="text-xs text-[#9CA3AF]">Sources ({message.citations.length})</div>
                       {message.citations.map((citation, idx) => (
                         <button
                           key={idx}
-                          className="flex items-center gap-2 text-xs text-[#FF6B35] hover:text-[#FFA07A] transition-colors"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent('chatCitationNavigate', {
+                              detail: { 
+                                entityType: 'sheet',
+                                entityId: citation.sheetId,
+                                sheetName: citation.sheetName
+                              }
+                            }));
+                          }}
+                          className="flex items-center gap-2 text-xs text-[#FF6B35] hover:text-[#FFA07A] hover:bg-[#FF6B35]/10 px-2 py-1 rounded transition-colors w-full text-left"
                         >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>{citation.sheetName} (rows {citation.rows.join(', ')})</span>
+                          <FileSpreadsheet className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{citation.sheetName}</span>
+                          {citation.value && (
+                            <span className="text-[#6B7280] ml-auto flex-shrink-0">{citation.value.replace('sheet ', '').replace(/[()]/g, '')}</span>
+                          )}
                         </button>
                       ))}
                     </div>
