@@ -1714,15 +1714,29 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
                 {!isUser && message.citations && message.citations.length > 0 && (
                   <Collapsible className="mt-2">
                     <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-[#9CA3AF] hover:text-[#FF6B35] transition-colors group/sources">
-                      <span>📚</span>
                       <span>Sources ({message.citations.length})</span>
                       <ChevronDown className="w-3 h-3 transition-transform group-data-[state=open]/sources:rotate-180" />
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-2 space-y-1.5">
                       {message.citations.map((citation, idx) => (
-                        <div 
+                        <button 
                           key={`${citation.entityId}-${idx}`}
-                          className="flex items-center gap-2 px-2 py-1.5 bg-[#1A1A1A] rounded text-xs"
+                          onClick={() => {
+                            if (citation.entityType === 'sheet') {
+                              if (dataPanelRef.current) {
+                                dataPanelRef.current.expand();
+                              }
+                              localStorage.setItem('captureinsight_selected_sheet_id', citation.entityId);
+                              window.dispatchEvent(new CustomEvent('selectSheet', { detail: { sheetId: citation.entityId } }));
+                              toast.success(`Navigating to ${citation.name}`);
+                            } else if (citation.entityType === 'insight') {
+                              if (canvasPanelRef.current) {
+                                canvasPanelRef.current.expand();
+                              }
+                              toast.success(`Showing insight in canvas`);
+                            }
+                          }}
+                          className="flex items-center gap-2 px-2 py-1.5 bg-[#1A1A1A] hover:bg-[#252525] rounded text-xs w-full text-left transition-colors cursor-pointer"
                         >
                           {citation.entityType === 'sheet' ? (
                             <FileSpreadsheet className="w-3.5 h-3.5 text-[#FF6B35] flex-shrink-0" />
@@ -1733,7 +1747,7 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
                           <span className="text-[#6B7280] flex-shrink-0">
                             {Math.round(citation.relevanceScore * 100)}%
                           </span>
-                        </div>
+                        </button>
                       ))}
                     </CollapsibleContent>
                   </Collapsible>
@@ -2519,6 +2533,25 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
       localStorage.setItem(SELECTED_SHEET_KEY, selectedSheetId);
     }
   }, [selectedSheetId]);
+  
+  // Listen for selectSheet events from chat panel
+  useEffect(() => {
+    const handleSelectSheet = (e: CustomEvent<{ sheetId: string }>) => {
+      if (e.detail?.sheetId) {
+        setSelectedSheetId(e.detail.sheetId);
+        setTimeout(() => {
+          const sheetTab = document.querySelector(`[data-sheet-tab-id="${e.detail.sheetId}"]`);
+          if (sheetTab) {
+            sheetTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          }
+        }, 100);
+      }
+    };
+    window.addEventListener('selectSheet', handleSelectSheet as EventListener);
+    return () => {
+      window.removeEventListener('selectSheet', handleSelectSheet as EventListener);
+    };
+  }, []);
   
   useEffect(() => {
     if (displayableSheets.length > 0) {
@@ -3785,6 +3818,7 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
               return (
                 <div
                   key={sheet.id}
+                  data-sheet-tab-id={sheet.id}
                   className={`group flex items-center gap-2 px-3 py-1.5 rounded transition-colors cursor-pointer flex-shrink-0 max-w-[200px] ${
                     isSelected
                       ? 'bg-[#2A2A2A] text-white'

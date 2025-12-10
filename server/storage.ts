@@ -454,6 +454,12 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSheet(id: string): Promise<boolean> {
     await db.delete(ingestionJobs).where(eq(ingestionJobs.sheetId, id));
+    await db.delete(documentEmbeddings).where(
+      and(
+        eq(documentEmbeddings.entityType, 'sheet'),
+        eq(documentEmbeddings.entityId, id)
+      )
+    );
     const result = await db.delete(sheets).where(eq(sheets.id, id));
     return (result.rowCount ?? 0) > 0;
   }
