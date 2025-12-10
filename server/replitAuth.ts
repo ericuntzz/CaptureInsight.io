@@ -8,6 +8,12 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
+function getReplitDomain(): string {
+  return process.env.REPLIT_DOMAINS || 
+         process.env.REPLIT_DEV_DOMAIN || 
+         '';
+}
+
 const getOidcConfig = memoize(
   async () => {
     return await client.discovery(
@@ -28,14 +34,15 @@ export function getSession() {
     tableName: "sessions",
   });
   return session({
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET || 'fallback-secret-change-in-production',
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production' || !!process.env.REPL_ID,
       maxAge: sessionTtl,
+      sameSite: 'lax',
     },
   });
 }
@@ -82,8 +89,13 @@ export async function setupAuth(app: Express) {
 
   const registeredStrategies = new Set<string>();
 
-  const getDomain = (req: any): string => {
+  const getRequestDomain = (req: any): string => {
     return req.get('x-forwarded-host') || req.get('host') || req.hostname;
+  };
+
+  const getCanonicalDomain = (): string => {
+    const replitDomain = getReplitDomain();
+    return replitDomain || 'localhost:5000';
   };
 
   const ensureStrategy = (domain: string) => {
@@ -107,39 +119,55 @@ export async function setupAuth(app: Express) {
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    const domain = getDomain(req);
-    ensureStrategy(domain);
-    passport.authenticate(`replitauth:${domain}`, {
+    const replitDomain = getReplitDomain();
+    const requestDomain = getRequestDomain(req);
+    
+    const authDomain = replitDomain || requestDomain;
+    ensureStrategy(authDomain);
+    
+    if (replitDomain && requestDomain !== replitDomain) {
+      return res.redirect(`https://${replitDomain}/api/login`);
+    }
+    
+    passport.authenticate(`replitauth:${authDomain}`, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
-    const domain = getDomain(req);
-    ensureStrategy(domain);
-    passport.authenticate(`replitauth:${domain}`, {
+    const replitDomain = getReplitDomain();
+    const requestDomain = getRequestDomain(req);
+    
+    const authDomain = replitDomain || requestDomain;
+    ensureStrategy(authDomain);
+    
+    passport.authenticate(`replitauth:${authDomain}`, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
     })(req, res, next);
   });
 
   app.get("/api/logout", (req, res) => {
-    const userDomain = getDomain(req);
-    const replitDomain = process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN;
+    const requestDomain = getRequestDomain(req);
+    const replitDomain = getReplitDomain();
     
     req.logout(() => {
-      req.session?.destroy(() => {});
+      if (req.session) {
+        req.session.destroy((err) => {
+          if (err) console.error("Session destroy error:", err);
+        });
+      }
       
-      if (replitDomain && userDomain !== replitDomain) {
-        res.redirect(`https://${userDomain}`);
-      } else {
+      if (replitDomain) {
         res.redirect(
           client.buildEndSessionUrl(config, {
             client_id: process.env.REPL_ID!,
-            post_logout_redirect_uri: `https://${replitDomain || userDomain}`,
+            post_logout_redirect_uri: `https://${replitDomain}`,
           }).href
         );
+      } else {
+        res.redirect('/');
       }
     });
   });
