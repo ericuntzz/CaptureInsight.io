@@ -99,7 +99,7 @@ export default defineConfig({
     },
     host: '0.0.0.0',
     port: 5000,
-    allowedHosts: ['.kirk.replit.dev', '.replit.dev'],
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
@@ -110,5 +110,10 @@ export default defineConfig({
         },
       },
     },
+  },
+  preview: {
+    host: '0.0.0.0',
+    port: 5000,
+    allowedHosts: true,
   },
 });
