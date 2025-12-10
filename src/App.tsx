@@ -310,6 +310,7 @@ export default function App() {
   const [captures, setCaptures] = useState<CaptureData[]>([]);
   const [shareLinks, setShareLinks] = useState<ShareLinkData[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<FileData[]>([]);
+  const isSubmittingCapturesRef = useRef(false);
   const [blurAreas, setBlurAreas] = useState<Selection[]>([]);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [isBlurMode, setIsBlurMode] = useState(false);
@@ -672,6 +673,13 @@ export default function App() {
       schedule?: { frequency: string; time: string };
     }>
   }) => {
+    // Prevent double submissions (React StrictMode, double-click, etc.)
+    if (isSubmittingCapturesRef.current) {
+      console.log('[Capture Flow] Submission already in progress, ignoring duplicate call');
+      return;
+    }
+    isSubmittingCapturesRef.current = true;
+    
     let { destinations } = data;
     const { analysisSettings } = data;
     
@@ -862,6 +870,9 @@ export default function App() {
       // Provide more specific error message
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       toast.error(`Failed to save captures: ${errorMessage}`);
+    } finally {
+      // Reset submission guard after completion (success or error)
+      isSubmittingCapturesRef.current = false;
     }
   };
 

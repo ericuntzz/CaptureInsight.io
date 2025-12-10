@@ -3,6 +3,7 @@ import { db } from "../db";
 import { sheets, spaces } from "../../shared/schema";
 import { eq } from "drizzle-orm";
 import { filterPII, filterPIIFromData, type PIIFilterOptions } from "./piiFilter";
+import { serverEncryption } from "../encryption";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
@@ -48,10 +49,37 @@ export interface StreamInsightSummaryOptions {
 }
 
 async function getSheetsByBatchId(batchId: string): Promise<typeof sheets.$inferSelect[]> {
-  return await db
+  const sheetsList = await db
     .select()
     .from(sheets)
     .where(eq(sheets.captureBatchId, batchId));
+  
+  // Decrypt encrypted sheets
+  for (const sheet of sheetsList) {
+    if ((sheet as any).encryptedData && (sheet as any).encryptionIv && (sheet as any).encryptionVersion === 1) {
+      try {
+        const userId = sheet.createdBy;
+        if (userId) {
+          const decryptedString = await serverEncryption.decryptForUser(
+            userId,
+            (sheet as any).encryptedData,
+            (sheet as any).encryptionIv
+          );
+          if (decryptedString) {
+            try {
+              (sheet as any).data = JSON.parse(decryptedString);
+            } catch {
+              (sheet as any).data = decryptedString;
+            }
+          }
+        }
+      } catch (decryptError) {
+        console.error(`[InsightSummary] Failed to decrypt sheet ${sheet.id}:`, decryptError);
+      }
+    }
+  }
+  
+  return sheetsList;
 }
 
 async function getSpaceAISettings(spaceId: string): Promise<{
