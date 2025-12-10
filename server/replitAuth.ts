@@ -125,14 +125,22 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/logout", (req, res) => {
-    const domain = getDomain(req);
+    const userDomain = getDomain(req);
+    const replitDomain = process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN;
+    
     req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `https://${domain}`,
-        }).href
-      );
+      req.session?.destroy(() => {});
+      
+      if (replitDomain && userDomain !== replitDomain) {
+        res.redirect(`https://${userDomain}`);
+      } else {
+        res.redirect(
+          client.buildEndSessionUrl(config, {
+            client_id: process.env.REPL_ID!,
+            post_logout_redirect_uri: `https://${replitDomain || userDomain}`,
+          }).href
+        );
+      }
     });
   });
 }
