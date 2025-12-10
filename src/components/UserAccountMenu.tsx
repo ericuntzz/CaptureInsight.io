@@ -85,6 +85,7 @@ import {
   ChevronRight, 
   Check,
   LogOut,
+  LogIn,
   Settings,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -103,6 +104,7 @@ interface UserAccountMenuProps {
   currentCompany?: Company;
   companies?: Company[];
   isCollapsed: boolean;
+  isAuthenticated?: boolean;
   onSwitchCompany?: (companyId: string) => void;
   onCreateCompany?: () => void;
   onSettings?: () => void;
@@ -111,6 +113,7 @@ interface UserAccountMenuProps {
   onBilling?: () => void;
   onHelp?: () => void;
   onLogout?: () => void;
+  onLogin?: () => void;
 }
 
 export function UserAccountMenu({
@@ -120,6 +123,7 @@ export function UserAccountMenu({
   currentCompany,
   companies = [],
   isCollapsed,
+  isAuthenticated = true,
   onSwitchCompany,
   onCreateCompany,
   onSettings,
@@ -128,6 +132,7 @@ export function UserAccountMenu({
   onBilling: _onBilling,
   onHelp: _onHelp,
   onLogout,
+  onLogin,
 }: UserAccountMenuProps) {
   void _onPreferences; void _onBilling; void _onHelp;
   const [isOpen, setIsOpen] = useState(false);
@@ -351,12 +356,21 @@ export function UserAccountMenu({
         {/* Bottom Actions */}
         <div className="border-t border-[rgba(255,107,53,0.1)]" />
         <div className="py-1">
-          <MenuItem
-            icon={LogOut}
-            label="Log Out"
-            onClick={() => handleMenuItemClick(onLogout)}
-            danger
-          />
+          {isAuthenticated ? (
+            <MenuItem
+              icon={LogOut}
+              label="Log Out"
+              onClick={() => handleMenuItemClick(onLogout)}
+              danger
+            />
+          ) : (
+            <MenuItem
+              icon={LogIn}
+              label="Log In"
+              onClick={() => handleMenuItemClick(onLogin)}
+              highlight
+            />
+          )}
         </div>
       </>
     );

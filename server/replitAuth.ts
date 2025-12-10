@@ -149,23 +149,35 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/logout", (req, res) => {
-    const requestDomain = getRequestDomain(req);
     const replitDomain = getReplitDomain();
     
-    req.logout(() => {
+    if (!req.isAuthenticated()) {
+      return res.redirect('/');
+    }
+    
+    req.logout((err) => {
+      if (err) {
+        console.error("Logout error:", err);
+        return res.redirect('/');
+      }
+      
       if (req.session) {
-        req.session.destroy((err) => {
-          if (err) console.error("Session destroy error:", err);
+        req.session.destroy((destroyErr) => {
+          if (destroyErr) console.error("Session destroy error:", destroyErr);
         });
       }
       
       if (replitDomain) {
-        res.redirect(
-          client.buildEndSessionUrl(config, {
+        try {
+          const endSessionUrl = client.buildEndSessionUrl(config, {
             client_id: process.env.REPL_ID!,
             post_logout_redirect_uri: `https://${replitDomain}`,
-          }).href
-        );
+          });
+          res.redirect(endSessionUrl.href);
+        } catch (error) {
+          console.error("End session URL build error:", error);
+          res.redirect('/');
+        }
       } else {
         res.redirect('/');
       }

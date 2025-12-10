@@ -824,6 +824,7 @@ export function ProjectBrowser({
             { id: '1', name: 'CaptureInsight Demo', role: 'owner' },
           ]}
           isCollapsed={isCollapsed}
+          isAuthenticated={!!user}
           onSwitchCompany={(companyId) => {
             toast.success(`Switched to company`);
           }}
@@ -851,6 +852,9 @@ export function ProjectBrowser({
             } else {
               window.location.href = '/api/logout';
             }
+          }}
+          onLogin={() => {
+            window.location.href = '/api/login';
           }}
         />
       </div>
