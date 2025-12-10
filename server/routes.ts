@@ -8,7 +8,7 @@ import {
   extractInsights,
   getAIStatus,
   isGeminiConfigured,
-  isGoogleEmbeddingsConfigured,
+  isOpenAIEmbeddingsConfigured,
   searchSimilar,
   getAvailablePIIPatterns,
   type ChatMessage,
@@ -2918,7 +2918,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      if (!isGoogleEmbeddingsConfigured()) {
+      if (!isOpenAIEmbeddingsConfigured()) {
         return res.status(503).json({ 
           message: "Embeddings service not configured. OpenAI API key is required." 
         });
@@ -2965,7 +2965,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { spaceId } = req.params;
 
-      if (!isGoogleEmbeddingsConfigured()) {
+      if (!isOpenAIEmbeddingsConfigured()) {
         return res.status(503).json({ 
           message: "Embeddings service not configured. OpenAI API key is required." 
         });
@@ -2995,7 +2995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      if (!isGoogleEmbeddingsConfigured()) {
+      if (!isOpenAIEmbeddingsConfigured()) {
         return res.status(503).json({ 
           message: "Search service not configured. OpenAI API key is required." 
         });
