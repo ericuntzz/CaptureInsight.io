@@ -73,7 +73,10 @@ export function WelcomeModal({ open, onOpenChange }: WelcomeModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-4xl w-[900px] p-0 gap-0 bg-white rounded-2xl overflow-hidden border-0 shadow-2xl [&>button]:hidden">
+      <DialogContent 
+        showCloseButton={false}
+        className="max-w-4xl w-[900px] p-0 gap-0 bg-white rounded-2xl overflow-hidden border-0 shadow-2xl block"
+      >
         <DialogTitle className="sr-only">Welcome to CaptureInsight</DialogTitle>
         <DialogDescription className="sr-only">
           Watch tutorial videos to learn how to use CaptureInsight for capturing and analyzing data.
