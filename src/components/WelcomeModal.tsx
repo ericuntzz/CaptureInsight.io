@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Play, Download, Send, Loader2, HelpCircle, Chrome } from 'lucide-react';
-import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
@@ -73,8 +73,11 @@ export function WelcomeModal({ open, onOpenChange }: WelcomeModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl p-0 gap-0 bg-white rounded-2xl overflow-hidden border-0 shadow-2xl">
+      <DialogContent className="!max-w-4xl w-[900px] p-0 gap-0 bg-white rounded-2xl overflow-hidden border-0 shadow-2xl [&>button]:hidden">
         <DialogTitle className="sr-only">Welcome to CaptureInsight</DialogTitle>
+        <DialogDescription className="sr-only">
+          Watch tutorial videos to learn how to use CaptureInsight for capturing and analyzing data.
+        </DialogDescription>
         
         <button
           onClick={() => onOpenChange(false)}
@@ -83,15 +86,15 @@ export function WelcomeModal({ open, onOpenChange }: WelcomeModalProps) {
           <X className="h-5 w-5 text-gray-500" />
         </button>
 
-        <div className="p-8 pb-0 text-center">
-          <h1 className="text-3xl font-bold text-[#030213]">Welcome to CaptureInsight!</h1>
-          <p className="mt-2 text-gray-600 text-lg">
+        <div className="p-6 pb-4 text-center">
+          <h1 className="text-2xl font-bold text-[#030213]">Welcome to CaptureInsight!</h1>
+          <p className="mt-2 text-gray-600">
             Watch this quick tutorial to capture & analyze your first data.
           </p>
         </div>
 
-        <div className="flex p-8 gap-6">
-          <div className="flex-1">
+        <div className="flex p-6 pt-0 gap-6">
+          <div className="flex-1 min-w-0">
             <div className="relative aspect-video bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
               {selectedVideo.vimeoId ? (
                 <iframe
@@ -145,30 +148,15 @@ export function WelcomeModal({ open, onOpenChange }: WelcomeModalProps) {
             </div>
           </div>
 
-          <div className="w-72 flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowQuestionForm(true)}
-                className="flex-1 bg-[#e8f5e9] border-[#c8e6c9] text-[#2e7d32] hover:bg-[#c8e6c9] font-semibold rounded-lg"
-              >
-                <HelpCircle className="w-4 h-4 mr-2" />
-                Questions?
-              </Button>
-              <Button variant="outline" className="p-2 rounded-lg border-gray-200">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="#FF6B35" stroke="#FF6B35" strokeWidth="2"/>
-                </svg>
-              </Button>
-              <div className="p-2 rounded-lg border border-gray-200 bg-white">
-                <div className="flex items-center gap-1">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#FF6B35] to-[#FF8F5F] flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">CI</span>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-700">CaptureInsight</span>
-                </div>
-              </div>
-            </div>
+          <div className="w-64 flex-shrink-0 flex flex-col gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowQuestionForm(true)}
+              className="w-full bg-[#e8f5e9] border-[#c8e6c9] text-[#2e7d32] hover:bg-[#c8e6c9] font-medium rounded-lg"
+            >
+              <HelpCircle className="w-4 h-4 mr-2" />
+              Questions?
+            </Button>
 
             <div className="flex-1 bg-gray-50 rounded-xl p-3 space-y-2">
               {tutorialVideos.map((video) => (
