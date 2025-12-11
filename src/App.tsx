@@ -1867,6 +1867,14 @@ export default function App() {
           })()}
         </div>
         </div>
+        
+        {/* Welcome Tutorial Modal - shows tutorial videos and questions form */}
+        <WelcomeModal
+          open={showWelcome}
+          onOpenChange={(open) => {
+            if (!open) closeWelcome();
+          }}
+        />
       </div>
     );
   }
