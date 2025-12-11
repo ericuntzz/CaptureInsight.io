@@ -1,12 +1,13 @@
 import { motion } from 'motion/react';
-import { Upload, Plus } from 'lucide-react';
+import { Upload, Plus, HelpCircle } from 'lucide-react';
 import { Button } from './ui/button';
 
 interface EmptyWorkspaceStateProps {
   onUploadData: () => void;
+  onWatchTutorial?: () => void;
 }
 
-export function EmptyWorkspaceState({ onUploadData }: EmptyWorkspaceStateProps) {
+export function EmptyWorkspaceState({ onUploadData, onWatchTutorial }: EmptyWorkspaceStateProps) {
   return (
     <div className="flex-1 flex items-center justify-center h-full bg-[#0A0D12]">
       <motion.div
@@ -94,6 +95,24 @@ export function EmptyWorkspaceState({ onUploadData }: EmptyWorkspaceStateProps) 
             </Button>
           </div>
         </motion.div>
+
+        {onWatchTutorial && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6, duration: 0.4 }}
+            className="mt-8 flex items-center justify-center gap-2"
+          >
+            <HelpCircle className="w-4 h-4 text-gray-500" />
+            <span className="text-gray-500 text-sm">Not sure where to start?</span>
+            <button
+              onClick={onWatchTutorial}
+              className="text-[#FF6B35] hover:text-[#E55A2B] text-sm font-medium hover:underline transition-colors"
+            >
+              Watch a 30-second tutorial
+            </button>
+          </motion.div>
+        )}
 
       </motion.div>
     </div>

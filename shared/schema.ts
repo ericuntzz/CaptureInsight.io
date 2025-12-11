@@ -900,3 +900,17 @@ export type SystemColumnAlias = typeof systemColumnAliases.$inferSelect;
 
 export type InsertIngestionJob = typeof ingestionJobs.$inferInsert;
 export type IngestionJob = typeof ingestionJobs.$inferSelect;
+
+// Contact questions table for welcome modal "Questions?" form
+export const contactQuestions = pgTable("contact_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name"),
+  email: varchar("email"),
+  question: text("question").notNull(),
+  userId: varchar("user_id").references(() => users.id),
+  status: varchar("status").default('pending'),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type InsertContactQuestion = typeof contactQuestions.$inferInsert;
+export type ContactQuestion = typeof contactQuestions.$inferSelect;

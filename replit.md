@@ -155,6 +155,9 @@ npm run test:watch   # Run tests in watch mode
 ```
 
 ## Recent Changes
+- **2024-12-11**: Added Welcome Screen modal with tutorial video placeholders (Vimeo support), Questions form, and Chrome extension download banner
+- **2024-12-11**: Added contact questions endpoint (POST /api/contact/question) storing to database for email forwarding to ericunterberger@proton.me
+- **2024-12-11**: Added "Watch tutorial" link to EmptyWorkspaceState component
 - **2024-12-08**: Switched embeddings from Google text-embedding-004 to OpenAI text-embedding-3-small (768 dimensions) due to Replit Gemini proxy not supporting embedding endpoints
 - **2024-12-08**: Fixed file upload flow to properly send base64 file data with captureBatchId for batch processing
 - **2024-12-08**: ETL pipeline now completes all 7 stages successfully with embedding generation

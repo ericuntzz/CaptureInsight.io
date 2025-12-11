@@ -24,7 +24,7 @@ import { triggerDataCleaning } from "./ai/dataCleaning";
 import * as templateService from "./ai/templateService";
 import { serverEncryption } from "./encryption";
 import { db } from "./db";
-import { userEncryptionKeys, serverEncryptionKeys, users, aiFeedback, chatMessages } from "../shared/schema";
+import { userEncryptionKeys, serverEncryptionKeys, users, aiFeedback, chatMessages, contactQuestions } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import * as OTPAuth from "otpauth";
 import { filterPII } from "./ai/piiFilter";
@@ -456,6 +456,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Contact question endpoint (for welcome modal "Questions?" form)
+  // Forwards questions to ericunterberger@proton.me
+  app.post('/api/contact/question', async (req: any, res) => {
+    try {
+      const { name, email, question } = req.body;
+      
+      if (!question || typeof question !== 'string' || question.trim().length === 0) {
+        return res.status(400).json({ message: 'Question is required' });
+      }
+
+      // Get user ID if authenticated
+      let userId = null;
+      if (req.user?.claims?.sub) {
+        userId = req.user.claims.sub;
+      }
+
+      // Store the question in the database
+      await db.insert(contactQuestions).values({
+        name: name || null,
+        email: email || null,
+        question: question.trim(),
+        userId,
+        status: 'pending',
+      });
+
+      // Log for now - email integration can be added later
+      console.log('[Contact] New question received:', {
+        name: name || 'Anonymous',
+        email: email || 'Not provided',
+        question: question.slice(0, 100) + (question.length > 100 ? '...' : ''),
+        userId,
+      });
+
+      res.json({ success: true, message: 'Question submitted successfully' });
+    } catch (error) {
+      console.error('Error submitting contact question:', error);
+      res.status(500).json({ message: 'Failed to submit question' });
     }
   });
 

@@ -27,6 +27,8 @@ import { InsightWorkspace } from './pages/InsightWorkspace';
 import { TemplateManagement } from './pages/TemplateManagement';
 import { ProjectBrowser, Project } from './components/ProjectBrowser';
 import { EmptyWorkspaceState } from './components/EmptyWorkspaceState';
+import { WelcomeModal, useWelcomeModal } from './components/WelcomeModal';
+import { ChromeExtensionBanner } from './components/ChromeExtensionBanner';
 import { 
   useSpaces, 
   useCreateSpace, 
@@ -99,6 +101,9 @@ export default function App() {
   // Local state to optimistically close overlay immediately after successful completion
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  
+  // Welcome modal state (for tutorial video modal)
+  const { showWelcome, closeWelcome, openWelcome } = useWelcomeModal();
   
   // Check if user has completed onboarding
   const { 
@@ -1779,7 +1784,11 @@ export default function App() {
     };
     
     return (
-      <div className="h-screen bg-[#0A0E1A] flex overflow-hidden">
+      <div className="h-screen bg-[#0A0E1A] flex flex-col overflow-hidden">
+        {/* Chrome Extension Download Banner */}
+        <ChromeExtensionBanner />
+        
+        <div className="flex-1 flex overflow-hidden">
         {/* Original Left Sidebar - Project Browser (auto-collapsed) */}
         <ProjectBrowser
           projects={Array.isArray(spaces) ? spaces : []}
@@ -1842,6 +1851,7 @@ export default function App() {
                     // Switch to capture view to show the capture toolbar
                     handleViewChange('capture');
                   }}
+                  onWatchTutorial={openWelcome}
                 />
               );
             }
@@ -1855,6 +1865,7 @@ export default function App() {
               />
             );
           })()}
+        </div>
         </div>
       </div>
     );
@@ -2117,6 +2128,14 @@ export default function App() {
         hasError={onboardingError && !isRetrying}
         onRetry={handleOnboardingRetry}
         isRetrying={isRetrying}
+      />
+
+      {/* Welcome Tutorial Modal - shows tutorial videos and questions form */}
+      <WelcomeModal
+        open={showWelcome && isAuthenticated}
+        onOpenChange={(open) => {
+          if (!open) closeWelcome();
+        }}
       />
     </div>
   );
