@@ -155,6 +155,7 @@ npm run test:watch   # Run tests in watch mode
 ```
 
 ## Recent Changes
+- **2024-12-15**: Implemented Rules System - workspace-level data processing rules with 4 configurable sections (cleaning, renaming, KPIs, AI hints), per-section saves, upload flow integration with rules modal, and canvas summary trigger after ETL
 - **2024-12-11**: Added Welcome Screen modal with tutorial video placeholders (Vimeo support), Questions form, and Chrome extension download banner
 - **2024-12-11**: Added contact questions endpoint (POST /api/contact/question) storing to database for email forwarding to ericunterberger@proton.me
 - **2024-12-11**: Added "Watch tutorial" link to EmptyWorkspaceState component
