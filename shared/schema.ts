@@ -1,6 +1,7 @@
 import { sql, relations } from 'drizzle-orm';
 import {
   index,
+  uniqueIndex,
   jsonb,
   pgTable,
   timestamp,
@@ -565,6 +566,10 @@ export const dataTemplates = pgTable("data_templates", {
   spaceId: varchar("space_id").references(() => spaces.id),
   createdBy: varchar("created_by").references(() => users.id),
   
+  // Status for workspace rules system
+  status: varchar("status").default('draft'), // 'draft' | 'active'
+  draftState: jsonb("draft_state"), // Stores partial config (cleaning rules, column renames, KPIs, AI hints)
+  
   // Source type lock (optional) - restricts template to specific sources
   sourceType: varchar("source_type"), // 'google_sheets' | 'csv' | 'google_ads' | 'meta_ads' | 'ga4' | 'custom'
   
@@ -686,6 +691,7 @@ export const dataTemplates = pgTable("data_templates", {
   index("idx_data_templates_space").on(table.spaceId),
   index("idx_data_templates_created_by").on(table.createdBy),
   index("idx_data_templates_source_type").on(table.sourceType),
+  uniqueIndex("idx_data_templates_workspace_unique").on(table.workspaceId),
 ]);
 
 export const dataTemplatesRelations = relations(dataTemplates, ({ one }) => ({
