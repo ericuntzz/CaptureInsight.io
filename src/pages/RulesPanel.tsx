@@ -414,17 +414,17 @@ export function RulesPanel({
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="max-w-3xl w-full relative z-10">
         {/* Page Title with Workspace Selector */}
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl sm:text-3xl font-semibold text-white inline-flex items-center justify-center flex-wrap gap-x-2">
+        <div className="mb-16 text-center">
+          <h1 className="text-3xl sm:text-4xl font-semibold text-white inline-flex items-center justify-center flex-wrap gap-x-3">
             <span>Set Rules for How Data is Processed in</span>
-            <span className="relative inline-block">
+            <span className="relative inline-block ml-1">
               <button
                 onClick={() => setShowWorkspaceDropdown(!showWorkspaceDropdown)}
-                className="text-2xl sm:text-3xl font-semibold text-[#FF6B35] hover:text-[#FF8C5E] transition-colors inline-flex items-center gap-1"
+                className="text-3xl sm:text-4xl font-semibold text-[#FF6B35] hover:text-[#FF8C5E] transition-colors inline-flex items-center gap-2"
               >
                 {workspaceName}
                 <ChevronDown
-                  size={20}
+                  size={24}
                   className={`transition-transform ${showWorkspaceDropdown ? "rotate-180" : ""}`}
                 />
               </button>
@@ -434,7 +434,7 @@ export function RulesPanel({
                     className="fixed inset-0 z-10"
                     onClick={() => setShowWorkspaceDropdown(false)}
                   />
-                  <div className="absolute top-full left-0 mt-2 bg-[#1A1F2E] border border-[#2A303C] rounded-xl overflow-hidden z-20 min-w-[220px] shadow-xl">
+                  <div className="absolute top-full left-0 mt-2 bg-[#1A1F2E] border border-[#2A303C] rounded-xl overflow-hidden z-20 min-w-[280px] shadow-xl">
                     {/* All Workspaces option */}
                     <button
                       onClick={() => selectWorkspace("all")}
