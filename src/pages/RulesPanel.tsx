@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -6,6 +6,9 @@ import {
   Trash2,
   X,
   Lightbulb,
+  Loader2,
+  Cloud,
+  Check,
 } from "lucide-react";
 import { CleaningPipeline, CleaningPipelineState } from "../components/CleaningPipeline";
 
@@ -94,38 +97,67 @@ export function RulesPanel({
     [key in Section]?: boolean;
   }>({});
 
+  const [saveStatus, setSaveStatus] = useState<{
+    [key in Section]?: 'idle' | 'saving' | 'saved';
+  }>({
+    rules: 'idle',
+    renaming: 'idle',
+    kpis: 'idle',
+    'ai-hints': 'idle',
+  });
+
+  const savedStatusTimeouts = useRef<{ [key in Section]?: NodeJS.Timeout }>({});
+  const autoSaveTimeouts = useRef<{ [key in Section]?: NodeJS.Timeout }>({});
+
   const [initialColumnRenames] = useState(JSON.stringify(columnRenames));
   const [initialSelectedKPIs] = useState(JSON.stringify(selectedKPIs));
   const [initialAiHints] = useState(aiHints);
   const [initialCleaningRules] = useState(JSON.stringify(cleaningRules));
 
-  useEffect(() => {
-    setDirtyState((prev) => ({
-      ...prev,
-      renaming: JSON.stringify(columnRenames) !== initialColumnRenames,
-    }));
-  }, [columnRenames, initialColumnRenames]);
+  const [lastSavedColumnRenames, setLastSavedColumnRenames] = useState(JSON.stringify(columnRenames));
+  const [lastSavedKPIs, setLastSavedKPIs] = useState(JSON.stringify(selectedKPIs));
+  const [lastSavedAiHints, setLastSavedAiHints] = useState(aiHints);
+  const [lastSavedCleaningRules, setLastSavedCleaningRules] = useState(JSON.stringify(cleaningRules));
+
+  const triggerAutoSave = (section: Section) => {
+    if (autoSaveTimeouts.current[section]) {
+      clearTimeout(autoSaveTimeouts.current[section]);
+    }
+    autoSaveTimeouts.current[section] = setTimeout(() => {
+      handleSaveSection(section);
+    }, 500);
+  };
 
   useEffect(() => {
-    setDirtyState((prev) => ({
-      ...prev,
-      kpis: JSON.stringify(selectedKPIs) !== initialSelectedKPIs,
-    }));
-  }, [selectedKPIs, initialSelectedKPIs]);
+    const isDirty = JSON.stringify(columnRenames) !== lastSavedColumnRenames;
+    setDirtyState((prev) => ({ ...prev, renaming: isDirty }));
+    if (isDirty) triggerAutoSave('renaming');
+  }, [columnRenames]);
 
   useEffect(() => {
-    setDirtyState((prev) => ({
-      ...prev,
-      "ai-hints": aiHints !== initialAiHints,
-    }));
-  }, [aiHints, initialAiHints]);
+    const isDirty = JSON.stringify(selectedKPIs) !== lastSavedKPIs;
+    setDirtyState((prev) => ({ ...prev, kpis: isDirty }));
+    if (isDirty) triggerAutoSave('kpis');
+  }, [selectedKPIs]);
 
   useEffect(() => {
-    setDirtyState((prev) => ({
-      ...prev,
-      rules: JSON.stringify(cleaningRules) !== initialCleaningRules,
-    }));
-  }, [cleaningRules, initialCleaningRules]);
+    const isDirty = aiHints !== lastSavedAiHints;
+    setDirtyState((prev) => ({ ...prev, 'ai-hints': isDirty }));
+    if (isDirty) triggerAutoSave('ai-hints');
+  }, [aiHints]);
+
+  useEffect(() => {
+    const isDirty = JSON.stringify(cleaningRules) !== lastSavedCleaningRules;
+    setDirtyState((prev) => ({ ...prev, rules: isDirty }));
+    if (isDirty) triggerAutoSave('rules');
+  }, [cleaningRules]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(savedStatusTimeouts.current).forEach(t => t && clearTimeout(t));
+      Object.values(autoSaveTimeouts.current).forEach(t => t && clearTimeout(t));
+    };
+  }, []);
 
   const kpiFormulas = [
     {
@@ -267,6 +299,12 @@ export function RulesPanel({
 
   const handleSaveSection = async (section: Section) => {
     setSavingState((prev) => ({ ...prev, [section]: true }));
+    setSaveStatus((prev) => ({ ...prev, [section]: 'saving' }));
+    
+    if (savedStatusTimeouts.current[section]) {
+      clearTimeout(savedStatusTimeouts.current[section]);
+    }
+    
     try {
       let data: any;
       switch (section) {
@@ -287,6 +325,28 @@ export function RulesPanel({
       }
       await onSave(section, data);
       setDirtyState((prev) => ({ ...prev, [section]: false }));
+      
+      switch (section) {
+        case "rules":
+          setLastSavedCleaningRules(JSON.stringify(cleaningRules));
+          break;
+        case "renaming":
+          setLastSavedColumnRenames(JSON.stringify(columnRenames));
+          break;
+        case "kpis":
+          setLastSavedKPIs(JSON.stringify(selectedKPIs));
+          break;
+        case "ai-hints":
+          setLastSavedAiHints(aiHints);
+          break;
+      }
+      
+      setSaveStatus((prev) => ({ ...prev, [section]: 'saved' }));
+      savedStatusTimeouts.current[section] = setTimeout(() => {
+        setSaveStatus((prev) => ({ ...prev, [section]: 'idle' }));
+      }, 3000);
+    } catch (error) {
+      setSaveStatus((prev) => ({ ...prev, [section]: 'idle' }));
     } finally {
       setSavingState((prev) => ({ ...prev, [section]: false }));
     }
@@ -320,11 +380,25 @@ export function RulesPanel({
               className="w-full px-8 py-6 flex items-center justify-between cursor-pointer hover:bg-[rgba(255,107,53,0.05)] transition-colors"
             >
               <h1 className="text-2xl text-white">Rules for your data</h1>
-              {expandedSections.rules ? (
-                <ChevronUp className="text-[#9CA3AF]" />
-              ) : (
-                <ChevronDown className="text-[#9CA3AF]" />
-              )}
+              <div className="flex items-center gap-3">
+                {saveStatus.rules === 'saving' ? (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF6B35]" />
+                    <span>Saving...</span>
+                  </div>
+                ) : saveStatus.rules === 'saved' ? (
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                    <Check className="w-3 h-3 text-emerald-400 -ml-2.5 mt-0.5" />
+                    <span className="text-emerald-400">Saved</span>
+                  </div>
+                ) : null}
+                {expandedSections.rules ? (
+                  <ChevronUp className="text-[#9CA3AF]" />
+                ) : (
+                  <ChevronDown className="text-[#9CA3AF]" />
+                )}
+              </div>
             </button>
 
             {expandedSections.rules && (
@@ -395,11 +469,25 @@ export function RulesPanel({
               className="w-full px-8 py-6 flex items-center justify-between cursor-pointer hover:bg-[rgba(255,107,53,0.05)] transition-colors"
             >
               <h1 className="text-2xl text-white">Column Renaming</h1>
-              {expandedSections.renaming ? (
-                <ChevronUp className="text-[#9CA3AF]" />
-              ) : (
-                <ChevronDown className="text-[#9CA3AF]" />
-              )}
+              <div className="flex items-center gap-3">
+                {saveStatus.renaming === 'saving' ? (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF6B35]" />
+                    <span>Saving...</span>
+                  </div>
+                ) : saveStatus.renaming === 'saved' ? (
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                    <Check className="w-3 h-3 text-emerald-400 -ml-2.5 mt-0.5" />
+                    <span className="text-emerald-400">Saved</span>
+                  </div>
+                ) : null}
+                {expandedSections.renaming ? (
+                  <ChevronUp className="text-[#9CA3AF]" />
+                ) : (
+                  <ChevronDown className="text-[#9CA3AF]" />
+                )}
+              </div>
             </button>
 
             {expandedSections.renaming && (
@@ -601,11 +689,25 @@ export function RulesPanel({
               className="w-full px-8 py-6 flex items-center justify-between cursor-pointer hover:bg-[rgba(255,107,53,0.05)] transition-colors"
             >
               <h1 className="text-2xl text-white">Create calculated KPIs</h1>
-              {expandedSections.kpis ? (
-                <ChevronUp className="text-[#9CA3AF]" />
-              ) : (
-                <ChevronDown className="text-[#9CA3AF]" />
-              )}
+              <div className="flex items-center gap-3">
+                {saveStatus.kpis === 'saving' ? (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF6B35]" />
+                    <span>Saving...</span>
+                  </div>
+                ) : saveStatus.kpis === 'saved' ? (
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                    <Check className="w-3 h-3 text-emerald-400 -ml-2.5 mt-0.5" />
+                    <span className="text-emerald-400">Saved</span>
+                  </div>
+                ) : null}
+                {expandedSections.kpis ? (
+                  <ChevronUp className="text-[#9CA3AF]" />
+                ) : (
+                  <ChevronDown className="text-[#9CA3AF]" />
+                )}
+              </div>
             </button>
 
             {expandedSections.kpis && (
@@ -671,11 +773,25 @@ export function RulesPanel({
               className="w-full px-8 py-6 flex items-center justify-between cursor-pointer hover:bg-[rgba(255,107,53,0.05)] transition-colors"
             >
               <h1 className="text-2xl text-white">AI Hints</h1>
-              {expandedSections["ai-hints"] ? (
-                <ChevronUp className="text-[#9CA3AF]" />
-              ) : (
-                <ChevronDown className="text-[#9CA3AF]" />
-              )}
+              <div className="flex items-center gap-3">
+                {saveStatus['ai-hints'] === 'saving' ? (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FF6B35]" />
+                    <span>Saving...</span>
+                  </div>
+                ) : saveStatus['ai-hints'] === 'saved' ? (
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                    <Check className="w-3 h-3 text-emerald-400 -ml-2.5 mt-0.5" />
+                    <span className="text-emerald-400">Saved</span>
+                  </div>
+                ) : null}
+                {expandedSections["ai-hints"] ? (
+                  <ChevronUp className="text-[#9CA3AF]" />
+                ) : (
+                  <ChevronDown className="text-[#9CA3AF]" />
+                )}
+              </div>
             </button>
 
             {expandedSections["ai-hints"] && (
