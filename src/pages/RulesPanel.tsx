@@ -754,10 +754,10 @@ export function RulesPanel({
         </div>
 
         {/* Finish Button */}
-        <div className="flex justify-center mt-8">
+        <div className="flex justify-center mt-8 mb-12">
           <button
             onClick={onFinish}
-            className="px-10 py-4 bg-[#FF6B35] text-white rounded-full hover:scale-105 transition-transform duration-200 text-lg font-medium"
+            className="px-12 py-4 bg-[#FF6B35] text-white rounded-full hover:scale-105 transition-transform duration-200 text-lg font-medium whitespace-nowrap"
             style={{
               boxShadow: "0 0 40px -10px rgba(255, 107, 53, 0.5)",
             }}
