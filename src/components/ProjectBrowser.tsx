@@ -68,8 +68,8 @@ interface ProjectBrowserProps {
       schedule?: { frequency: string; time: string };
     }
   ) => void;
-  activeView?: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace';
-  onViewChange?: (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace') => void;
+  activeView?: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace' | 'rules';
+  onViewChange?: (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace' | 'rules') => void;
   onBackToCapture?: () => void;
   externalCollapseControl?: boolean;
   user?: {
