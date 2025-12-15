@@ -434,11 +434,11 @@ export function RulesPanel({
                     className="fixed inset-0 z-10"
                     onClick={() => setShowWorkspaceDropdown(false)}
                   />
-                  <div className="absolute top-full left-0 mt-2 bg-[#1A1F2E] border border-[#2A303C] rounded-xl overflow-hidden z-20 min-w-[280px] shadow-xl">
+                  <div className="absolute top-full left-0 mt-2 bg-[#1A1F2E] border border-[#2A303C] rounded-xl overflow-hidden z-20 min-w-[280px] shadow-xl text-base font-normal">
                     {/* All Workspaces option */}
                     <button
                       onClick={() => selectWorkspace("all")}
-                      className={`w-full px-4 py-3 text-left transition-colors ${
+                      className={`w-full px-4 py-2.5 text-left text-sm font-normal transition-colors ${
                         workspaceId === "all"
                           ? "bg-[#FF6B35] text-white"
                           : "text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-[#FF6B35]"
@@ -455,7 +455,7 @@ export function RulesPanel({
                       <button
                         key={workspace.id}
                         onClick={() => selectWorkspace(workspace.id)}
-                        className={`w-full px-4 py-3 text-left transition-colors ${
+                        className={`w-full px-4 py-2.5 text-left text-sm font-normal transition-colors ${
                           workspace.id === workspaceId
                             ? "bg-[#FF6B35] text-white"
                             : "text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-[#FF6B35]"
@@ -472,9 +472,9 @@ export function RulesPanel({
                         setShowWorkspaceDropdown(false);
                         onCreateWorkspace();
                       }}
-                      className="w-full px-4 py-3 text-left text-[#FF6B35] hover:bg-[rgba(255,107,53,0.1)] transition-colors flex items-center gap-2"
+                      className="w-full px-4 py-2.5 text-left text-sm font-normal text-[#FF6B35] hover:bg-[rgba(255,107,53,0.1)] transition-colors flex items-center gap-2"
                     >
-                      <Plus size={16} />
+                      <Plus size={14} />
                       <span>Create Workspace</span>
                     </button>
                   </div>
