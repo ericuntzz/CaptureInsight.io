@@ -119,6 +119,52 @@ export function RulesPanel({
   const [lastSavedAiHints, setLastSavedAiHints] = useState(aiHints);
   const [lastSavedCleaningRules, setLastSavedCleaningRules] = useState(JSON.stringify(cleaningRules));
 
+  // Reset all state when workspace changes to prevent saving stale data to wrong workspace
+  useEffect(() => {
+    const defaultRenames: ColumnRename[] = [
+      {
+        id: "1",
+        from: "",
+        to: "",
+        aliases: [],
+        showAliases: false,
+        newAlias: "",
+        suggestedAliases: ["Cost", "Total Spend", "Amount", "Spend", "Ad Cost"],
+      },
+    ];
+    
+    // Clear any pending auto-save timeouts
+    Object.values(autoSaveTimeouts.current).forEach(t => t && clearTimeout(t));
+    Object.values(savedStatusTimeouts.current).forEach(t => t && clearTimeout(t));
+    
+    // Reset form data to new workspace's data
+    const newColumnRenames = initialData?.columnRenames || defaultRenames;
+    const newKPIs = initialData?.selectedKPIs || [];
+    const newAiHints = initialData?.aiHints || "";
+    const newCleaningRules = initialData?.cleaningRules || null;
+    
+    setColumnRenames(newColumnRenames);
+    setSelectedKPIs(newKPIs);
+    setAiHints(newAiHints);
+    setCleaningRules(newCleaningRules);
+    
+    // Reset lastSaved values to prevent false dirty detection
+    setLastSavedColumnRenames(JSON.stringify(newColumnRenames));
+    setLastSavedKPIs(JSON.stringify(newKPIs));
+    setLastSavedAiHints(newAiHints);
+    setLastSavedCleaningRules(JSON.stringify(newCleaningRules));
+    
+    // Reset save statuses
+    setSaveStatus({
+      rules: 'idle',
+      renaming: 'idle',
+      kpis: 'idle',
+      'ai-hints': 'idle',
+    });
+    setDirtyState({});
+    setSavingState({});
+  }, [workspaceId]);
+
   const triggerAutoSave = (section: Section) => {
     if (autoSaveTimeouts.current[section]) {
       clearTimeout(autoSaveTimeouts.current[section]);
