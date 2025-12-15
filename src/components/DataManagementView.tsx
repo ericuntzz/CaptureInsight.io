@@ -281,7 +281,7 @@ export function DataManagementView({
           activeView={activeView}
           onViewChange={handleViewChange}
           onBackToCapture={onBackToCapture}
-          externalCollapseControl={sidebarCollapsed}
+          externalCollapseControl={undefined}
           user={user}
           onNavigateToSettings={onNavigateToSettings}
           onLogout={onLogout}
