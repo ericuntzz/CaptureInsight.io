@@ -2744,7 +2744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ai/analyze', isAuthenticated, async (req: any, res) => {
     try {
-      const { type, content, context, spaceGoals, piiFilter } = req.body;
+      const { type, content, context, spaceGoals: providedSpaceGoals, spaceId, piiFilter } = req.body;
 
       if (!type || !content) {
         return res.status(400).json({ message: "Missing required fields: type and content" });
@@ -2758,6 +2758,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).json({ 
           message: "AI service not configured. Gemini integration is required." 
         });
+      }
+      
+      // Auto-fetch Space Goals and AI Instructions from database if spaceId provided
+      let spaceGoals = providedSpaceGoals;
+      if (!spaceGoals && spaceId) {
+        const space = await storage.getSpace(spaceId);
+        if (space) {
+          const parts: string[] = [];
+          if (space.goals) {
+            parts.push(`SPACE GOALS:\n${space.goals}`);
+          }
+          if (space.instructions) {
+            parts.push(`AI ASSISTANT INSTRUCTIONS:\n${space.instructions}`);
+          }
+          if (parts.length > 0) {
+            spaceGoals = parts.join('\n\n');
+          }
+        }
       }
 
       const result = await analyzeCapture(type, content, { 
@@ -2780,7 +2798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ai/chat', isAuthenticated, async (req: any, res) => {
     try {
-      const { messages, context, spaceGoals, spaceId, workspaceId, allSpaceIds, useRag, useHybridSearch, useReranking, piiFilter, canvasContext, quickAction } = req.body;
+      const { messages, context, spaceGoals: providedSpaceGoals, spaceId, workspaceId, allSpaceIds, useRag, useHybridSearch, useReranking, piiFilter, canvasContext, quickAction } = req.body;
 
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({ message: "Messages must be an array" });
@@ -2792,6 +2810,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).json({ 
           message: "AI service not configured. Gemini integration is required." 
         });
+      }
+      
+      // Auto-fetch Space Goals and AI Instructions from database if spaceId provided
+      let spaceGoals = providedSpaceGoals;
+      if (!spaceGoals && spaceId) {
+        const space = await storage.getSpace(spaceId);
+        if (space) {
+          const parts: string[] = [];
+          if (space.goals) {
+            parts.push(`SPACE GOALS:\n${space.goals}`);
+          }
+          if (space.instructions) {
+            parts.push(`AI ASSISTANT INSTRUCTIONS:\n${space.instructions}`);
+          }
+          if (parts.length > 0) {
+            spaceGoals = parts.join('\n\n');
+          }
+        }
       }
 
       // Server-side consent verification for canvas AI operations
@@ -2924,7 +2960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ai/extract-insights', isAuthenticated, async (req: any, res) => {
     try {
-      const { content, spaceGoals } = req.body;
+      const { content, spaceGoals: providedSpaceGoals, spaceId } = req.body;
 
       if (!content) {
         return res.status(400).json({ message: "Content is required" });
@@ -2934,6 +2970,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).json({ 
           message: "AI service not configured. Gemini integration is required." 
         });
+      }
+      
+      // Auto-fetch Space Goals and AI Instructions from database if spaceId provided
+      let spaceGoals = providedSpaceGoals;
+      if (!spaceGoals && spaceId) {
+        const space = await storage.getSpace(spaceId);
+        if (space) {
+          const parts: string[] = [];
+          if (space.goals) {
+            parts.push(`SPACE GOALS:\n${space.goals}`);
+          }
+          if (space.instructions) {
+            parts.push(`AI ASSISTANT INSTRUCTIONS:\n${space.instructions}`);
+          }
+          if (parts.length > 0) {
+            spaceGoals = parts.join('\n\n');
+          }
+        }
       }
 
       const result = await extractInsights(content, spaceGoals);

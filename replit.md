@@ -155,6 +155,9 @@ npm run test:watch   # Run tests in watch mode
 ```
 
 ## Recent Changes
+- **2024-12-15**: Fixed Space Goals and AI Instructions - Backend now auto-fetches these from database when spaceId is provided, ensuring AI chat/analysis/summaries respect user-defined goals and instructions
+- **2024-12-15**: Settings sub-pages Back button now returns to main Settings menu instead of exiting to workspace
+- **2024-12-15**: Billing and Security temporarily disabled with "Coming soon once beta is complete..." message
 - **2024-12-15**: Implemented Rules System - workspace-level data processing rules with 4 configurable sections (cleaning, renaming, KPIs, AI hints), per-section saves, upload flow integration with rules modal, and canvas summary trigger after ETL
 - **2024-12-11**: Added Welcome Screen modal with tutorial video placeholders (Vimeo support), Questions form, and Chrome extension download banner
 - **2024-12-11**: Added contact questions endpoint (POST /api/contact/question) storing to database for email forwarding to ericunterberger@proton.me
