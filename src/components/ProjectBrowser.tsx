@@ -454,6 +454,40 @@ export function ProjectBrowser({
             </TooltipContent>
           )}
         </Tooltip>
+
+        {/* Rules Button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onNavigateToRules}
+              className={`w-full h-10 flex items-center rounded-lg transition-all mb-2 group px-3 ${
+                activeView === 'rules'
+                  ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
+                  : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
+              }`}
+            >
+              <Filter className={`w-4 h-4 flex-shrink-0 ${activeView !== 'rules' && isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
+              <AnimatePresence>
+                {!isCollapsed && (
+                  <motion.span 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-sm whitespace-nowrap overflow-hidden ml-3"
+                  >
+                    Rules
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          </TooltipTrigger>
+          {isCollapsed && (
+            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+              Rules
+            </TooltipContent>
+          )}
+        </Tooltip>
       </div>
 
       {/* Divider */}
@@ -808,36 +842,6 @@ export function ProjectBrowser({
           {isCollapsed && (
             <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
               What's New?
-            </TooltipContent>
-          )}
-        </Tooltip>
-
-        {/* Rules */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button 
-              onClick={() => onNavigateToRules?.()}
-              className="w-full h-10 flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white mb-1 group px-3"
-            >
-              <Filter className={`w-4 h-4 flex-shrink-0 ${isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
-              <AnimatePresence>
-                {!isCollapsed && (
-                  <motion.span 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-sm whitespace-nowrap overflow-hidden ml-3"
-                  >
-                    Rules
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </button>
-          </TooltipTrigger>
-          {isCollapsed && (
-            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
-              Rules
             </TooltipContent>
           )}
         </Tooltip>
