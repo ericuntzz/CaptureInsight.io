@@ -1994,7 +1994,7 @@ export default function App() {
             handleViewChange('capture');
             toast.info('Create a new capture');
           }}
-          activeView="workspace"
+          activeView={currentView === 'rules' ? 'rules' : 'workspace'}
           onViewChange={handleWorkspaceViewChange}
           onBackToCapture={() => handleViewChange('capture')}
           externalCollapseControl={(() => {
