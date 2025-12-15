@@ -197,9 +197,6 @@ export function DataManagementView({
 
   // NEW: Data source sidebar state
   const [showSourceDataSidebar, setShowSourceDataSidebar] = useState(false);
-  
-  // NEW: Sidebar collapse control for Canvas mode
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleSelectSheet = (projectId: string, folderId: string, sheetId: string) => {
     setSelectedProject(projectId);
