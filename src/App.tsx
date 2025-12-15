@@ -269,6 +269,12 @@ export default function App() {
     }
   };
   
+  // Navigate from a settings sub-page back to the main settings menu
+  const handleBackToSettingsMenu = () => {
+    setActiveSettingsPage('settings');
+    router.push('/settings');
+  };
+  
   const handleLogout = () => {
     window.location.href = '/api/logout';
   };
@@ -1738,7 +1744,7 @@ export default function App() {
     const settingsPageContent = () => {
       switch (activeSettingsPage) {
         case 'profile':
-          return <ProfilePage onBack={handleCloseSettings} />;
+          return <ProfilePage onBack={handleBackToSettingsMenu} />;
         case 'settings':
           return (
             <SettingsPage 
@@ -1747,21 +1753,21 @@ export default function App() {
             />
           );
         case 'preferences':
-          return <PreferencesPage onBack={handleCloseSettings} />;
+          return <PreferencesPage onBack={handleBackToSettingsMenu} />;
         case 'notifications':
-          return <NotificationsPage onBack={handleCloseSettings} />;
+          return <NotificationsPage onBack={handleBackToSettingsMenu} />;
         case 'billing':
-          return <BillingPage onBack={handleCloseSettings} />;
+          return <BillingPage onBack={handleBackToSettingsMenu} />;
         case 'companies':
-          return <CompanyManagementPage onBack={handleCloseSettings} />;
+          return <CompanyManagementPage onBack={handleBackToSettingsMenu} />;
         case 'security':
-          return <SecuritySettings onBack={handleCloseSettings} />;
+          return <SecuritySettings onBack={handleBackToSettingsMenu} />;
         case 'templates':
           return (
             <TemplateManagement 
               workspaceId={activeWorkspaceId} 
               spaceId={currentSpaceId}
-              onBack={handleCloseSettings} 
+              onBack={handleBackToSettingsMenu} 
             />
           );
         default:
