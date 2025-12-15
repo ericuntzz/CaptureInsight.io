@@ -46,7 +46,9 @@ import {
   useCreateTag,
   useUpdateTag,
   useDeleteTag,
+  useSaveWorkspaceRules,
 } from './hooks/useSpaces';
+import * as Dialog from '@radix-ui/react-dialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from './lib/queryClient';
 
@@ -526,6 +528,23 @@ export default function App() {
   // Track which captures are selected in CaptureAssignmentPanel
   const [panelSelectedCaptureIds, setPanelSelectedCaptureIds] = useState<Set<string>>(new Set());
   
+  // Rules modal state for upload flow
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [rulesModalWorkspaceId, setRulesModalWorkspaceId] = useState<string | null>(null);
+  const [pendingUploadData, setPendingUploadData] = useState<{
+    destinations: { spaceId: string; folderId: string }[];
+    analysisSettings: Array<{
+      captureId: string;
+      analysisType: 'one-time' | 'scheduled' | 'llm-integration' | 'api' | null;
+      llmProvider?: { id: string; name: string };
+      schedule?: { frequency: string; time: string };
+    }>;
+    captureBatchId: string;
+  } | null>(null);
+  
+  // Hook for saving workspace rules
+  const saveWorkspaceRulesMutation = useSaveWorkspaceRules();
+  
   const scrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -800,6 +819,37 @@ export default function App() {
         return;
       }
       
+      // Step 3.5: Check if workspace has active rules configured
+      console.log('[Capture Flow] Checking workspace rules for:', finalFolderId);
+      try {
+        const rulesResponse = await fetch(`/api/workspaces/${finalFolderId}/rules`, {
+          credentials: 'include'
+        });
+        const rulesData = rulesResponse.ok ? await rulesResponse.json() : null;
+        
+        // If no rules exist or rules are in draft status, show the rules modal
+        if (!rulesData || rulesData.status !== 'active') {
+          console.log('[Capture Flow] No active rules found, showing rules configuration modal');
+          
+          // Store pending upload data so we can resume after rules are configured
+          setPendingUploadData({
+            destinations,
+            analysisSettings,
+            captureBatchId,
+          });
+          setRulesModalWorkspaceId(finalFolderId);
+          setShowRulesModal(true);
+          
+          // Don't reset the submitting flag - we'll resume after rules are configured
+          return;
+        }
+        
+        console.log('[Capture Flow] Active rules found, proceeding with upload');
+      } catch (rulesError) {
+        console.log('[Capture Flow] Error checking rules (proceeding anyway):', rulesError);
+        // If rules check fails, proceed with upload anyway
+      }
+      
       // Step 4: Update captures with their destinations
       setCaptures(prev => prev.map((capture, index) => {
         const dest = destinations[index];
@@ -882,6 +932,139 @@ export default function App() {
     } finally {
       // Reset submission guard after completion (success or error)
       isSubmittingCapturesRef.current = false;
+    }
+  };
+
+  // Continue upload after rules have been configured
+  const continueUploadAfterRules = async () => {
+    if (!pendingUploadData) {
+      console.error('[Capture Flow] No pending upload data');
+      return;
+    }
+    
+    const { destinations, analysisSettings, captureBatchId } = pendingUploadData;
+    
+    console.log('[Capture Flow] Continuing upload after rules configuration');
+    
+    try {
+      // Step 4: Update captures with their destinations
+      setCaptures(prev => prev.map((capture, index) => {
+        return {
+          ...capture,
+          folder: `Workspace`
+        };
+      }));
+      
+      // Step 5: Create sheets for each capture via API
+      console.log('[Capture Flow] Creating sheets for', captureItems.length, 'items...');
+      
+      for (let index = 0; index < captureItems.length; index++) {
+        const item = captureItems[index];
+        const dest = destinations[index];
+        const settings = analysisSettings[index];
+        
+        console.log('[Capture Flow] Creating sheet:', item.name, 'in workspace:', dest.folderId);
+        
+        if (item.type === 'file') {
+          const fileData = uploadedFiles.find(f => f.id === item.id);
+          if (fileData?.file) {
+            console.log('[Capture Flow] Uploading file:', fileData.file.name, 'size:', fileData.file.size);
+            await uploadFileMutation.mutateAsync({
+              spaceId: dest.spaceId,
+              workspaceId: dest.folderId,
+              file: fileData.file,
+              name: item.name,
+              captureBatchId,
+              analysisType: settings?.analysisType,
+              llmProvider: settings?.llmProvider,
+              schedule: settings?.schedule,
+            });
+          } else {
+            console.error('[Capture Flow] File not found for item:', item.id);
+            toast.error(`File not found: ${item.name}`);
+          }
+        } else {
+          await createSheetMutation.mutateAsync({
+            spaceId: dest.spaceId,
+            folderId: dest.folderId,
+            name: item.name,
+            dataSourceType: item.type,
+            dataSourceMeta: {
+              analysisType: settings?.analysisType,
+              llmProvider: settings?.llmProvider,
+              schedule: settings?.schedule,
+              url: item.url,
+            },
+            captureBatchId,
+          });
+        }
+      }
+      
+      // Step 6: Navigate to workspace view with batch ID
+      const finalFolderId = destinations[0]?.folderId;
+      console.log('[Capture Flow] Navigating to workspace view...');
+      
+      setActiveWorkspaceId(finalFolderId);
+      handleViewChange('workspace', { captureBatchId });
+      setShowOptionsModal(false);
+      
+      // Clear captures and pending data after successful save
+      setCaptures([]);
+      setUploadedFiles([]);
+      setShareLinks([]);
+      setPendingUploadData(null);
+      
+      console.log('[Capture Flow] Upload complete, showing success toast');
+      toast.success(`${captureItems.length} item(s) saved to workspace!`);
+      
+    } catch (error) {
+      console.error('[Capture Flow] Error during continued upload:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to save captures: ${errorMessage}`);
+    } finally {
+      isSubmittingCapturesRef.current = false;
+    }
+  };
+
+  // Handle finishing rules configuration and continuing with upload
+  const handleRulesFinish = async () => {
+    if (!rulesModalWorkspaceId) return;
+    
+    try {
+      // Set rules status to 'active'
+      await apiRequest('PATCH', `/api/workspaces/${rulesModalWorkspaceId}/rules`, { 
+        status: 'active' 
+      });
+      
+      toast.success('Rules saved and activated!');
+      
+      // Close the modal
+      setShowRulesModal(false);
+      setRulesModalWorkspaceId(null);
+      
+      // Continue with the upload
+      await continueUploadAfterRules();
+      
+    } catch (error) {
+      console.error('Error activating rules:', error);
+      toast.error('Failed to activate rules');
+    }
+  };
+
+  // Handle saving a section of rules
+  const handleSaveRulesSection = async (section: string, data: any) => {
+    if (!rulesModalWorkspaceId) return;
+    
+    try {
+      await apiRequest('PUT', `/api/workspaces/${rulesModalWorkspaceId}/rules`, { 
+        section, 
+        data,
+        status: 'draft' // Keep as draft until Finish is clicked
+      });
+      toast.success('Section saved');
+    } catch (error) {
+      console.error('Error saving rules section:', error);
+      toast.error('Failed to save rules');
     }
   };
 
@@ -2168,6 +2351,45 @@ export default function App() {
           if (!open) closeWelcome();
         }}
       />
+
+      {/* Rules Configuration Modal - shown during upload flow when no active rules exist */}
+      <Dialog.Root 
+        open={showRulesModal} 
+        onOpenChange={(open) => {
+          if (!open) {
+            // If user closes modal without finishing, cancel the upload
+            setShowRulesModal(false);
+            setRulesModalWorkspaceId(null);
+            setPendingUploadData(null);
+            isSubmittingCapturesRef.current = false;
+            toast.info('Upload cancelled - configure rules to continue');
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/70 z-50" />
+          <Dialog.Content className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="min-h-full">
+              {rulesModalWorkspaceId && (() => {
+                const allWorkspaces = spaces.flatMap(s => 
+                  (s.workspaces || s.folders || []).map(w => ({ id: w.id, name: w.name }))
+                );
+                const currentWorkspace = allWorkspaces.find(w => w.id === rulesModalWorkspaceId);
+                return (
+                  <RulesPanel
+                    workspaceId={rulesModalWorkspaceId}
+                    workspaceName={currentWorkspace?.name || 'Workspace'}
+                    workspaces={allWorkspaces}
+                    onWorkspaceChange={(newId) => setRulesModalWorkspaceId(newId)}
+                    onSave={handleSaveRulesSection}
+                    onFinish={handleRulesFinish}
+                  />
+                );
+              })()}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }
