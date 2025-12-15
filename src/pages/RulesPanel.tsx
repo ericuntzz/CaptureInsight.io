@@ -328,7 +328,7 @@ export function RulesPanel({
             </button>
 
             {expandedSections.rules && (
-              <div className="px-8 pb-8 border-t border-[#2A303C]">
+              <div className="px-8 pb-8">
                 <h2 className="text-xl text-[#9CA3AF] mt-6 mb-2">
                   When data is uploaded to{" "}
                   <span className="relative inline">
@@ -417,7 +417,7 @@ export function RulesPanel({
             </button>
 
             {expandedSections.renaming && (
-              <div className="px-8 pb-8 border-t border-[#2A303C]">
+              <div className="px-8 pb-8">
                 <h2 className="text-xl text-[#9CA3AF] mt-6 mb-2">
                   Are there any column headers that you would like to be renamed
                   when you upload data to{" "}
@@ -637,7 +637,7 @@ export function RulesPanel({
             </button>
 
             {expandedSections.kpis && (
-              <div className="px-8 pb-8 border-t border-[#2A303C]">
+              <div className="px-8 pb-8">
                 <h2 className="text-xl text-[#9CA3AF] mt-6 mb-2">
                   Define formulas to automatically calculate metrics like CPA,
                   CTR, ROAS from your data columns for{" "}
@@ -721,7 +721,7 @@ export function RulesPanel({
             </button>
 
             {expandedSections["ai-hints"] && (
-              <div className="px-8 pb-8 border-t border-[#2A303C]">
+              <div className="px-8 pb-8">
                 <p className="text-[#9CA3AF] mt-6 mb-6">
                   Give your AI some additional guidance when uploading data to{" "}
                   <span className="text-[#FF6B35]">{workspaceName}</span>
