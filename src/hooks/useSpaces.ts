@@ -488,3 +488,40 @@ export function useDeleteTag() {
     },
   });
 }
+
+export interface WorkspaceRules {
+  cleaningRules?: any;
+  columnRenames?: Array<{
+    id: string;
+    from: string;
+    to: string;
+    aliases: string[];
+  }>;
+  selectedKPIs?: string[];
+  aiHints?: string;
+}
+
+export function useWorkspaceRules(workspaceId: string | null) {
+  return useQuery<WorkspaceRules>({
+    queryKey: ["/api/workspaces", workspaceId, "rules"],
+    queryFn: async () => {
+      if (!workspaceId) throw new Error("No workspace ID provided");
+      const res = await apiRequest("GET", `/api/workspaces/${workspaceId}/rules`);
+      return res.json();
+    },
+    enabled: !!workspaceId,
+  });
+}
+
+export function useSaveWorkspaceRules() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ workspaceId, section, data }: { workspaceId: string; section: string; data: any }) => {
+      const res = await apiRequest("PUT", `/api/workspaces/${workspaceId}/rules`, { section, data });
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces", variables.workspaceId, "rules"] });
+    },
+  });
+}

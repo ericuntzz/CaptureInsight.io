@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Camera, FileText, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2, Settings as SettingsIcon, Check, X, MoreVertical, FolderPlus, Edit2, FileSpreadsheet, Brain, Clock, ChevronsRight, ChevronsLeft, HelpCircle, Gift, Database, LayoutGrid } from 'lucide-react';
+import { Sparkles, Camera, FileText, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2, Settings as SettingsIcon, Check, X, MoreVertical, FolderPlus, Edit2, FileSpreadsheet, Brain, Clock, ChevronsRight, ChevronsLeft, HelpCircle, Gift, Database, LayoutGrid, Filter } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from './ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from './ui/dropdown-menu';
 import { SpaceSwitcher } from './SpaceSwitcher';
@@ -87,6 +87,7 @@ interface ProjectBrowserProps {
   onDeleteWorkspace?: (workspaceId: string) => void;
   newlyCreatedWorkspaceId?: string | null;
   onNewlyCreatedWorkspaceHandled?: () => void;
+  onNavigateToRules?: () => void;
 }
 
 export function ProjectBrowser({ 
@@ -118,6 +119,7 @@ export function ProjectBrowser({
   onDeleteWorkspace,
   newlyCreatedWorkspaceId,
   onNewlyCreatedWorkspaceHandled,
+  onNavigateToRules,
 }: ProjectBrowserProps) {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set(Array.isArray(projects) ? projects.map(p => p.id) : []));
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -806,6 +808,36 @@ export function ProjectBrowser({
           {isCollapsed && (
             <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
               What's New?
+            </TooltipContent>
+          )}
+        </Tooltip>
+
+        {/* Rules */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button 
+              onClick={() => onNavigateToRules?.()}
+              className="w-full h-10 flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white mb-1 group px-3"
+            >
+              <Filter className={`w-4 h-4 flex-shrink-0 ${isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
+              <AnimatePresence>
+                {!isCollapsed && (
+                  <motion.span 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-sm whitespace-nowrap overflow-hidden ml-3"
+                  >
+                    Rules
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          </TooltipTrigger>
+          {isCollapsed && (
+            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+              Rules
             </TooltipContent>
           )}
         </Tooltip>

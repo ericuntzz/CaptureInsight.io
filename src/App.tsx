@@ -25,6 +25,7 @@ import {
 import { SecuritySettings } from './pages/SecuritySettings';
 import { InsightWorkspace } from './pages/InsightWorkspace';
 import { TemplateManagement } from './pages/TemplateManagement';
+import { RulesPanel } from './pages/RulesPanel';
 import { ProjectBrowser, Project } from './components/ProjectBrowser';
 import { EmptyWorkspaceState } from './components/EmptyWorkspaceState';
 import { WelcomeModal, useWelcomeModal } from './components/WelcomeModal';
@@ -197,7 +198,7 @@ export default function App() {
   }, [hasRestoredUrl, router.pathname, router.search, router.hash]);
   
   // Initialize view from URL or localStorage
-  const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights' | 'workspace'>(() => {
+  const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' | 'rules'>(() => {
     if (typeof window !== 'undefined') {
       // First check if there's a saved URL to restore
       const savedUrl = localStorage.getItem('captureinsight_current_url');
@@ -281,7 +282,7 @@ export default function App() {
   }, [router.pathname, currentView]);
   
   // Update URL when view changes
-  const handleViewChange = (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace', params?: { captureBatchId?: string }) => {
+  const handleViewChange = (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' | 'rules', params?: { captureBatchId?: string }) => {
     setCurrentView(view);
     // Push new URL with optional search params
     let url: string;
@@ -300,6 +301,9 @@ export default function App() {
         break;
       case 'workspace':
         url = buildRoute.workspace();
+        break;
+      case 'rules':
+        url = buildRoute.rules();
         break;
     }
     
@@ -1700,7 +1704,7 @@ export default function App() {
         }}
       />
     );
-  } else if (currentView === 'workspace') {
+  } else if (currentView === 'workspace' || currentView === 'rules') {
     // Workspace view with auto-collapsed ProjectBrowser sidebar
     const handleWorkspaceSelectSheet = (projectId: string, _folderId: string, _sheetId: string) => {
       setCurrentSpaceId(projectId);
@@ -1824,6 +1828,7 @@ export default function App() {
           onDeleteWorkspace={handleDeleteWorkspace}
           newlyCreatedWorkspaceId={newlyCreatedWorkspaceId}
           onNewlyCreatedWorkspaceHandled={() => setNewlyCreatedWorkspaceId(null)}
+          onNavigateToRules={() => handleViewChange('rules')}
         />
         
         {/* Main Workspace Content */}
@@ -1852,6 +1857,24 @@ export default function App() {
                     handleViewChange('capture');
                   }}
                   onWatchTutorial={openWelcome}
+                />
+              );
+            }
+            
+            if (currentView === 'rules') {
+              const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
+              return (
+                <RulesPanel
+                  workspaceId={activeWorkspaceId || ''}
+                  workspaceName={activeWorkspace?.name || 'Workspace'}
+                  workspaces={workspaces.map(w => ({ id: w.id, name: w.name }))}
+                  onWorkspaceChange={setActiveWorkspaceId}
+                  onSave={async (section, data) => {
+                    if (!activeWorkspaceId) return;
+                    await apiRequest('PUT', `/api/workspaces/${activeWorkspaceId}/rules`, { section, data });
+                    toast.success('Rules saved successfully');
+                  }}
+                  onFinish={() => handleViewChange('workspace')}
                 />
               );
             }

@@ -7,6 +7,7 @@ export const ROUTES = {
   CHANGE_LOGS: '/changelogs',
   INSIGHTS: '/insights',
   WORKSPACE: '/workspace',
+  RULES: '/rules',
   
   // Data management deep links
   DATA_SPACE: '/data/:spaceId',
@@ -48,6 +49,7 @@ export const buildRoute = {
   insights: () => ROUTES.INSIGHTS,
   insightDetail: (insightId: string) => `/insights/${insightId}`,
   workspace: () => ROUTES.WORKSPACE,
+  rules: () => ROUTES.RULES,
   workspaceInsight: (insightId: string) => `/workspace/${insightId}`,
   aiChat: () => ROUTES.AI_CHAT,
   aiChatMessage: (messageId: string) => `/ai-assistant#message-${messageId}`,
@@ -66,6 +68,7 @@ export const parseRoute = {
   isChangeLogs: (pathname: string) => pathname.startsWith('/changelogs'),
   isInsights: (pathname: string) => pathname.startsWith('/insights'),
   isWorkspace: (pathname: string) => pathname.startsWith('/workspace'),
+  isRules: (pathname: string) => pathname.startsWith('/rules'),
   isAIChat: (pathname: string) => pathname.startsWith('/ai-assistant'),
   isTags: (pathname: string) => pathname.startsWith('/tags'),
   isSearch: (pathname: string) => pathname.startsWith('/search'),
@@ -110,10 +113,11 @@ export const parseRoute = {
 };
 
 // Get current view from pathname
-export const getCurrentView = (pathname: string): 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' => {
+export const getCurrentView = (pathname: string): 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' | 'rules' => {
   if (parseRoute.isData(pathname)) return 'data';
   if (parseRoute.isChangeLogs(pathname)) return 'changelogs';
   if (parseRoute.isInsights(pathname)) return 'insights';
   if (parseRoute.isWorkspace(pathname)) return 'workspace';
+  if (parseRoute.isRules(pathname)) return 'rules';
   return 'capture';
 };
