@@ -145,6 +145,8 @@ interface DataManagementViewProps {
   } | null;
   onNavigateToSettings?: (page: 'profile' | 'settings' | 'preferences' | 'notifications' | 'billing' | 'companies') => void;
   onLogout?: () => void;
+  sidebarCollapsed?: boolean;
+  onSidebarCollapseChange?: (collapsed: boolean) => void;
 }
 
 export function DataManagementView({ 
@@ -166,6 +168,8 @@ export function DataManagementView({
   user,
   onNavigateToSettings,
   onLogout,
+  sidebarCollapsed,
+  onSidebarCollapseChange,
 }: DataManagementViewProps) {
   const { openEditor: openTemplateEditor } = useTemplateEditor();
   
@@ -281,7 +285,8 @@ export function DataManagementView({
           activeView={activeView}
           onViewChange={handleViewChange}
           onBackToCapture={onBackToCapture}
-          externalCollapseControl={undefined}
+          externalCollapseControl={sidebarCollapsed}
+          onCollapseChange={onSidebarCollapseChange}
           user={user}
           onNavigateToSettings={onNavigateToSettings}
           onLogout={onLogout}

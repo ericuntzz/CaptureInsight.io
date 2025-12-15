@@ -72,6 +72,7 @@ interface ProjectBrowserProps {
   onViewChange?: (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace' | 'rules') => void;
   onBackToCapture?: () => void;
   externalCollapseControl?: boolean;
+  onCollapseChange?: (collapsed: boolean) => void;
   user?: {
     id: string;
     email?: string | null;
@@ -110,6 +111,7 @@ export function ProjectBrowser({
   onViewChange,
   onBackToCapture,
   externalCollapseControl,
+  onCollapseChange,
   user,
   onNavigateToSettings,
   onLogout,
@@ -763,7 +765,11 @@ export function ProjectBrowser({
         <Tooltip>
           <TooltipTrigger asChild>
             <button 
-              onClick={() => setIsCollapsed(!isCollapsed)}
+              onClick={() => {
+                const newValue = !isCollapsed;
+                setIsCollapsed(newValue);
+                onCollapseChange?.(newValue);
+              }}
               className="w-full h-10 flex items-center rounded-lg transition-all text-[#6B7280] hover:bg-[rgba(255,107,53,0.1)] hover:text-white mb-1 group px-3"
             >
               {isCollapsed ? (

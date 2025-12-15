@@ -332,6 +332,25 @@ export default function App() {
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [isBlurMode, setIsBlurMode] = useState(false);
   const [showToolbar, setShowToolbar] = useState(true);
+  
+  // Shared sidebar collapse state - persists across all views
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('captureinsight_sidebar_collapsed');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  // Persist sidebar state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('captureinsight_sidebar_collapsed', sidebarCollapsed ? 'true' : 'false');
+    } catch (error) {
+      console.error('Error saving sidebar state:', error);
+    }
+  }, [sidebarCollapsed]);
 
   const [selectedCaptureIndices, setSelectedCaptureIndices] = useState<number[]>([]);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
@@ -1863,6 +1882,8 @@ export default function App() {
           user={user}
           onNavigateToSettings={handleNavigateToSettings}
           onLogout={handleLogout}
+          sidebarCollapsed={sidebarCollapsed}
+          onSidebarCollapseChange={setSidebarCollapsed}
         />
       </>
     );
@@ -2003,7 +2024,8 @@ export default function App() {
           activeView={currentView === 'rules' ? 'rules' : 'workspace'}
           onViewChange={handleWorkspaceViewChange}
           onBackToCapture={() => handleViewChange('capture')}
-          externalCollapseControl={undefined}
+          externalCollapseControl={sidebarCollapsed}
+          onCollapseChange={setSidebarCollapsed}
           user={user}
           onNavigateToSettings={handleNavigateToSettings}
           onLogout={handleLogout}
