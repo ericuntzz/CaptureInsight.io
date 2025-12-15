@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings, User, Palette, Bell, CreditCard, Building2, Shield, Key } from 'lucide-react';
+import { ArrowLeft, Settings, User, Palette, Bell, CreditCard, Building2, Shield } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface SettingsPageProps {
@@ -46,13 +46,6 @@ const securityItems = [
     title: 'Security',
     description: 'Data encryption, two-factor authentication, and security settings',
     disabled: false,
-  },
-  {
-    id: 'api-keys',
-    icon: Key,
-    title: 'API Keys',
-    description: 'Manage API keys for integrations',
-    disabled: true,
   },
 ];
 
