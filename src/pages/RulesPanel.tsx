@@ -414,7 +414,7 @@ export function RulesPanel({
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="max-w-3xl w-full relative z-10">
         {/* Page Title with Workspace Selector */}
-        <div className="mb-20 text-center">
+        <div className="mb-40 text-center">
           <h1 className="text-4xl font-bold text-white inline-flex items-center justify-center flex-wrap gap-x-3">
             <span>Set Rules for How Data is Processed in</span>
             <span className="relative inline-block ml-3">
