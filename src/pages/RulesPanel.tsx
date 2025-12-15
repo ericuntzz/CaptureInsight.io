@@ -331,12 +331,12 @@ export function RulesPanel({
               <div className="px-8 pb-8 border-t border-[#2A303C]">
                 <h2 className="text-xl text-[#9CA3AF] mt-6 mb-2">
                   When data is uploaded to{" "}
-                  <div className="inline-block relative">
+                  <span className="relative inline">
                     <button
                       onClick={() =>
                         setShowWorkspaceDropdown(!showWorkspaceDropdown)
                       }
-                      className="text-[#FF6B35] hover:text-[#FF8C5E] transition-colors inline-flex items-center gap-1"
+                      className="text-xl text-[#FF6B35] hover:text-[#FF8C5E] transition-colors inline-flex items-center gap-1"
                     >
                       {workspaceName}
                       <ChevronDown
@@ -344,7 +344,6 @@ export function RulesPanel({
                         className={`transition-transform ${showWorkspaceDropdown ? "rotate-180" : ""}`}
                       />
                     </button>
-
                     {showWorkspaceDropdown && (
                       <>
                         <div
@@ -368,8 +367,7 @@ export function RulesPanel({
                         </div>
                       </>
                     )}
-                  </div>
-                  , how would you like it to be processed?
+                  </span>, how would you like it to be processed?
                 </h2>
                 <div className="flex items-center gap-2 mb-6">
                   <div className="w-1 h-4 bg-[#FF6B35] rounded-full"></div>
