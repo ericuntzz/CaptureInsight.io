@@ -293,10 +293,10 @@ export function RulesPanel({
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0A0D12] p-6 md:p-12">
+    <div className="h-full overflow-y-auto bg-[#0A0D12] flex flex-col">
       <div className="fixed inset-0 pointer-events-none">
         <div
-          className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full"
           style={{
             background:
               "radial-gradient(circle at 50% 50%, rgba(255, 107, 53, 0.15) 0%, rgba(10, 13, 18, 0) 50%)",
@@ -305,7 +305,8 @@ export function RulesPanel({
         />
       </div>
 
-      <div className="max-w-3xl mx-auto relative z-10">
+      <div className="flex-1 flex items-center justify-center p-6 md:p-12">
+        <div className="max-w-3xl w-full relative z-10">
         {/* Section 1: Rules for your data */}
         <div className="mb-6">
           <div
@@ -714,6 +715,7 @@ export function RulesPanel({
           >
             Finish Configuration
           </button>
+        </div>
         </div>
       </div>
     </div>
