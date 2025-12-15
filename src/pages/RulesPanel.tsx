@@ -411,10 +411,9 @@ export function RulesPanel({
         />
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-6 md:p-12">
-        <div className="max-w-5xl w-full relative z-10">
-        {/* Page Title with Workspace Selector */}
-        <div className="mb-40 text-center">
+      {/* Container 1: Page Title with Workspace Selector */}
+      <div className="w-full flex justify-center pt-12 pb-16 relative z-10">
+        <div className="text-center">
           <h1 className="text-4xl font-bold text-white inline-flex items-center justify-center whitespace-nowrap gap-x-3">
             <span>Set Rules for How Data is Processed in</span>
             <span className="relative inline-block ml-3">
@@ -483,7 +482,11 @@ export function RulesPanel({
             </span>
           </h1>
         </div>
+      </div>
 
+      {/* Container 2: Rules Sections */}
+      <div className="flex-1 flex justify-center p-6 md:p-12">
+        <div className="max-w-3xl w-full relative z-10">
         {/* Section 1: Rules for your data */}
         <div className="mb-6">
           <div
