@@ -1,9 +1,9 @@
-import { ArrowLeft, Settings, User, Palette, Bell, CreditCard, Building2, Shield } from 'lucide-react';
+import { ArrowLeft, Settings, User, CreditCard, Building2, Shield } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface SettingsPageProps {
   onBack: () => void;
-  onNavigate: (page: 'profile' | 'preferences' | 'notifications' | 'billing' | 'companies' | 'security') => void;
+  onNavigate: (page: 'profile' | 'billing' | 'companies' | 'security') => void;
 }
 
 const settingsItems = [
@@ -12,18 +12,6 @@ const settingsItems = [
     icon: User,
     title: 'Profile',
     description: 'Update your personal information and photo',
-  },
-  {
-    id: 'preferences',
-    icon: Palette,
-    title: 'Preferences',
-    description: 'Theme, language, timezone, and display settings',
-  },
-  {
-    id: 'notifications',
-    icon: Bell,
-    title: 'Notifications',
-    description: 'Email and push notification preferences',
   },
   {
     id: 'companies',
