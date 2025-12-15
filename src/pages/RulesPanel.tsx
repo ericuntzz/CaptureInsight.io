@@ -6,7 +6,6 @@ import {
   Trash2,
   X,
   Lightbulb,
-  Save,
 } from "lucide-react";
 import { CleaningPipeline, CleaningPipelineState } from "../components/CleaningPipeline";
 
@@ -377,20 +376,6 @@ export function RulesPanel({
                 </div>
 
                 <CleaningPipeline onChange={setCleaningRules} />
-
-                {dirtyState.rules && (
-                  <button
-                    onClick={() => handleSaveSection("rules")}
-                    disabled={savingState.rules}
-                    className="mt-6 px-6 py-2 bg-[#FF6B35] text-white rounded-full hover:scale-105 transition-transform duration-200 flex items-center gap-2"
-                    style={{
-                      boxShadow: "0 0 40px -10px rgba(255, 107, 53, 0.5)",
-                    }}
-                  >
-                    <Save size={16} />
-                    {savingState.rules ? "Saving..." : "Save Rules"}
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -597,20 +582,6 @@ export function RulesPanel({
                     Add another rename rule
                   </button>
                 </div>
-
-                {dirtyState.renaming && (
-                  <button
-                    onClick={() => handleSaveSection("renaming")}
-                    disabled={savingState.renaming}
-                    className="mt-2 px-6 py-2 bg-[#FF6B35] text-white rounded-full hover:scale-105 transition-transform duration-200 flex items-center gap-2"
-                    style={{
-                      boxShadow: "0 0 40px -10px rgba(255, 107, 53, 0.5)",
-                    }}
-                  >
-                    <Save size={16} />
-                    {savingState.renaming ? "Saving..." : "Save Column Renames"}
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -681,20 +652,6 @@ export function RulesPanel({
                     ))}
                   </div>
                 </div>
-
-                {dirtyState.kpis && (
-                  <button
-                    onClick={() => handleSaveSection("kpis")}
-                    disabled={savingState.kpis}
-                    className="mt-2 px-6 py-2 bg-[#FF6B35] text-white rounded-full hover:scale-105 transition-transform duration-200 flex items-center gap-2"
-                    style={{
-                      boxShadow: "0 0 40px -10px rgba(255, 107, 53, 0.5)",
-                    }}
-                  >
-                    <Save size={16} />
-                    {savingState.kpis ? "Saving..." : "Save KPIs"}
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -734,29 +691,22 @@ export function RulesPanel({
                   rows={6}
                   className="w-full px-4 py-3 bg-[#0A0D12] border border-[rgba(255,255,255,0.08)] rounded-xl text-white placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent resize-none"
                 />
-
-                {dirtyState["ai-hints"] && (
-                  <button
-                    onClick={() => handleSaveSection("ai-hints")}
-                    disabled={savingState["ai-hints"]}
-                    className="mt-6 px-6 py-2 bg-[#FF6B35] text-white rounded-full hover:scale-105 transition-transform duration-200 flex items-center gap-2"
-                    style={{
-                      boxShadow: "0 0 40px -10px rgba(255, 107, 53, 0.5)",
-                    }}
-                  >
-                    <Save size={16} />
-                    {savingState["ai-hints"] ? "Saving..." : "Save AI Hints"}
-                  </button>
-                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* Finish Button */}
+        {/* Finish Button - saves all sections */}
         <div className="flex justify-center mt-8 mb-12">
           <button
-            onClick={onFinish}
+            onClick={async () => {
+              // Save all sections that have changes
+              const sectionsToSave: Section[] = ['rules', 'renaming', 'kpis', 'ai-hints'];
+              for (const section of sectionsToSave) {
+                await handleSaveSection(section);
+              }
+              onFinish();
+            }}
             className="px-12 py-4 bg-[#FF6B35] text-white rounded-full hover:scale-105 transition-transform duration-200 text-lg font-medium whitespace-nowrap"
             style={{
               boxShadow: "0 0 40px -10px rgba(255, 107, 53, 0.5)",
