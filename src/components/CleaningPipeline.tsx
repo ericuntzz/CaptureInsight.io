@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { CustomSelect } from './CustomSelect';
 
@@ -32,45 +32,75 @@ interface FillEmptyValuesRule extends Rule {
   applyTo: string;
 }
 
-export function CleaningPipeline() {
-  const [removeCommas, setRemoveCommas] = useState<RemoveCommasRule>({
-    id: 'remove-commas',
-    enabled: false,
-    expanded: false,
-    applyTo: 'All Columns'
-  });
+export interface CleaningPipelineState {
+  removeCommas: RemoveCommasRule;
+  stripCurrency: StripCurrencyRule;
+  convertPercentages: ConvertPercentagesRule;
+  convertDateFormat: ConvertDateFormatRule;
+  fillEmptyValues: FillEmptyValuesRule;
+}
 
-  const [stripCurrency, setStripCurrency] = useState<StripCurrencyRule>({
-    id: 'strip-currency',
-    enabled: false,
-    expanded: false,
-    applyTo: 'All Columns'
-  });
+interface CleaningPipelineProps {
+  value?: CleaningPipelineState;
+  onChange?: (state: CleaningPipelineState) => void;
+}
 
-  const [convertPercentages, setConvertPercentages] = useState<ConvertPercentagesRule>({
-    id: 'convert-percentages',
-    enabled: false,
-    expanded: false,
-    percentageMode: 'Decimal (0.125)',
-    applyTo: 'All Columns'
-  });
+const defaultState: CleaningPipelineState = {
+  removeCommas: { id: 'remove-commas', enabled: false, expanded: false, applyTo: 'All Columns' },
+  stripCurrency: { id: 'strip-currency', enabled: false, expanded: false, applyTo: 'All Columns' },
+  convertPercentages: { id: 'convert-percentages', enabled: false, expanded: false, percentageMode: 'Decimal (0.125)', applyTo: 'All Columns' },
+  convertDateFormat: { id: 'convert-date', enabled: false, expanded: false, fromFormat: 'MM/DD/YYYY', toFormat: 'YYYY-MM-DD', applyTo: 'All Columns' },
+  fillEmptyValues: { id: 'fill-empty', enabled: false, expanded: false, fillValue: '', applyTo: 'All Columns' },
+};
 
-  const [convertDateFormat, setConvertDateFormat] = useState<ConvertDateFormatRule>({
-    id: 'convert-date',
-    enabled: false,
-    expanded: false,
-    fromFormat: 'MM/DD/YYYY',
-    toFormat: 'YYYY-MM-DD',
-    applyTo: 'All Columns'
-  });
+export function CleaningPipeline({ value, onChange }: CleaningPipelineProps = {}) {
+  const [removeCommas, setRemoveCommasState] = useState<RemoveCommasRule>(
+    value?.removeCommas || defaultState.removeCommas
+  );
 
-  const [fillEmptyValues, setFillEmptyValues] = useState<FillEmptyValuesRule>({
-    id: 'fill-empty',
-    enabled: false,
-    expanded: false,
-    fillValue: '',
-    applyTo: 'All Columns'
-  });
+  const [stripCurrency, setStripCurrencyState] = useState<StripCurrencyRule>(
+    value?.stripCurrency || defaultState.stripCurrency
+  );
+
+  const [convertPercentages, setConvertPercentagesState] = useState<ConvertPercentagesRule>(
+    value?.convertPercentages || defaultState.convertPercentages
+  );
+
+  const [convertDateFormat, setConvertDateFormatState] = useState<ConvertDateFormatRule>(
+    value?.convertDateFormat || defaultState.convertDateFormat
+  );
+
+  const [fillEmptyValues, setFillEmptyValuesState] = useState<FillEmptyValuesRule>(
+    value?.fillEmptyValues || defaultState.fillEmptyValues
+  );
+
+  useEffect(() => {
+    if (onChange) {
+      onChange({
+        removeCommas,
+        stripCurrency,
+        convertPercentages,
+        convertDateFormat,
+        fillEmptyValues,
+      });
+    }
+  }, [removeCommas, stripCurrency, convertPercentages, convertDateFormat, fillEmptyValues]);
+
+  const setRemoveCommas = (val: RemoveCommasRule) => {
+    setRemoveCommasState(val);
+  };
+  const setStripCurrency = (val: StripCurrencyRule) => {
+    setStripCurrencyState(val);
+  };
+  const setConvertPercentages = (val: ConvertPercentagesRule) => {
+    setConvertPercentagesState(val);
+  };
+  const setConvertDateFormat = (val: ConvertDateFormatRule) => {
+    setConvertDateFormatState(val);
+  };
+  const setFillEmptyValues = (val: FillEmptyValuesRule) => {
+    setFillEmptyValuesState(val);
+  };
 
   const toggleRule = (_ruleId: string, setter: any, currentState: any) => {
     setter({ ...currentState, enabled: !currentState.enabled, expanded: !currentState.enabled });

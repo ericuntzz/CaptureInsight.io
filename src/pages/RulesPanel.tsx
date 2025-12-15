@@ -8,7 +8,7 @@ import {
   Lightbulb,
   Save,
 } from "lucide-react";
-import { CleaningPipeline } from "../components/CleaningPipeline";
+import { CleaningPipeline, CleaningPipelineState } from "../components/CleaningPipeline";
 
 type Section = "rules" | "renaming" | "kpis" | "ai-hints";
 
@@ -83,6 +83,10 @@ export function RulesPanel({
 
   const [aiHints, setAiHints] = useState<string>(initialData?.aiHints || "");
 
+  const [cleaningRules, setCleaningRules] = useState<CleaningPipelineState | null>(
+    initialData?.cleaningRules || null
+  );
+
   const [dirtyState, setDirtyState] = useState<{
     [key in Section]?: boolean;
   }>({});
@@ -94,6 +98,7 @@ export function RulesPanel({
   const [initialColumnRenames] = useState(JSON.stringify(columnRenames));
   const [initialSelectedKPIs] = useState(JSON.stringify(selectedKPIs));
   const [initialAiHints] = useState(aiHints);
+  const [initialCleaningRules] = useState(JSON.stringify(cleaningRules));
 
   useEffect(() => {
     setDirtyState((prev) => ({
@@ -115,6 +120,13 @@ export function RulesPanel({
       "ai-hints": aiHints !== initialAiHints,
     }));
   }, [aiHints, initialAiHints]);
+
+  useEffect(() => {
+    setDirtyState((prev) => ({
+      ...prev,
+      rules: JSON.stringify(cleaningRules) !== initialCleaningRules,
+    }));
+  }, [cleaningRules, initialCleaningRules]);
 
   const kpiFormulas = [
     {
@@ -259,6 +271,9 @@ export function RulesPanel({
     try {
       let data: any;
       switch (section) {
+        case "rules":
+          data = cleaningRules;
+          break;
         case "renaming":
           data = columnRenames;
           break;
@@ -363,7 +378,7 @@ export function RulesPanel({
                   </p>
                 </div>
 
-                <CleaningPipeline />
+                <CleaningPipeline onChange={setCleaningRules} />
 
                 {dirtyState.rules && (
                   <button
