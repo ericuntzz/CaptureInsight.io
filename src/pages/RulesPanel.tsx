@@ -697,25 +697,6 @@ export function RulesPanel({
           </div>
         </div>
 
-        {/* Finish Button - saves all sections */}
-        <div className="flex justify-center mt-8 mb-12">
-          <button
-            onClick={async () => {
-              // Save all sections that have changes
-              const sectionsToSave: Section[] = ['rules', 'renaming', 'kpis', 'ai-hints'];
-              for (const section of sectionsToSave) {
-                await handleSaveSection(section);
-              }
-              onFinish();
-            }}
-            className="px-12 py-4 bg-[#FF6B35] text-white rounded-full hover:scale-105 transition-transform duration-200 text-lg font-medium whitespace-nowrap"
-            style={{
-              boxShadow: "0 0 40px -10px rgba(255, 107, 53, 0.5)",
-            }}
-          >
-            Finish Configuration
-          </button>
-        </div>
         </div>
       </div>
     </div>
