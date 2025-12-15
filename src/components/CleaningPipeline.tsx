@@ -191,7 +191,7 @@ export function CleaningPipeline({ value, onChange }: CleaningPipelineProps = {}
 
       {/* Convert Date Format */}
       <div 
-        className={`rounded-xl border transition-all duration-200 ${
+        className={`rounded-xl border overflow-hidden transition-all duration-200 ${
           convertDateFormat.enabled
             ? 'bg-[#FF6B35] border-[#FF6B35]'
             : 'bg-[#0A0D12] border-[rgba(255,255,255,0.08)] hover:border-[#FF6B35]'
