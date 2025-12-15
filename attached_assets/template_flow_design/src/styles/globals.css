@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-orange: #FF6B35;
+    --deep-dark: #0A0D12;
+    --card-solid: #1A1F2E;
+    --card-glass: rgba(26, 31, 46, 0.6);
+    --text-primary: #FFFFFF;
+    --text-secondary: #9CA3AF;
+    --text-muted: #6B7280;
+    --border-subtle: #2A303C;
+    --border-glass: rgba(255, 255, 255, 0.08);
+  }
+
+  body {
+    @apply bg-[#0A0D12] text-white;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1 {
+    font-weight: 700;
+  }
+
+  h2 {
+    font-weight: 600;
+  }
+
+  h3 {
+    font-weight: 500;
+  }
+
+  p {
+    font-weight: 400;
+  }
+}
