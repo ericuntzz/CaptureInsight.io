@@ -414,17 +414,17 @@ export function RulesPanel({
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="max-w-3xl w-full relative z-10">
         {/* Page Title with Workspace Selector */}
-        <div className="mb-16 text-center">
-          <h1 className="text-3xl sm:text-4xl font-semibold text-white inline-flex items-center justify-center flex-wrap gap-x-3">
+        <div className="mb-20 text-center">
+          <h1 className="text-4xl font-bold text-white inline-flex items-center justify-center flex-wrap gap-x-3">
             <span>Set Rules for How Data is Processed in</span>
-            <span className="relative inline-block ml-1">
+            <span className="relative inline-block ml-3">
               <button
                 onClick={() => setShowWorkspaceDropdown(!showWorkspaceDropdown)}
-                className="text-3xl sm:text-4xl font-semibold text-[#FF6B35] hover:text-[#FF8C5E] transition-colors inline-flex items-center gap-2"
+                className="text-4xl font-bold text-[#FF6B35] hover:text-[#FF8C5E] transition-colors inline-flex items-center gap-2"
               >
                 {workspaceName}
                 <ChevronDown
-                  size={24}
+                  size={28}
                   className={`transition-transform ${showWorkspaceDropdown ? "rotate-180" : ""}`}
                 />
               </button>
