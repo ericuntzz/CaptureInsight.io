@@ -2062,8 +2062,13 @@ export default function App() {
               );
             }
             
+            // Extract batchId from URL to use as key - forces re-mount when batchId changes
+            // This ensures the summary useEffect runs when navigating with a new batchId
+            const urlBatchId = new URLSearchParams(router.search).get('batchId');
+            
             return (
               <InsightWorkspace
+                key={urlBatchId ? `workspace-${urlBatchId}` : 'workspace-default'}
                 onBack={() => handleViewChange('capture')}
                 spaceId={currentSpaceId}
                 insightId={null}
