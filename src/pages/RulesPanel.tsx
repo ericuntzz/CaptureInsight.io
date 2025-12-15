@@ -48,10 +48,10 @@ export function RulesPanel({
   const [expandedSections, setExpandedSections] = useState<{
     [key in Section]?: boolean;
   }>({
-    rules: true,
-    renaming: true,
-    kpis: true,
-    "ai-hints": true,
+    rules: false,
+    renaming: false,
+    kpis: false,
+    "ai-hints": false,
   });
 
   const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
