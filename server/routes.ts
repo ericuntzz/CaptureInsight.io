@@ -4176,6 +4176,189 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== WORKSPACE RULES ====================
+  
+  // Get rules for a workspace
+  app.get('/api/workspaces/:workspaceId/rules', isAuthenticated, requireEntityOwner('workspace', 'workspaceId'), async (req: any, res) => {
+    try {
+      const workspaceId = req.params.workspaceId;
+      const rules = await storage.getWorkspaceRules(workspaceId);
+      
+      if (!rules) {
+        return res.json(null);
+      }
+      
+      res.json({
+        id: rules.id,
+        workspaceId: rules.workspaceId,
+        spaceId: rules.spaceId,
+        name: rules.name,
+        description: rules.description,
+        status: rules.status,
+        draftState: rules.draftState,
+        columnSchema: rules.columnSchema,
+        columnAliases: rules.columnAliases,
+        cleaningPipeline: rules.cleaningPipeline,
+        calculatedFields: rules.calculatedFields,
+        aiPromptHints: rules.aiPromptHints,
+        matchingConfig: rules.matchingConfig,
+        createdBy: rules.createdBy,
+        createdAt: rules.createdAt,
+        updatedAt: rules.updatedAt,
+      });
+    } catch (error) {
+      console.error("Error fetching workspace rules:", error);
+      res.status(500).json({ message: "Failed to fetch workspace rules" });
+    }
+  });
+  
+  // Create or update rules for a workspace (upsert)
+  app.put('/api/workspaces/:workspaceId/rules', isAuthenticated, requireEntityOwner('workspace', 'workspaceId'), async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const workspaceId = req.params.workspaceId;
+      const workspace = req.entity;
+      const spaceId = workspace.spaceId;
+      
+      const {
+        name,
+        description,
+        status,
+        draftState,
+        columnSchema,
+        columnAliases,
+        cleaningPipeline,
+        calculatedFields,
+        aiPromptHints,
+        matchingConfig,
+      } = req.body;
+      
+      const data: any = {};
+      if (name !== undefined) data.name = name;
+      if (description !== undefined) data.description = description;
+      if (status !== undefined) data.status = status;
+      if (draftState !== undefined) data.draftState = draftState;
+      if (columnSchema !== undefined) data.columnSchema = columnSchema;
+      if (columnAliases !== undefined) data.columnAliases = columnAliases;
+      if (cleaningPipeline !== undefined) data.cleaningPipeline = cleaningPipeline;
+      if (calculatedFields !== undefined) data.calculatedFields = calculatedFields;
+      if (aiPromptHints !== undefined) data.aiPromptHints = aiPromptHints;
+      if (matchingConfig !== undefined) data.matchingConfig = matchingConfig;
+      
+      const rules = await storage.upsertWorkspaceRules(workspaceId, spaceId, userId, data);
+      
+      res.json({
+        id: rules.id,
+        workspaceId: rules.workspaceId,
+        spaceId: rules.spaceId,
+        name: rules.name,
+        description: rules.description,
+        status: rules.status,
+        draftState: rules.draftState,
+        columnSchema: rules.columnSchema,
+        columnAliases: rules.columnAliases,
+        cleaningPipeline: rules.cleaningPipeline,
+        calculatedFields: rules.calculatedFields,
+        aiPromptHints: rules.aiPromptHints,
+        matchingConfig: rules.matchingConfig,
+        createdBy: rules.createdBy,
+        createdAt: rules.createdAt,
+        updatedAt: rules.updatedAt,
+      });
+    } catch (error) {
+      console.error("Error upserting workspace rules:", error);
+      res.status(500).json({ message: "Failed to save workspace rules" });
+    }
+  });
+  
+  // Partial update rules for a workspace (for per-section saves)
+  app.patch('/api/workspaces/:workspaceId/rules', isAuthenticated, requireEntityOwner('workspace', 'workspaceId'), async (req: any, res) => {
+    try {
+      const workspaceId = req.params.workspaceId;
+      const userId = req.user.claims.sub;
+      const workspace = req.entity;
+      const spaceId = workspace.spaceId;
+      
+      const {
+        name,
+        description,
+        status,
+        draftState,
+        columnSchema,
+        columnAliases,
+        cleaningPipeline,
+        calculatedFields,
+        aiPromptHints,
+        matchingConfig,
+      } = req.body;
+      
+      const data: any = {};
+      if (name !== undefined) data.name = name;
+      if (description !== undefined) data.description = description;
+      if (status !== undefined) data.status = status;
+      if (draftState !== undefined) data.draftState = draftState;
+      if (columnSchema !== undefined) data.columnSchema = columnSchema;
+      if (columnAliases !== undefined) data.columnAliases = columnAliases;
+      if (cleaningPipeline !== undefined) data.cleaningPipeline = cleaningPipeline;
+      if (calculatedFields !== undefined) data.calculatedFields = calculatedFields;
+      if (aiPromptHints !== undefined) data.aiPromptHints = aiPromptHints;
+      if (matchingConfig !== undefined) data.matchingConfig = matchingConfig;
+      
+      // If no rules exist yet, create them
+      const existing = await storage.getWorkspaceRules(workspaceId);
+      let rules;
+      
+      if (!existing) {
+        rules = await storage.upsertWorkspaceRules(workspaceId, spaceId, userId, data);
+      } else {
+        rules = await storage.patchWorkspaceRules(workspaceId, data);
+      }
+      
+      if (!rules) {
+        return res.status(404).json({ message: "Workspace rules not found" });
+      }
+      
+      res.json({
+        id: rules.id,
+        workspaceId: rules.workspaceId,
+        spaceId: rules.spaceId,
+        name: rules.name,
+        description: rules.description,
+        status: rules.status,
+        draftState: rules.draftState,
+        columnSchema: rules.columnSchema,
+        columnAliases: rules.columnAliases,
+        cleaningPipeline: rules.cleaningPipeline,
+        calculatedFields: rules.calculatedFields,
+        aiPromptHints: rules.aiPromptHints,
+        matchingConfig: rules.matchingConfig,
+        createdBy: rules.createdBy,
+        createdAt: rules.createdAt,
+        updatedAt: rules.updatedAt,
+      });
+    } catch (error) {
+      console.error("Error patching workspace rules:", error);
+      res.status(500).json({ message: "Failed to update workspace rules" });
+    }
+  });
+  
+  // Delete rules for a workspace
+  app.delete('/api/workspaces/:workspaceId/rules', isAuthenticated, requireEntityOwner('workspace', 'workspaceId'), async (req: any, res) => {
+    try {
+      const workspaceId = req.params.workspaceId;
+      const deleted = await storage.deleteWorkspaceRules(workspaceId);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Workspace rules not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting workspace rules:", error);
+      res.status(500).json({ message: "Failed to delete workspace rules" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

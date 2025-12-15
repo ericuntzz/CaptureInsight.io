@@ -16,6 +16,7 @@ import {
   companyMembers,
   userSettings,
   ingestionJobs,
+  dataTemplates,
   type User,
   type UpsertUser,
   type Space,
@@ -50,6 +51,8 @@ import {
   type InsertUserSettings,
   type IngestionJob,
   type InsertIngestionJob,
+  type DataTemplate,
+  type InsertDataTemplate,
 } from "../shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, asc, lte, lt, inArray, sql } from "drizzle-orm";
@@ -1076,6 +1079,79 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return updated;
+  }
+
+  // Workspace Rules operations (using data_templates table)
+  async getWorkspaceRules(workspaceId: string): Promise<DataTemplate | undefined> {
+    const [template] = await db
+      .select()
+      .from(dataTemplates)
+      .where(eq(dataTemplates.workspaceId, workspaceId));
+    return template;
+  }
+
+  async upsertWorkspaceRules(
+    workspaceId: string,
+    spaceId: string,
+    createdBy: string,
+    data: Partial<InsertDataTemplate>
+  ): Promise<DataTemplate> {
+    const existing = await this.getWorkspaceRules(workspaceId);
+    const now = new Date();
+
+    if (existing) {
+      const [updated] = await db
+        .update(dataTemplates)
+        .set({
+          ...data,
+          updatedAt: now,
+        })
+        .where(eq(dataTemplates.workspaceId, workspaceId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(dataTemplates)
+        .values({
+          ...data,
+          workspaceId,
+          spaceId,
+          createdBy,
+          name: data.name || 'Workspace Rules',
+          scope: 'workspace',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+      return created;
+    }
+  }
+
+  async patchWorkspaceRules(
+    workspaceId: string,
+    data: Partial<InsertDataTemplate>
+  ): Promise<DataTemplate | undefined> {
+    const existing = await this.getWorkspaceRules(workspaceId);
+    if (!existing) {
+      return undefined;
+    }
+
+    const [updated] = await db
+      .update(dataTemplates)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(dataTemplates.workspaceId, workspaceId))
+      .returning();
+    return updated;
+  }
+
+  async deleteWorkspaceRules(workspaceId: string): Promise<boolean> {
+    const result = await db
+      .delete(dataTemplates)
+      .where(eq(dataTemplates.workspaceId, workspaceId));
+    return (result.rowCount ?? 0) > 0;
   }
 }
 
