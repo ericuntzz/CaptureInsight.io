@@ -155,6 +155,7 @@ npm run test:watch   # Run tests in watch mode
 ```
 
 ## Recent Changes
+- **2024-12-15**: Added H1 title to Rules page with inline workspace dropdown selector - "Set Rules for How Data is Processed in [Workspace Name]" with "All Workspaces" and "+ Create Workspace" options
 - **2024-12-15**: Fixed Space Goals and AI Instructions - Backend now auto-fetches these from database when spaceId is provided, ensuring AI chat/analysis/summaries respect user-defined goals and instructions
 - **2024-12-15**: Settings sub-pages Back button now returns to main Settings menu instead of exiting to workspace
 - **2024-12-15**: Billing and Security temporarily disabled with "Coming soon once beta is complete..." message

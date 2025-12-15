@@ -29,8 +29,8 @@ interface RulesPanelProps {
   workspaceName: string;
   workspaces: Array<{ id: string; name: string }>;
   onWorkspaceChange: (workspaceId: string) => void;
+  onCreateWorkspace: () => void;
   onSave: (section: string, data: any) => Promise<void>;
-  onFinish: () => void;
   initialData?: {
     cleaningRules?: any;
     columnRenames?: ColumnRename[];
@@ -44,8 +44,8 @@ export function RulesPanel({
   workspaceName,
   workspaces,
   onWorkspaceChange,
+  onCreateWorkspace,
   onSave,
-  onFinish,
   initialData,
 }: RulesPanelProps) {
   const [expandedSections, setExpandedSections] = useState<{
@@ -89,11 +89,11 @@ export function RulesPanel({
     initialData?.cleaningRules || null
   );
 
-  const [dirtyState, setDirtyState] = useState<{
+  const [_dirtyState, setDirtyState] = useState<{
     [key in Section]?: boolean;
   }>({});
 
-  const [savingState, setSavingState] = useState<{
+  const [_savingState, setSavingState] = useState<{
     [key in Section]?: boolean;
   }>({});
 
@@ -109,10 +109,10 @@ export function RulesPanel({
   const savedStatusTimeouts = useRef<{ [key in Section]?: NodeJS.Timeout }>({});
   const autoSaveTimeouts = useRef<{ [key in Section]?: NodeJS.Timeout }>({});
 
-  const [initialColumnRenames] = useState(JSON.stringify(columnRenames));
-  const [initialSelectedKPIs] = useState(JSON.stringify(selectedKPIs));
-  const [initialAiHints] = useState(aiHints);
-  const [initialCleaningRules] = useState(JSON.stringify(cleaningRules));
+  const [_initialColumnRenames] = useState(JSON.stringify(columnRenames));
+  const [_initialSelectedKPIs] = useState(JSON.stringify(selectedKPIs));
+  const [_initialAiHints] = useState(aiHints);
+  const [_initialCleaningRules] = useState(JSON.stringify(cleaningRules));
 
   const [lastSavedColumnRenames, setLastSavedColumnRenames] = useState(JSON.stringify(columnRenames));
   const [lastSavedKPIs, setLastSavedKPIs] = useState(JSON.stringify(selectedKPIs));
@@ -413,6 +413,77 @@ export function RulesPanel({
 
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="max-w-3xl w-full relative z-10">
+        {/* Page Title with Workspace Selector */}
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-white inline-flex items-center justify-center flex-wrap gap-x-2">
+            <span>Set Rules for How Data is Processed in</span>
+            <span className="relative inline-block">
+              <button
+                onClick={() => setShowWorkspaceDropdown(!showWorkspaceDropdown)}
+                className="text-2xl sm:text-3xl font-semibold text-[#FF6B35] hover:text-[#FF8C5E] transition-colors inline-flex items-center gap-1"
+              >
+                {workspaceName}
+                <ChevronDown
+                  size={20}
+                  className={`transition-transform ${showWorkspaceDropdown ? "rotate-180" : ""}`}
+                />
+              </button>
+              {showWorkspaceDropdown && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowWorkspaceDropdown(false)}
+                  />
+                  <div className="absolute top-full left-0 mt-2 bg-[#1A1F2E] border border-[#2A303C] rounded-xl overflow-hidden z-20 min-w-[220px] shadow-xl">
+                    {/* All Workspaces option */}
+                    <button
+                      onClick={() => selectWorkspace("all")}
+                      className={`w-full px-4 py-3 text-left transition-colors ${
+                        workspaceId === "all"
+                          ? "bg-[#FF6B35] text-white"
+                          : "text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-[#FF6B35]"
+                      }`}
+                    >
+                      All Workspaces
+                    </button>
+                    {/* Divider */}
+                    {workspaces.length > 0 && (
+                      <div className="border-t border-[#2A303C]" />
+                    )}
+                    {/* Existing workspaces */}
+                    {workspaces.map((workspace) => (
+                      <button
+                        key={workspace.id}
+                        onClick={() => selectWorkspace(workspace.id)}
+                        className={`w-full px-4 py-3 text-left transition-colors ${
+                          workspace.id === workspaceId
+                            ? "bg-[#FF6B35] text-white"
+                            : "text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-[#FF6B35]"
+                        }`}
+                      >
+                        {workspace.name}
+                      </button>
+                    ))}
+                    {/* Divider */}
+                    <div className="border-t border-[#2A303C]" />
+                    {/* Create Workspace option */}
+                    <button
+                      onClick={() => {
+                        setShowWorkspaceDropdown(false);
+                        onCreateWorkspace();
+                      }}
+                      className="w-full px-4 py-3 text-left text-[#FF6B35] hover:bg-[rgba(255,107,53,0.1)] transition-colors flex items-center gap-2"
+                    >
+                      <Plus size={16} />
+                      <span>Create Workspace</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </span>
+          </h1>
+        </div>
+
         {/* Section 1: Rules for your data */}
         <div className="mb-6">
           <div
@@ -451,43 +522,7 @@ export function RulesPanel({
               <div className="px-8 pb-8">
                 <h2 className="text-xl text-[#9CA3AF] mt-6 mb-2">
                   When data is uploaded to{" "}
-                  <span className="relative inline">
-                    <button
-                      onClick={() =>
-                        setShowWorkspaceDropdown(!showWorkspaceDropdown)
-                      }
-                      className="text-xl text-[#FF6B35] hover:text-[#FF8C5E] transition-colors inline-flex items-center gap-1"
-                    >
-                      {workspaceName}
-                      <ChevronDown
-                        size={16}
-                        className={`transition-transform ${showWorkspaceDropdown ? "rotate-180" : ""}`}
-                      />
-                    </button>
-                    {showWorkspaceDropdown && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-10"
-                          onClick={() => setShowWorkspaceDropdown(false)}
-                        />
-                        <div className="absolute top-full left-0 mt-2 bg-[#1A1F2E] border border-[#2A303C] rounded-xl overflow-hidden z-20 min-w-[200px] shadow-xl">
-                          {workspaces.map((workspace) => (
-                            <button
-                              key={workspace.id}
-                              onClick={() => selectWorkspace(workspace.id)}
-                              className={`w-full px-4 py-3 text-left transition-colors ${
-                                workspace.id === workspaceId
-                                  ? "bg-[#FF6B35] text-white"
-                                  : "text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-[#FF6B35]"
-                              }`}
-                            >
-                              {workspace.name}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </span>, how would you like it to be processed?
+                  <span className="text-[#FF6B35]">{workspaceName}</span>, how would you like it to be processed?
                 </h2>
                 <div className="flex items-center gap-2 mb-6">
                   <div className="w-1 h-4 bg-[#FF6B35] rounded-full"></div>

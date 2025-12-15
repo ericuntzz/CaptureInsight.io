@@ -2072,16 +2072,16 @@ export default function App() {
               const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
               return (
                 <RulesPanel
-                  workspaceId={activeWorkspaceId || ''}
-                  workspaceName={activeWorkspace?.name || 'Workspace'}
+                  workspaceId={activeWorkspaceId || 'all'}
+                  workspaceName={activeWorkspaceId ? (activeWorkspace?.name || 'Workspace') : 'All Workspaces'}
                   workspaces={workspaces.map(w => ({ id: w.id, name: w.name }))}
-                  onWorkspaceChange={setActiveWorkspaceId}
+                  onWorkspaceChange={(newId) => setActiveWorkspaceId(newId === 'all' ? '' : newId)}
+                  onCreateWorkspace={() => toast.info('Click the + button next to "WORKSPACES" in the sidebar to create a new workspace')}
                   onSave={async (section, data) => {
                     if (!activeWorkspaceId) return;
                     await apiRequest('PUT', `/api/workspaces/${activeWorkspaceId}/rules`, { section, data });
                     toast.success('Rules saved successfully');
                   }}
-                  onFinish={() => handleViewChange('workspace')}
                 />
               );
             }
@@ -2407,11 +2407,11 @@ export default function App() {
                 return (
                   <RulesPanel
                     workspaceId={rulesModalWorkspaceId}
-                    workspaceName={currentWorkspace?.name || 'Workspace'}
+                    workspaceName={rulesModalWorkspaceId === 'all' ? 'All Workspaces' : (currentWorkspace?.name || 'Workspace')}
                     workspaces={allWorkspaces}
                     onWorkspaceChange={(newId) => setRulesModalWorkspaceId(newId)}
+                    onCreateWorkspace={() => toast.info('Click the + button next to "WORKSPACES" in the sidebar to create a new workspace')}
                     onSave={handleSaveRulesSection}
-                    onFinish={handleRulesFinish}
                   />
                 );
               })()}
