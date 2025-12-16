@@ -435,6 +435,20 @@ export default function App() {
     }
   }, [activeWorkspaceId]);
   
+  // Fetch workspace rules when on rules page
+  const { data: workspaceRulesData, refetch: refetchWorkspaceRules } = useQuery({
+    queryKey: ['/api/workspaces', activeWorkspaceId, 'rules'],
+    queryFn: async () => {
+      if (!activeWorkspaceId || activeWorkspaceId === 'all') return null;
+      const response = await fetch(`/api/workspaces/${activeWorkspaceId}/rules`, { credentials: 'include' });
+      if (response.status === 404) return null; // No rules yet
+      if (!response.ok) throw new Error('Failed to fetch rules');
+      return response.json();
+    },
+    enabled: currentView === 'rules' && !!activeWorkspaceId && activeWorkspaceId !== 'all',
+    staleTime: 30000,
+  });
+  
   // Track temp workspace ID to update when real ID comes back
   const pendingWorkspaceRef = useRef<string | null>(null);
   
