@@ -2084,18 +2084,52 @@ export default function App() {
             
             if (currentView === 'rules') {
               const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
+              
+              // Map API data to RulesPanel initialData format
+              const rulesInitialData = workspaceRulesData ? {
+                cleaningRules: workspaceRulesData.cleaningPipeline,
+                columnRenames: workspaceRulesData.columnAliases,
+                selectedKPIs: workspaceRulesData.draftState?.selectedKPIs || [],
+                aiHints: workspaceRulesData.aiPromptHints || '',
+              } : undefined;
+              
               return (
                 <RulesPanel
                   workspaceId={activeWorkspaceId || 'all'}
                   workspaceName={activeWorkspaceId ? (activeWorkspace?.name || 'Workspace') : 'All Workspaces'}
                   workspaces={workspaces.map(w => ({ id: w.id, name: w.name }))}
-                  onWorkspaceChange={(newId) => setActiveWorkspaceId(newId === 'all' ? '' : newId)}
+                  onWorkspaceChange={(newId) => {
+                    setActiveWorkspaceId(newId === 'all' ? '' : newId);
+                  }}
                   onCreateWorkspace={() => toast.info('Click the + button next to "WORKSPACES" in the sidebar to create a new workspace')}
                   onSave={async (section, data) => {
                     if (!activeWorkspaceId) return;
-                    await apiRequest('PUT', `/api/workspaces/${activeWorkspaceId}/rules`, { section, data });
+                    
+                    // Map section names to API field names
+                    const sectionToFieldMap: Record<string, string> = {
+                      'rules': 'cleaningPipeline',
+                      'renaming': 'columnAliases',
+                      'kpis': 'draftState',
+                      'ai-hints': 'aiPromptHints',
+                    };
+                    
+                    const fieldName = sectionToFieldMap[section];
+                    if (!fieldName) return;
+                    
+                    // Prepare the payload based on section
+                    let payload: Record<string, any> = {};
+                    if (section === 'kpis') {
+                      // Store KPIs in draftState
+                      payload[fieldName] = { selectedKPIs: data };
+                    } else {
+                      payload[fieldName] = data;
+                    }
+                    
+                    await apiRequest('PUT', `/api/workspaces/${activeWorkspaceId}/rules`, payload);
+                    await refetchWorkspaceRules();
                     toast.success('Rules saved successfully');
                   }}
+                  initialData={rulesInitialData}
                 />
               );
             }
