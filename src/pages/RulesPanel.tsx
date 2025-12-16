@@ -399,7 +399,7 @@ export function RulesPanel({
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0A0D12] flex flex-col items-center justify-center">
+    <div className="h-full overflow-y-auto bg-[#0A0D12] flex flex-col items-stretch justify-center">
       <div className="fixed inset-0 pointer-events-none">
         <div
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full"
@@ -485,8 +485,8 @@ export function RulesPanel({
       </div>
 
       {/* Container 2: Rules Sections */}
-      <div className="flex justify-center px-6">
-        <div className="max-w-5xl w-full relative z-10">
+      <div className="w-full px-6">
+        <div className="max-w-5xl w-full mx-auto relative z-10">
         {/* Section 1: Rules for your data */}
         <div className="mb-6 w-full">
           <div
