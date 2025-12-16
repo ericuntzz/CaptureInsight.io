@@ -488,9 +488,9 @@ export function RulesPanel({
       <div className="flex justify-center px-6">
         <div className="max-w-5xl w-full relative z-10">
         {/* Section 1: Rules for your data */}
-        <div className="mb-6">
+        <div className="mb-6 w-full">
           <div
-            className="bg-[#1A1F2E] rounded-2xl border border-[#2A303C] overflow-hidden"
+            className="w-full bg-[#1A1F2E] rounded-2xl border border-[#2A303C] overflow-hidden"
             style={{
               boxShadow: "0 4px 24px rgba(0, 0, 0, 0.2)",
             }}
@@ -541,9 +541,9 @@ export function RulesPanel({
         </div>
 
         {/* Section 2: Column Renaming */}
-        <div className="mb-6">
+        <div className="mb-6 w-full">
           <div
-            className="bg-[#1A1F2E] rounded-2xl border border-[#2A303C] overflow-hidden"
+            className="w-full bg-[#1A1F2E] rounded-2xl border border-[#2A303C] overflow-hidden"
             style={{
               boxShadow: "0 4px 24px rgba(0, 0, 0, 0.2)",
             }}
@@ -761,9 +761,9 @@ export function RulesPanel({
         </div>
 
         {/* Section 3: Create Calculated KPIs */}
-        <div className="mb-6">
+        <div className="mb-6 w-full">
           <div
-            className="bg-[#1A1F2E] rounded-2xl border border-[#2A303C] overflow-hidden"
+            className="w-full bg-[#1A1F2E] rounded-2xl border border-[#2A303C] overflow-hidden"
             style={{
               boxShadow: "0 4px 24px rgba(0, 0, 0, 0.2)",
             }}
@@ -845,9 +845,9 @@ export function RulesPanel({
         </div>
 
         {/* Section 4: AI Hints */}
-        <div className="mb-6">
+        <div className="mb-6 w-full">
           <div
-            className="bg-[#1A1F2E] rounded-2xl border border-[#2A303C] overflow-hidden"
+            className="w-full bg-[#1A1F2E] rounded-2xl border border-[#2A303C] overflow-hidden"
             style={{
               boxShadow: "0 4px 24px rgba(0, 0, 0, 0.2)",
             }}
