@@ -486,7 +486,7 @@ export function RulesPanel({
 
       {/* Container 2: Rules Sections */}
       <div className="w-full px-6">
-        <div className="max-w-5xl w-full mx-auto relative z-10">
+        <div className="max-w-2xl w-full mx-auto relative z-10">
         {/* Section 1: Rules for your data */}
         <div className="mb-6 w-full">
           <div
