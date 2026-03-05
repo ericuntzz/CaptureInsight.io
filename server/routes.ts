@@ -23,6 +23,7 @@ import { isGoogleSheetsUrl, parseUploadedFile, MAX_FILE_SIZE_BYTES, MAX_CSV_SIZE
 import { triggerDataCleaning } from "./ai/dataCleaning";
 import * as templateService from "./ai/templateService";
 import { serverEncryption } from "./encryption";
+import { computeNextRun } from "./ai/jobScheduler";
 import { db } from "./db";
 import { userEncryptionKeys, serverEncryptionKeys, users, aiFeedback, chatMessages, contactQuestions } from "../shared/schema";
 import { eq } from "drizzle-orm";
@@ -2889,6 +2890,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }
 
+      // Fetch memory context for the AI (global + space-specific)
+      let memoryContext: string | undefined;
+      const userId = req.user.claims.sub;
+      if (spaceId) {
+        try {
+          const memories = await storage.getMemoryContext(userId, spaceId);
+          if (memories.length > 0) {
+            memoryContext = memories
+              .map(m => `- [${m.category || 'general'}] ${m.content}`)
+              .join('\n');
+          }
+        } catch (memErr) {
+          console.error("Failed to fetch memory context (non-fatal):", memErr);
+        }
+      }
+
       const result = await chat({
         messages: chatMessages,
         spaceId,
@@ -2896,6 +2913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         allSpaceIds: Array.isArray(allSpaceIds) ? allSpaceIds.filter((id: any) => id != null) : undefined,
         spaceGoals,
         additionalContext: context,
+        memoryContext,
         useRag: useRag !== false && hasValidSpaceContext,
         useHybridSearch: useHybridSearch !== false,
         useReranking: useReranking !== false,
@@ -2903,6 +2921,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         canvasContext: filteredCanvasContext,
         quickAction: quickAction,
       });
+
+      // Auto-learn: extract learned memories from the AI response
+      if (spaceId && result.response) {
+        try {
+          const learnedMatch = result.response.match(/💡\s*Learned:\s*(.+?)(?:\n|$)/g);
+          if (learnedMatch && learnedMatch.length > 0) {
+            const todayCount = await storage.countTodayAutoLearnedMemories(userId);
+            const remaining = 20 - todayCount;
+            if (remaining > 0) {
+              const entries = learnedMatch.slice(0, remaining).map(line => {
+                const content = line.replace(/💡\s*Learned:\s*/, '').trim();
+                return content;
+              }).filter(c => c.length > 0);
+
+              for (const content of entries) {
+                await storage.createMemory({
+                  userId,
+                  spaceId,
+                  category: 'insight',
+                  content,
+                  source: 'ai_learned',
+                  importance: 5,
+                  metadata: null,
+                });
+              }
+            }
+          }
+        } catch (learnErr) {
+          console.error("Failed to auto-learn memories (non-fatal):", learnErr);
+        }
+      }
+
       res.json(result);
     } catch (error) {
       console.error("Error in AI chat:", error);
@@ -4410,6 +4460,550 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting workspace rules:", error);
       res.status(500).json({ message: "Failed to delete workspace rules" });
+    }
+  });
+
+  // =========================================================================
+  // Agent Skills API Routes
+  // =========================================================================
+
+  // List all available skills (built-in + user-created)
+  app.get('/api/skills', isAuthenticated, async (_req: any, res) => {
+    try {
+      const skills = await storage.getAllSkills();
+      res.json(skills);
+    } catch (error) {
+      console.error("Error fetching skills:", error);
+      res.status(500).json({ message: "Failed to fetch skills" });
+    }
+  });
+
+  // Get skills enabled for a workspace (includes space-wide)
+  app.get('/api/skills/workspace/:workspaceId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { workspaceId } = req.params;
+      const workspace = await storage.getWorkspace(workspaceId);
+      if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+
+      const skills = await storage.getWorkspaceSkills(workspaceId, workspace.spaceId);
+      res.json(skills);
+    } catch (error) {
+      console.error("Error fetching workspace skills:", error);
+      res.status(500).json({ message: "Failed to fetch workspace skills" });
+    }
+  });
+
+  // Get space-wide skills
+  app.get('/api/skills/space/:spaceId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { spaceId } = req.params;
+      const skills = await storage.getSpaceWideSkills(spaceId);
+      res.json(skills);
+    } catch (error) {
+      console.error("Error fetching space skills:", error);
+      res.status(500).json({ message: "Failed to fetch space skills" });
+    }
+  });
+
+  // Create a custom skill
+  app.post('/api/skills', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { name, description, category, config, promptTemplate } = req.body;
+
+      if (!name || typeof name !== 'string') {
+        return res.status(400).json({ message: "Name is required" });
+      }
+      if (!promptTemplate || typeof promptTemplate !== 'string') {
+        return res.status(400).json({ message: "Prompt template is required" });
+      }
+
+      const skill = await storage.createSkill({
+        name,
+        description: description || null,
+        category: category || 'analysis',
+        skillType: 'custom',
+        config: config || {},
+        promptTemplate,
+        isSystem: false,
+        createdBy: userId,
+      });
+
+      res.status(201).json(skill);
+    } catch (error) {
+      console.error("Error creating skill:", error);
+      res.status(500).json({ message: "Failed to create skill" });
+    }
+  });
+
+  // Enable a skill for a workspace or space
+  app.post('/api/skills/:skillId/enable', isAuthenticated, async (req: any, res) => {
+    try {
+      const { skillId } = req.params;
+      const { workspaceId, spaceId, config } = req.body;
+
+      if (!spaceId) return res.status(400).json({ message: "spaceId is required" });
+
+      const skill = await storage.getSkill(skillId);
+      if (!skill) return res.status(404).json({ message: "Skill not found" });
+
+      const wsSkill = await storage.enableSkill({
+        skillId,
+        workspaceId: workspaceId || null,
+        spaceId,
+        isEnabled: true,
+        config: config || null,
+      });
+
+      res.status(201).json(wsSkill);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(409).json({ message: "Skill already enabled for this scope" });
+      }
+      console.error("Error enabling skill:", error);
+      res.status(500).json({ message: "Failed to enable skill" });
+    }
+  });
+
+  // Disable a skill for a workspace or space
+  app.post('/api/skills/:skillId/disable', isAuthenticated, async (req: any, res) => {
+    try {
+      const { skillId } = req.params;
+      const { workspaceId, spaceId } = req.body;
+
+      if (!spaceId) return res.status(400).json({ message: "spaceId is required" });
+
+      const deleted = await storage.disableSkill(skillId, workspaceId || null, spaceId);
+      if (!deleted) return res.status(404).json({ message: "Skill assignment not found" });
+
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error disabling skill:", error);
+      res.status(500).json({ message: "Failed to disable skill" });
+    }
+  });
+
+  // Update workspace-specific skill config
+  app.patch('/api/skills/:skillId/config', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id, config } = req.body;
+      if (!id) return res.status(400).json({ message: "Workspace skill ID is required" });
+
+      const updated = await storage.updateSkillConfig(id, config);
+      if (!updated) return res.status(404).json({ message: "Workspace skill not found" });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating skill config:", error);
+      res.status(500).json({ message: "Failed to update skill config" });
+    }
+  });
+
+  // Execute a skill against workspace data
+  app.post('/api/skills/:skillId/run', isAuthenticated, async (req: any, res) => {
+    try {
+      const { skillId } = req.params;
+      const { workspaceId, spaceId, configOverrides } = req.body;
+
+      if (!workspaceId) return res.status(400).json({ message: "workspaceId is required" });
+
+      const skill = await storage.getSkill(skillId);
+      if (!skill) return res.status(404).json({ message: "Skill not found" });
+
+      // Gather workspace data context
+      const worksheets = await storage.getSheetsByWorkspace(workspaceId);
+      const dataContext = worksheets
+        .filter(s => s.cleanedData)
+        .map(s => {
+          const data = s.cleanedData as any[];
+          const preview = data.slice(0, 50); // Limit to first 50 rows
+          return `Sheet: ${s.name} (${data.length} rows)\n${JSON.stringify(preview, null, 2)}`;
+        })
+        .join('\n\n---\n\n');
+
+      if (!dataContext) {
+        return res.status(400).json({ message: "No data available in this workspace. Upload some data first." });
+      }
+
+      // Merge configs
+      const mergedConfig = { ...((skill.config as any) || {}), ...(configOverrides || {}) };
+
+      // Build the prompt
+      let prompt = skill.promptTemplate || '';
+      prompt = prompt.replace('{{data}}', dataContext);
+      // Replace config placeholders
+      for (const [key, value] of Object.entries(mergedConfig)) {
+        prompt = prompt.replace(new RegExp(`\\{\\{config\\.${key}\\}\\}`, 'g'), String(value));
+      }
+
+      // Fetch memory context for richer results
+      const userId = req.user.claims.sub;
+      let memoryContext: string | undefined;
+      if (spaceId) {
+        try {
+          const memories = await storage.getMemoryContext(userId, spaceId);
+          if (memories.length > 0) {
+            memoryContext = memories.map(m => `- [${m.category || 'general'}] ${m.content}`).join('\n');
+          }
+        } catch {}
+      }
+
+      // Execute via AI chat
+      const result = await chat({
+        messages: [{ role: 'user', content: prompt }],
+        spaceId,
+        workspaceId,
+        memoryContext,
+        useRag: false,
+      });
+
+      res.json({
+        skillId,
+        skillName: skill.name,
+        result: result.response,
+        executedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error executing skill:", error);
+      res.status(500).json({ message: "Failed to execute skill" });
+    }
+  });
+
+  // =========================================================================
+  // Agent Memory API Routes
+  // =========================================================================
+
+  // List memories for the authenticated user
+  app.get('/api/memory', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { spaceId, category, activeOnly } = req.query;
+      const memories = await storage.getMemories(userId, {
+        spaceId: spaceId as string | undefined,
+        category: category as string | undefined,
+        activeOnly: activeOnly === 'true',
+      });
+      res.json(memories);
+    } catch (error) {
+      console.error("Error fetching memories:", error);
+      res.status(500).json({ message: "Failed to fetch memories" });
+    }
+  });
+
+  // Get assembled memory context for AI calls (global + space-specific)
+  app.get('/api/memory/context/:spaceId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { spaceId } = req.params;
+      const memories = await storage.getMemoryContext(userId, spaceId);
+      res.json(memories);
+    } catch (error) {
+      console.error("Error fetching memory context:", error);
+      res.status(500).json({ message: "Failed to fetch memory context" });
+    }
+  });
+
+  // Create a new memory entry (manual)
+  app.post('/api/memory', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { spaceId, category, content, source, importance, metadata } = req.body;
+
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        return res.status(400).json({ message: "Content is required" });
+      }
+
+      const validCategories = ['preference', 'insight', 'pattern', 'context', 'goal'];
+      if (category && !validCategories.includes(category)) {
+        return res.status(400).json({ message: `Invalid category. Must be one of: ${validCategories.join(', ')}` });
+      }
+
+      const validSources = ['user_manual', 'ai_learned', 'system'];
+      const memorySource = source && validSources.includes(source) ? source : 'user_manual';
+
+      if (importance !== undefined && (typeof importance !== 'number' || importance < 1 || importance > 10)) {
+        return res.status(400).json({ message: "Importance must be a number between 1 and 10" });
+      }
+
+      // Validate spaceId ownership if provided
+      if (spaceId) {
+        const space = await storage.getSpace(spaceId);
+        if (!space || space.ownerId !== userId) {
+          return res.status(403).json({ message: "Forbidden: you do not own this space" });
+        }
+      }
+
+      const memory = await storage.createMemory({
+        userId,
+        spaceId: spaceId || null,
+        category: category || 'context',
+        content: content.trim(),
+        source: memorySource,
+        importance: importance ?? 5,
+        metadata: metadata || null,
+      });
+
+      res.status(201).json(memory);
+    } catch (error) {
+      console.error("Error creating memory:", error);
+      res.status(500).json({ message: "Failed to create memory" });
+    }
+  });
+
+  // AI auto-learn endpoint — creates learned memories with rate limiting
+  app.post('/api/memory/ai-learn', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { spaceId, entries } = req.body;
+
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return res.status(400).json({ message: "entries array is required" });
+      }
+
+      // Rate limit: max 20 auto-learned memories per user per day
+      const todayCount = await storage.countTodayAutoLearnedMemories(userId);
+      const MAX_DAILY_AUTO_LEARN = 20;
+      const remaining = MAX_DAILY_AUTO_LEARN - todayCount;
+
+      if (remaining <= 0) {
+        return res.status(429).json({ message: "Daily auto-learn limit reached", limit: MAX_DAILY_AUTO_LEARN });
+      }
+
+      // Validate spaceId ownership if provided
+      if (spaceId) {
+        const space = await storage.getSpace(spaceId);
+        if (!space || space.ownerId !== userId) {
+          return res.status(403).json({ message: "Forbidden: you do not own this space" });
+        }
+      }
+
+      const toCreate = entries.slice(0, remaining);
+      const created: any[] = [];
+
+      for (const entry of toCreate) {
+        if (!entry.content || typeof entry.content !== 'string') continue;
+
+        const memory = await storage.createMemory({
+          userId,
+          spaceId: spaceId || null,
+          category: entry.category || 'insight',
+          content: entry.content.trim(),
+          source: 'ai_learned',
+          importance: entry.importance ?? 5,
+          metadata: entry.metadata || null,
+        });
+        created.push(memory);
+      }
+
+      res.status(201).json({ created, count: created.length, dailyRemaining: remaining - created.length });
+    } catch (error) {
+      console.error("Error auto-learning memories:", error);
+      res.status(500).json({ message: "Failed to auto-learn memories" });
+    }
+  });
+
+  // Update a memory entry
+  app.patch('/api/memory/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+
+      // Verify ownership
+      const existing = await storage.getMemory(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Memory not found" });
+      }
+      if (existing.userId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const { content, category, importance, isActive, metadata } = req.body;
+      const updates: Partial<any> = {};
+
+      if (content !== undefined) {
+        if (typeof content !== 'string' || content.trim().length === 0) {
+          return res.status(400).json({ message: "Content cannot be empty" });
+        }
+        updates.content = content.trim();
+      }
+      if (category !== undefined) {
+        const validCategories = ['preference', 'insight', 'pattern', 'context', 'goal'];
+        if (!validCategories.includes(category)) {
+          return res.status(400).json({ message: `Invalid category` });
+        }
+        updates.category = category;
+      }
+      if (importance !== undefined) {
+        if (typeof importance !== 'number' || importance < 1 || importance > 10) {
+          return res.status(400).json({ message: "Importance must be 1-10" });
+        }
+        updates.importance = importance;
+      }
+      if (isActive !== undefined) {
+        updates.isActive = Boolean(isActive);
+      }
+      if (metadata !== undefined) {
+        updates.metadata = metadata;
+      }
+
+      const updated = await storage.updateMemory(id, updates);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating memory:", error);
+      res.status(500).json({ message: "Failed to update memory" });
+    }
+  });
+
+  // Delete a memory entry
+  app.delete('/api/memory/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+
+      // Verify ownership
+      const existing = await storage.getMemory(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Memory not found" });
+      }
+      if (existing.userId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      await storage.deleteMemory(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting memory:", error);
+      res.status(500).json({ message: "Failed to delete memory" });
+    }
+  });
+
+  // =========================================================================
+  // Scheduled Jobs API Routes
+  // =========================================================================
+
+  // List scheduled jobs for the authenticated user
+  app.get('/api/scheduled-jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { spaceId } = req.query;
+      const jobs = await storage.getScheduledJobs(userId, spaceId as string | undefined);
+      res.json(jobs);
+    } catch (error) {
+      console.error("Error fetching scheduled jobs:", error);
+      res.status(500).json({ message: "Failed to fetch scheduled jobs" });
+    }
+  });
+
+  // Get a single scheduled job
+  app.get('/api/scheduled-jobs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const job = await storage.getScheduledJob(req.params.id);
+      if (!job) return res.status(404).json({ message: "Job not found" });
+      if (job.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      res.json(job);
+    } catch (error) {
+      console.error("Error fetching scheduled job:", error);
+      res.status(500).json({ message: "Failed to fetch scheduled job" });
+    }
+  });
+
+  // Create a scheduled job
+  app.post('/api/scheduled-jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { name, description, spaceId, workspaceId, skillId, cronExpression, timezone, config } = req.body;
+
+      if (!name || !spaceId || !skillId || !cronExpression) {
+        return res.status(400).json({ message: "name, spaceId, skillId, and cronExpression are required" });
+      }
+
+      // Validate skill exists
+      const skill = await storage.getSkill(skillId);
+      if (!skill) return res.status(404).json({ message: "Skill not found" });
+
+      // Compute next run time
+      const nextRunAt = computeNextRun(cronExpression, timezone || 'UTC');
+      if (!nextRunAt) {
+        return res.status(400).json({ message: "Invalid cron expression" });
+      }
+
+      const job = await storage.createScheduledJob({
+        name,
+        description,
+        userId,
+        spaceId,
+        workspaceId: workspaceId || null,
+        skillId,
+        cronExpression,
+        timezone: timezone || 'UTC',
+        config: config || null,
+        nextRunAt,
+      });
+
+      res.status(201).json(job);
+    } catch (error) {
+      console.error("Error creating scheduled job:", error);
+      res.status(500).json({ message: "Failed to create scheduled job" });
+    }
+  });
+
+  // Update a scheduled job
+  app.patch('/api/scheduled-jobs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const existing = await storage.getScheduledJob(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Job not found" });
+      if (existing.userId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+      const updates: any = { ...req.body };
+
+      // If cron expression changed, recompute nextRunAt
+      if (updates.cronExpression) {
+        const nextRunAt = computeNextRun(updates.cronExpression, updates.timezone || existing.timezone || 'UTC');
+        if (!nextRunAt) {
+          return res.status(400).json({ message: "Invalid cron expression" });
+        }
+        updates.nextRunAt = nextRunAt;
+      }
+
+      const updated = await storage.updateScheduledJob(req.params.id, updates);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating scheduled job:", error);
+      res.status(500).json({ message: "Failed to update scheduled job" });
+    }
+  });
+
+  // Delete a scheduled job
+  app.delete('/api/scheduled-jobs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const existing = await storage.getScheduledJob(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Job not found" });
+      if (existing.userId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+      await storage.deleteScheduledJob(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting scheduled job:", error);
+      res.status(500).json({ message: "Failed to delete scheduled job" });
+    }
+  });
+
+  // Get run history for a job
+  app.get('/api/scheduled-jobs/:id/runs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const existing = await storage.getScheduledJob(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Job not found" });
+      if (existing.userId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+      const limit = parseInt(req.query.limit as string) || 20;
+      const runs = await storage.getJobRuns(req.params.id, limit);
+      res.json(runs);
+    } catch (error) {
+      console.error("Error fetching job runs:", error);
+      res.status(500).json({ message: "Failed to fetch job runs" });
     }
   });
 

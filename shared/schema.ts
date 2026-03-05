@@ -920,3 +920,171 @@ export const contactQuestions = pgTable("contact_questions", {
 
 export type InsertContactQuestion = typeof contactQuestions.$inferInsert;
 export type ContactQuestion = typeof contactQuestions.$inferSelect;
+
+// ============================================================================
+// Agent Features: Memory, Skills, Scheduled Jobs
+// ============================================================================
+
+// Agent Memory table — persistent AI memory per user with optional Space scoping
+export const agentMemory = pgTable("agent_memory", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  spaceId: varchar("space_id").references(() => spaces.id), // NULL = global user memory
+  category: varchar("category"), // 'preference' | 'insight' | 'pattern' | 'context' | 'goal'
+  content: text("content").notNull(),
+  source: varchar("source"), // 'user_manual' | 'ai_learned' | 'system'
+  isActive: boolean("is_active").default(true),
+  importance: integer("importance").default(5), // 1-10 scale for retrieval prioritization
+  metadata: jsonb("metadata"), // Flexible: tags, related entities, etc.
+  lastAccessedAt: timestamp("last_accessed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_agent_memory_user").on(table.userId),
+  index("idx_agent_memory_space").on(table.spaceId),
+  index("idx_agent_memory_category").on(table.category),
+]);
+
+export const agentMemoryRelations = relations(agentMemory, ({ one }) => ({
+  user: one(users, {
+    fields: [agentMemory.userId],
+    references: [users.id],
+  }),
+  space: one(spaces, {
+    fields: [agentMemory.spaceId],
+    references: [spaces.id],
+  }),
+}));
+
+export type InsertAgentMemory = typeof agentMemory.$inferInsert;
+export type AgentMemory = typeof agentMemory.$inferSelect;
+
+// Agent Skills table — reusable AI analysis templates (built-in + custom)
+export const agentSkills = pgTable("agent_skills", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  category: varchar("category"), // 'analysis' | 'monitoring' | 'reporting' | 'cleaning'
+  skillType: varchar("skill_type"), // 'builtin' | 'custom'
+  config: jsonb("config"), // Default parameters (thresholds, patterns)
+  promptTemplate: text("prompt_template"), // The Gemini prompt this skill uses
+  isSystem: boolean("is_system").default(false),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const agentSkillsRelations = relations(agentSkills, ({ one }) => ({
+  creator: one(users, {
+    fields: [agentSkills.createdBy],
+    references: [users.id],
+  }),
+}));
+
+export type InsertAgentSkill = typeof agentSkills.$inferInsert;
+export type AgentSkill = typeof agentSkills.$inferSelect;
+
+// Workspace Skills junction table — which skills are enabled where
+export const workspaceSkills = pgTable("workspace_skills", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  skillId: varchar("skill_id").references(() => agentSkills.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id), // NULL = space-wide
+  spaceId: varchar("space_id").references(() => spaces.id).notNull(),
+  isEnabled: boolean("is_enabled").default(true),
+  config: jsonb("config"), // Workspace-specific config overrides
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Partial unique indexes for proper scoping
+  uniqueIndex("idx_ws_skill_workspace").on(table.skillId, table.workspaceId),
+  index("idx_ws_skill_space").on(table.skillId, table.spaceId),
+]);
+
+export const workspaceSkillsRelations = relations(workspaceSkills, ({ one }) => ({
+  skill: one(agentSkills, {
+    fields: [workspaceSkills.skillId],
+    references: [agentSkills.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [workspaceSkills.workspaceId],
+    references: [workspaces.id],
+  }),
+  space: one(spaces, {
+    fields: [workspaceSkills.spaceId],
+    references: [spaces.id],
+  }),
+}));
+
+export type InsertWorkspaceSkill = typeof workspaceSkills.$inferInsert;
+export type WorkspaceSkill = typeof workspaceSkills.$inferSelect;
+
+// ─── Scheduled Jobs ───────────────────────────────────────────────────
+
+export const scheduledJobs = pgTable("scheduled_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  spaceId: varchar("space_id").references(() => spaces.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  skillId: varchar("skill_id").references(() => agentSkills.id).notNull(),
+  cronExpression: varchar("cron_expression").notNull(), // e.g. "0 9 * * 1" (every Monday 9am)
+  timezone: varchar("timezone").default('UTC'),
+  isEnabled: boolean("is_enabled").default(true),
+  config: jsonb("config"), // Override skill config for this job
+  lastRunAt: timestamp("last_run_at"),
+  nextRunAt: timestamp("next_run_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_scheduled_jobs_user").on(table.userId),
+  index("idx_scheduled_jobs_space").on(table.spaceId),
+  index("idx_scheduled_jobs_next_run").on(table.nextRunAt),
+]);
+
+export const scheduledJobsRelations = relations(scheduledJobs, ({ one, many }) => ({
+  user: one(users, {
+    fields: [scheduledJobs.userId],
+    references: [users.id],
+  }),
+  space: one(spaces, {
+    fields: [scheduledJobs.spaceId],
+    references: [spaces.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [scheduledJobs.workspaceId],
+    references: [workspaces.id],
+  }),
+  skill: one(agentSkills, {
+    fields: [scheduledJobs.skillId],
+    references: [agentSkills.id],
+  }),
+  runs: many(jobRunHistory),
+}));
+
+export type InsertScheduledJob = typeof scheduledJobs.$inferInsert;
+export type ScheduledJob = typeof scheduledJobs.$inferSelect;
+
+// Job execution history
+export const jobRunHistory = pgTable("job_run_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => scheduledJobs.id, { onDelete: 'cascade' }).notNull(),
+  status: varchar("status").notNull(), // 'running' | 'success' | 'failed'
+  startedAt: timestamp("started_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  result: text("result"), // Skill output
+  error: text("error"),
+  durationMs: integer("duration_ms"),
+}, (table) => [
+  index("idx_job_run_job").on(table.jobId),
+  index("idx_job_run_status").on(table.status),
+]);
+
+export const jobRunHistoryRelations = relations(jobRunHistory, ({ one }) => ({
+  job: one(scheduledJobs, {
+    fields: [jobRunHistory.jobId],
+    references: [scheduledJobs.id],
+  }),
+}));
+
+export type InsertJobRunHistory = typeof jobRunHistory.$inferInsert;
+export type JobRunHistory = typeof jobRunHistory.$inferSelect;

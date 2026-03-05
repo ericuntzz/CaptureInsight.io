@@ -17,6 +17,11 @@ import {
   userSettings,
   ingestionJobs,
   dataTemplates,
+  agentMemory,
+  agentSkills,
+  workspaceSkills,
+  scheduledJobs,
+  jobRunHistory,
   type User,
   type UpsertUser,
   type Space,
@@ -53,6 +58,16 @@ import {
   type InsertIngestionJob,
   type DataTemplate,
   type InsertDataTemplate,
+  type AgentMemory,
+  type InsertAgentMemory,
+  type AgentSkill,
+  type InsertAgentSkill,
+  type WorkspaceSkill,
+  type InsertWorkspaceSkill,
+  type ScheduledJob,
+  type InsertScheduledJob,
+  type JobRunHistory,
+  type InsertJobRunHistory,
 } from "../shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, asc, lte, lt, inArray, sql } from "drizzle-orm";
@@ -154,6 +169,38 @@ export interface IStorage {
   deleteDocumentEmbedding(entityType: string, entityId: string): Promise<boolean>;
   searchSimilarDocuments(embedding: number[], spaceId: string, limit?: number): Promise<Array<DocumentEmbedding & { similarity: number }>>;
   searchHybridDocuments(options: HybridSearchOptions): Promise<Array<DocumentEmbedding & { similarity: number; keywordScore: number; combinedScore: number }>>;
+
+  // Agent Memory operations
+  getMemories(userId: string, filters?: { spaceId?: string; category?: string; activeOnly?: boolean }): Promise<AgentMemory[]>;
+  getMemoryContext(userId: string, spaceId: string, limit?: number): Promise<AgentMemory[]>;
+  getMemory(id: string): Promise<AgentMemory | undefined>;
+  createMemory(memory: InsertAgentMemory): Promise<AgentMemory>;
+  updateMemory(id: string, memory: Partial<InsertAgentMemory>): Promise<AgentMemory | undefined>;
+  deleteMemory(id: string): Promise<boolean>;
+  countTodayAutoLearnedMemories(userId: string): Promise<number>;
+
+  // Agent Skills operations
+  getAllSkills(): Promise<AgentSkill[]>;
+  getSkill(id: string): Promise<AgentSkill | undefined>;
+  createSkill(skill: InsertAgentSkill): Promise<AgentSkill>;
+  getWorkspaceSkills(workspaceId: string, spaceId: string): Promise<(WorkspaceSkill & { skill: AgentSkill })[]>;
+  getSpaceWideSkills(spaceId: string): Promise<(WorkspaceSkill & { skill: AgentSkill })[]>;
+  enableSkill(data: InsertWorkspaceSkill): Promise<WorkspaceSkill>;
+  disableSkill(skillId: string, workspaceId: string | null, spaceId: string): Promise<boolean>;
+  updateSkillConfig(id: string, config: any): Promise<WorkspaceSkill | undefined>;
+
+  // Scheduled Jobs operations
+  getScheduledJobs(userId: string, spaceId?: string): Promise<(ScheduledJob & { skill: AgentSkill })[]>;
+  getScheduledJob(id: string): Promise<ScheduledJob | undefined>;
+  createScheduledJob(job: InsertScheduledJob): Promise<ScheduledJob>;
+  updateScheduledJob(id: string, job: Partial<InsertScheduledJob>): Promise<ScheduledJob | undefined>;
+  deleteScheduledJob(id: string): Promise<boolean>;
+  getDueJobs(now: Date): Promise<(ScheduledJob & { skill: AgentSkill })[]>;
+
+  // Job Run History operations
+  getJobRuns(jobId: string, limit?: number): Promise<JobRunHistory[]>;
+  createJobRun(run: InsertJobRunHistory): Promise<JobRunHistory>;
+  updateJobRun(id: string, run: Partial<InsertJobRunHistory>): Promise<JobRunHistory | undefined>;
 }
 
 export interface HybridSearchOptions {
@@ -1152,6 +1199,271 @@ export class DatabaseStorage implements IStorage {
       .delete(dataTemplates)
       .where(eq(dataTemplates.workspaceId, workspaceId));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // Agent Memory operations
+  async getMemories(
+    userId: string,
+    filters?: { spaceId?: string; category?: string; activeOnly?: boolean }
+  ): Promise<AgentMemory[]> {
+    const conditions = [eq(agentMemory.userId, userId)];
+    if (filters?.spaceId) {
+      conditions.push(eq(agentMemory.spaceId, filters.spaceId));
+    }
+    if (filters?.category) {
+      conditions.push(eq(agentMemory.category, filters.category));
+    }
+    if (filters?.activeOnly) {
+      conditions.push(eq(agentMemory.isActive, true));
+    }
+    return db
+      .select()
+      .from(agentMemory)
+      .where(and(...conditions))
+      .orderBy(desc(agentMemory.importance), desc(agentMemory.createdAt));
+  }
+
+  async getMemoryContext(userId: string, spaceId: string, limit: number = 20): Promise<AgentMemory[]> {
+    // Fetch global memories (spaceId IS NULL) + space-specific memories, ordered by importance
+    const results = await db
+      .select()
+      .from(agentMemory)
+      .where(
+        and(
+          eq(agentMemory.userId, userId),
+          eq(agentMemory.isActive, true),
+          sql`(${agentMemory.spaceId} IS NULL OR ${agentMemory.spaceId} = ${spaceId})`
+        )
+      )
+      .orderBy(desc(agentMemory.importance), desc(agentMemory.createdAt))
+      .limit(limit);
+
+    // Update lastAccessedAt for retrieved memories
+    if (results.length > 0) {
+      const ids = results.map(m => m.id);
+      await db
+        .update(agentMemory)
+        .set({ lastAccessedAt: new Date() })
+        .where(inArray(agentMemory.id, ids));
+    }
+
+    return results;
+  }
+
+  async getMemory(id: string): Promise<AgentMemory | undefined> {
+    const [memory] = await db.select().from(agentMemory).where(eq(agentMemory.id, id));
+    return memory;
+  }
+
+  async createMemory(memory: InsertAgentMemory): Promise<AgentMemory> {
+    const [created] = await db.insert(agentMemory).values(memory).returning();
+    return created;
+  }
+
+  async updateMemory(id: string, data: Partial<InsertAgentMemory>): Promise<AgentMemory | undefined> {
+    const [updated] = await db
+      .update(agentMemory)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(agentMemory.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteMemory(id: string): Promise<boolean> {
+    const result = await db.delete(agentMemory).where(eq(agentMemory.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async countTodayAutoLearnedMemories(userId: string): Promise<number> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(agentMemory)
+      .where(
+        and(
+          eq(agentMemory.userId, userId),
+          eq(agentMemory.source, 'ai_learned'),
+          sql`${agentMemory.createdAt} >= ${startOfDay}`
+        )
+      );
+    return Number(result?.count ?? 0);
+  }
+
+  // Agent Skills operations
+  async getAllSkills(): Promise<AgentSkill[]> {
+    return db.select().from(agentSkills).orderBy(agentSkills.category, agentSkills.name);
+  }
+
+  async getSkill(id: string): Promise<AgentSkill | undefined> {
+    const [skill] = await db.select().from(agentSkills).where(eq(agentSkills.id, id));
+    return skill;
+  }
+
+  async createSkill(skill: InsertAgentSkill): Promise<AgentSkill> {
+    const [created] = await db.insert(agentSkills).values(skill).returning();
+    return created;
+  }
+
+  async getWorkspaceSkills(workspaceId: string, spaceId: string): Promise<(WorkspaceSkill & { skill: AgentSkill })[]> {
+    // Get skills enabled for this specific workspace + space-wide skills
+    const results = await db
+      .select()
+      .from(workspaceSkills)
+      .innerJoin(agentSkills, eq(workspaceSkills.skillId, agentSkills.id))
+      .where(
+        and(
+          eq(workspaceSkills.spaceId, spaceId),
+          sql`(${workspaceSkills.workspaceId} = ${workspaceId} OR ${workspaceSkills.workspaceId} IS NULL)`
+        )
+      );
+
+    return results.map(r => ({
+      ...r.workspace_skills,
+      skill: r.agent_skills,
+    }));
+  }
+
+  async getSpaceWideSkills(spaceId: string): Promise<(WorkspaceSkill & { skill: AgentSkill })[]> {
+    const results = await db
+      .select()
+      .from(workspaceSkills)
+      .innerJoin(agentSkills, eq(workspaceSkills.skillId, agentSkills.id))
+      .where(
+        and(
+          eq(workspaceSkills.spaceId, spaceId),
+          sql`${workspaceSkills.workspaceId} IS NULL`
+        )
+      );
+
+    return results.map(r => ({
+      ...r.workspace_skills,
+      skill: r.agent_skills,
+    }));
+  }
+
+  async enableSkill(data: InsertWorkspaceSkill): Promise<WorkspaceSkill> {
+    const [created] = await db.insert(workspaceSkills).values(data).returning();
+    return created;
+  }
+
+  async disableSkill(skillId: string, workspaceId: string | null, spaceId: string): Promise<boolean> {
+    let result;
+    if (workspaceId) {
+      result = await db
+        .delete(workspaceSkills)
+        .where(
+          and(
+            eq(workspaceSkills.skillId, skillId),
+            eq(workspaceSkills.workspaceId, workspaceId),
+            eq(workspaceSkills.spaceId, spaceId)
+          )
+        );
+    } else {
+      result = await db
+        .delete(workspaceSkills)
+        .where(
+          and(
+            eq(workspaceSkills.skillId, skillId),
+            eq(workspaceSkills.spaceId, spaceId),
+            sql`${workspaceSkills.workspaceId} IS NULL`
+          )
+        );
+    }
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async updateSkillConfig(id: string, config: any): Promise<WorkspaceSkill | undefined> {
+    const [updated] = await db
+      .update(workspaceSkills)
+      .set({ config })
+      .where(eq(workspaceSkills.id, id))
+      .returning();
+    return updated;
+  }
+
+  // ─── Scheduled Jobs ───────────────────────────────────────────────
+
+  async getScheduledJobs(userId: string, spaceId?: string): Promise<(ScheduledJob & { skill: AgentSkill })[]> {
+    const conditions = [eq(scheduledJobs.userId, userId)];
+    if (spaceId) conditions.push(eq(scheduledJobs.spaceId, spaceId));
+
+    const rows = await db
+      .select()
+      .from(scheduledJobs)
+      .innerJoin(agentSkills, eq(scheduledJobs.skillId, agentSkills.id))
+      .where(and(...conditions))
+      .orderBy(desc(scheduledJobs.createdAt));
+
+    return rows.map((r) => ({ ...r.scheduled_jobs, skill: r.agent_skills }));
+  }
+
+  async getScheduledJob(id: string): Promise<ScheduledJob | undefined> {
+    const [job] = await db
+      .select()
+      .from(scheduledJobs)
+      .where(eq(scheduledJobs.id, id))
+      .limit(1);
+    return job;
+  }
+
+  async createScheduledJob(job: InsertScheduledJob): Promise<ScheduledJob> {
+    const [created] = await db.insert(scheduledJobs).values(job).returning();
+    return created;
+  }
+
+  async updateScheduledJob(id: string, job: Partial<InsertScheduledJob>): Promise<ScheduledJob | undefined> {
+    const [updated] = await db
+      .update(scheduledJobs)
+      .set({ ...job, updatedAt: new Date() })
+      .where(eq(scheduledJobs.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteScheduledJob(id: string): Promise<boolean> {
+    const result = await db.delete(scheduledJobs).where(eq(scheduledJobs.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getDueJobs(now: Date): Promise<(ScheduledJob & { skill: AgentSkill })[]> {
+    const rows = await db
+      .select()
+      .from(scheduledJobs)
+      .innerJoin(agentSkills, eq(scheduledJobs.skillId, agentSkills.id))
+      .where(
+        and(
+          eq(scheduledJobs.isEnabled, true),
+          lte(scheduledJobs.nextRunAt, now)
+        )
+      );
+
+    return rows.map((r) => ({ ...r.scheduled_jobs, skill: r.agent_skills }));
+  }
+
+  // ─── Job Run History ──────────────────────────────────────────────
+
+  async getJobRuns(jobId: string, limit = 20): Promise<JobRunHistory[]> {
+    return db
+      .select()
+      .from(jobRunHistory)
+      .where(eq(jobRunHistory.jobId, jobId))
+      .orderBy(desc(jobRunHistory.startedAt))
+      .limit(limit);
+  }
+
+  async createJobRun(run: InsertJobRunHistory): Promise<JobRunHistory> {
+    const [created] = await db.insert(jobRunHistory).values(run).returning();
+    return created;
+  }
+
+  async updateJobRun(id: string, run: Partial<InsertJobRunHistory>): Promise<JobRunHistory | undefined> {
+    const [updated] = await db
+      .update(jobRunHistory)
+      .set(run)
+      .where(eq(jobRunHistory.id, id))
+      .returning();
+    return updated;
   }
 }
 

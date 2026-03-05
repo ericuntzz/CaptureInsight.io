@@ -37,6 +37,7 @@ import {
   ZoomIn,
   ThumbsUp,
   ThumbsDown,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -91,6 +92,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { TypewriterText } from '../components/TypewriterText';
 import { GlowingDot } from '../components/GlowingDot';
 import { ProcessingOverlay } from '../components/ProcessingOverlay';
+import { SkillsDashboard } from '../components/workspace/SkillsDashboard';
 
 function BouncingDots() {
   return (
@@ -317,6 +319,9 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
   const canvasPanelRef = useRef<ImperativePanelHandle>(null);
   const dataPanelRef = useRef<ImperativePanelHandle>(null);
   
+  // Skills dashboard drawer
+  const [showSkillsDashboard, setShowSkillsDashboard] = useState(false);
+
   // Live panel sizes for continuous opacity calculation (0-100)
   const [chatSize, setChatSize] = useState(30);
   const [canvasSize, setCanvasSize] = useState(45);
@@ -2102,6 +2107,15 @@ export function InsightWorkspace({ onBack, spaceId, insightId, onSidebarCollapse
               >
                 <FileDigit className="w-3 h-3" />
                 Summarize
+              </button>
+              <div className="w-px h-4 bg-[#3A3A3A] mx-1" />
+              <button
+                onClick={() => setShowSkillsDashboard(true)}
+                className="px-2.5 py-1 text-xs bg-gradient-to-r from-[#FF6B35]/20 to-[#2A2A2A] hover:from-[#FF6B35]/30 hover:to-[#3A3A3A] text-[#FF6B35] hover:text-white rounded-md transition-colors flex items-center gap-1.5 border border-[#FF6B35]/20"
+                title="Open Skills Dashboard"
+              >
+                <Zap className="w-3 h-3" />
+                Skills
               </button>
               {isAiTyping && (
                 <div className="flex items-center gap-1.5 text-xs text-[#FF6B35]">
@@ -4738,6 +4752,15 @@ function DataSourcesPanel({ sheets, sources: _sources, sheetsData: _sheetsData, 
           )}
         </div>
       </div>
+
+      {/* Skills Dashboard Drawer */}
+      {showSkillsDashboard && (
+        <SkillsDashboard
+          workspaceId={workspaceId ?? insightId ?? ''}
+          spaceId={spaceId ?? ''}
+          onClose={() => setShowSkillsDashboard(false)}
+        />
+      )}
     </div>
   );
 }

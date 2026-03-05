@@ -314,6 +314,7 @@ export interface RagChatOptions {
   allSpaceIds?: string[];
   spaceGoals?: string;
   additionalContext?: string;
+  memoryContext?: string;
   useRag?: boolean;
   useHybridSearch?: boolean;
   useReranking?: boolean;
@@ -346,20 +347,21 @@ export interface RagChatResponse extends ChatResponse {
 }
 
 export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
-  const { 
-    messages, 
-    spaceId, 
+  const {
+    messages,
+    spaceId,
     workspaceId,
     allSpaceIds,
-    spaceGoals, 
-    additionalContext, 
-    useRag = true, 
+    spaceGoals,
+    additionalContext,
+    memoryContext,
+    useRag = true,
     useHybridSearch = true,
     useReranking = true,
     rerankInstructions,
-    piiFilter, 
-    canvasContext, 
-    quickAction 
+    piiFilter,
+    canvasContext,
+    quickAction
   } = options;
   
   if (!isGeminiConfigured()) {
@@ -477,7 +479,8 @@ export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
       canvasContext || { title: '', notes: '' },
       quickAction,
       contextString,
-      spaceGoals
+      spaceGoals,
+      memoryContext
     );
     
     return {
@@ -488,7 +491,7 @@ export async function chat(options: RagChatOptions): Promise<RagChatResponse> {
     };
   }
 
-  const result = await geminiChat(messagesToSend, contextString, spaceGoals);
+  const result = await geminiChat(messagesToSend, contextString, spaceGoals, memoryContext);
   
   return {
     ...result,

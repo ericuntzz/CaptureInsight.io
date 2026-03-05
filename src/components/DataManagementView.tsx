@@ -135,7 +135,7 @@ interface DataManagementViewProps {
       schedule?: { frequency: string; time: string };
     }
   ) => void;
-  onTopLevelViewChange?: (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace') => void;
+  onTopLevelViewChange?: (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory' | 'scheduled') => void;
   user?: {
     id: string;
     email?: string | null;
@@ -250,10 +250,10 @@ export function DataManagementView({
   const currentSheet = currentFolder?.sheets.find(s => s.id === selectedSheet);
 
   // Handle view changes - most views open locally, workspace bubbles up to top level
-  const handleViewChange = (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace') => {
-    if (view === 'workspace') {
-      // Workspace is a top-level view, bubble up to App.tsx
-      onTopLevelViewChange?.('workspace');
+  const handleViewChange = (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory' | 'scheduled') => {
+    if (view === 'workspace' || view === 'rules' || view === 'memory') {
+      // These are top-level views, bubble up to App.tsx
+      onTopLevelViewChange?.(view);
     } else {
       setActiveView(view);
     }

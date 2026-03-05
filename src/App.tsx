@@ -26,6 +26,8 @@ import { SecuritySettings } from './pages/SecuritySettings';
 import { InsightWorkspace } from './pages/InsightWorkspace';
 import { TemplateManagement } from './pages/TemplateManagement';
 import { RulesPanel } from './pages/RulesPanel';
+import { MemoryPage } from './components/MemoryPage';
+import { ScheduledJobsPage } from './components/ScheduledJobsPage';
 import { ProjectBrowser, Project } from './components/ProjectBrowser';
 import { EmptyWorkspaceState } from './components/EmptyWorkspaceState';
 import { WelcomeModal, useWelcomeModal } from './components/WelcomeModal';
@@ -200,7 +202,7 @@ export default function App() {
   }, [hasRestoredUrl, router.pathname, router.search, router.hash]);
   
   // Initialize view from URL or localStorage
-  const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' | 'rules'>(() => {
+  const [currentView, setCurrentView] = useState<'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory' | 'scheduled'>(() => {
     if (typeof window !== 'undefined') {
       // First check if there's a saved URL to restore
       const savedUrl = localStorage.getItem('captureinsight_current_url');
@@ -290,7 +292,7 @@ export default function App() {
   }, [router.pathname, currentView]);
   
   // Update URL when view changes
-  const handleViewChange = (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' | 'rules', params?: { captureBatchId?: string }) => {
+  const handleViewChange = (view: 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory' | 'scheduled', params?: { captureBatchId?: string }) => {
     setCurrentView(view);
     // Push new URL with optional search params
     let url: string;
@@ -312,6 +314,12 @@ export default function App() {
         break;
       case 'rules':
         url = buildRoute.rules();
+        break;
+      case 'memory':
+        url = buildRoute.memory();
+        break;
+      case 'scheduled':
+        url = buildRoute.scheduled();
         break;
     }
     
@@ -1928,7 +1936,7 @@ export default function App() {
         }}
       />
     );
-  } else if (currentView === 'workspace' || currentView === 'rules') {
+  } else if (currentView === 'workspace' || currentView === 'rules' || currentView === 'memory' || currentView === 'scheduled') {
     // Workspace view with auto-collapsed ProjectBrowser sidebar
     const handleWorkspaceSelectSheet = (projectId: string, _folderId: string, _sheetId: string) => {
       setCurrentSpaceId(projectId);
@@ -2003,7 +2011,7 @@ export default function App() {
       }
     };
     
-    const handleWorkspaceViewChange = (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace') => {
+    const handleWorkspaceViewChange = (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory' | 'scheduled') => {
       if (view === 'ai') {
         handleViewChange('data');
       } else if (view === 'data' || view === 'changelogs' || view === 'insights' || view === 'workspace') {
@@ -2035,7 +2043,7 @@ export default function App() {
             handleViewChange('capture');
             toast.info('Create a new capture');
           }}
-          activeView={currentView === 'rules' ? 'rules' : 'workspace'}
+          activeView={currentView === 'rules' ? 'rules' : currentView === 'memory' ? 'memory' : currentView === 'scheduled' ? 'scheduled' : 'workspace'}
           onViewChange={handleWorkspaceViewChange}
           onBackToCapture={() => handleViewChange('capture')}
           externalCollapseControl={sidebarCollapsed}
@@ -2050,6 +2058,8 @@ export default function App() {
           newlyCreatedWorkspaceId={newlyCreatedWorkspaceId}
           onNewlyCreatedWorkspaceHandled={() => setNewlyCreatedWorkspaceId(null)}
           onNavigateToRules={() => handleViewChange('rules')}
+          onNavigateToMemory={() => handleViewChange('memory')}
+          onNavigateToScheduled={() => handleViewChange('scheduled')}
         />
         
         {/* Main Workspace Content */}
@@ -2082,6 +2092,24 @@ export default function App() {
               );
             }
             
+            if (currentView === 'memory') {
+              return (
+                <MemoryPage
+                  spaces={(spaces || []).map(s => ({ id: s.id, name: s.name }))}
+                  currentSpaceId={currentSpaceId}
+                />
+              );
+            }
+
+            if (currentView === 'scheduled') {
+              return (
+                <ScheduledJobsPage
+                  spaces={(spaces || []).map(s => ({ id: s.id, name: s.name }))}
+                  currentSpaceId={currentSpaceId}
+                />
+              );
+            }
+
             if (currentView === 'rules') {
               const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
               
