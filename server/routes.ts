@@ -4463,6 +4463,212 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // =========================================================================
+  // Agent Skills API Routes
+  // =========================================================================
+
+  // List all available skills (built-in + user-created)
+  app.get('/api/skills', isAuthenticated, async (_req: any, res) => {
+    try {
+      const skills = await storage.getAllSkills();
+      res.json(skills);
+    } catch (error) {
+      console.error("Error fetching skills:", error);
+      res.status(500).json({ message: "Failed to fetch skills" });
+    }
+  });
+
+  // Get skills enabled for a workspace (includes space-wide)
+  app.get('/api/skills/workspace/:workspaceId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { workspaceId } = req.params;
+      const workspace = await storage.getWorkspace(workspaceId);
+      if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+
+      const skills = await storage.getWorkspaceSkills(workspaceId, workspace.spaceId);
+      res.json(skills);
+    } catch (error) {
+      console.error("Error fetching workspace skills:", error);
+      res.status(500).json({ message: "Failed to fetch workspace skills" });
+    }
+  });
+
+  // Get space-wide skills
+  app.get('/api/skills/space/:spaceId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { spaceId } = req.params;
+      const skills = await storage.getSpaceWideSkills(spaceId);
+      res.json(skills);
+    } catch (error) {
+      console.error("Error fetching space skills:", error);
+      res.status(500).json({ message: "Failed to fetch space skills" });
+    }
+  });
+
+  // Create a custom skill
+  app.post('/api/skills', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { name, description, category, config, promptTemplate } = req.body;
+
+      if (!name || typeof name !== 'string') {
+        return res.status(400).json({ message: "Name is required" });
+      }
+      if (!promptTemplate || typeof promptTemplate !== 'string') {
+        return res.status(400).json({ message: "Prompt template is required" });
+      }
+
+      const skill = await storage.createSkill({
+        name,
+        description: description || null,
+        category: category || 'analysis',
+        skillType: 'custom',
+        config: config || {},
+        promptTemplate,
+        isSystem: false,
+        createdBy: userId,
+      });
+
+      res.status(201).json(skill);
+    } catch (error) {
+      console.error("Error creating skill:", error);
+      res.status(500).json({ message: "Failed to create skill" });
+    }
+  });
+
+  // Enable a skill for a workspace or space
+  app.post('/api/skills/:skillId/enable', isAuthenticated, async (req: any, res) => {
+    try {
+      const { skillId } = req.params;
+      const { workspaceId, spaceId, config } = req.body;
+
+      if (!spaceId) return res.status(400).json({ message: "spaceId is required" });
+
+      const skill = await storage.getSkill(skillId);
+      if (!skill) return res.status(404).json({ message: "Skill not found" });
+
+      const wsSkill = await storage.enableSkill({
+        skillId,
+        workspaceId: workspaceId || null,
+        spaceId,
+        isEnabled: true,
+        config: config || null,
+      });
+
+      res.status(201).json(wsSkill);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(409).json({ message: "Skill already enabled for this scope" });
+      }
+      console.error("Error enabling skill:", error);
+      res.status(500).json({ message: "Failed to enable skill" });
+    }
+  });
+
+  // Disable a skill for a workspace or space
+  app.post('/api/skills/:skillId/disable', isAuthenticated, async (req: any, res) => {
+    try {
+      const { skillId } = req.params;
+      const { workspaceId, spaceId } = req.body;
+
+      if (!spaceId) return res.status(400).json({ message: "spaceId is required" });
+
+      const deleted = await storage.disableSkill(skillId, workspaceId || null, spaceId);
+      if (!deleted) return res.status(404).json({ message: "Skill assignment not found" });
+
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error disabling skill:", error);
+      res.status(500).json({ message: "Failed to disable skill" });
+    }
+  });
+
+  // Update workspace-specific skill config
+  app.patch('/api/skills/:skillId/config', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id, config } = req.body;
+      if (!id) return res.status(400).json({ message: "Workspace skill ID is required" });
+
+      const updated = await storage.updateSkillConfig(id, config);
+      if (!updated) return res.status(404).json({ message: "Workspace skill not found" });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating skill config:", error);
+      res.status(500).json({ message: "Failed to update skill config" });
+    }
+  });
+
+  // Execute a skill against workspace data
+  app.post('/api/skills/:skillId/run', isAuthenticated, async (req: any, res) => {
+    try {
+      const { skillId } = req.params;
+      const { workspaceId, spaceId, configOverrides } = req.body;
+
+      if (!workspaceId) return res.status(400).json({ message: "workspaceId is required" });
+
+      const skill = await storage.getSkill(skillId);
+      if (!skill) return res.status(404).json({ message: "Skill not found" });
+
+      // Gather workspace data context
+      const worksheets = await storage.getSheetsByWorkspace(workspaceId);
+      const dataContext = worksheets
+        .filter(s => s.cleanedData)
+        .map(s => {
+          const data = s.cleanedData as any[];
+          const preview = data.slice(0, 50); // Limit to first 50 rows
+          return `Sheet: ${s.name} (${data.length} rows)\n${JSON.stringify(preview, null, 2)}`;
+        })
+        .join('\n\n---\n\n');
+
+      if (!dataContext) {
+        return res.status(400).json({ message: "No data available in this workspace. Upload some data first." });
+      }
+
+      // Merge configs
+      const mergedConfig = { ...((skill.config as any) || {}), ...(configOverrides || {}) };
+
+      // Build the prompt
+      let prompt = skill.promptTemplate || '';
+      prompt = prompt.replace('{{data}}', dataContext);
+      // Replace config placeholders
+      for (const [key, value] of Object.entries(mergedConfig)) {
+        prompt = prompt.replace(new RegExp(`\\{\\{config\\.${key}\\}\\}`, 'g'), String(value));
+      }
+
+      // Fetch memory context for richer results
+      const userId = req.user.claims.sub;
+      let memoryContext: string | undefined;
+      if (spaceId) {
+        try {
+          const memories = await storage.getMemoryContext(userId, spaceId);
+          if (memories.length > 0) {
+            memoryContext = memories.map(m => `- [${m.category || 'general'}] ${m.content}`).join('\n');
+          }
+        } catch {}
+      }
+
+      // Execute via AI chat
+      const result = await chat({
+        messages: [{ role: 'user', content: prompt }],
+        spaceId,
+        workspaceId,
+        memoryContext,
+        useRag: false,
+      });
+
+      res.json({
+        skillId,
+        skillName: skill.name,
+        result: result.response,
+        executedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error executing skill:", error);
+      res.status(500).json({ message: "Failed to execute skill" });
+    }
+  });
+
+  // =========================================================================
   // Agent Memory API Routes
   // =========================================================================
 

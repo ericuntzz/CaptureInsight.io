@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { registerRoutes } from "./routes";
 import { startBackgroundProcessor } from "./ai/backgroundProcessor";
+import { seedBuiltinSkills } from "./ai/skillsLibrary";
 
 const app = express();
 
@@ -29,5 +30,8 @@ app.use(express.urlencoded({ extended: true }));
     
     // Start background processor for automatic data processing
     startBackgroundProcessor();
+
+    // Seed built-in skills (idempotent)
+    seedBuiltinSkills().catch(err => console.error('[Skills] Seeding failed:', err));
   });
 })();

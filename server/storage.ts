@@ -18,6 +18,8 @@ import {
   ingestionJobs,
   dataTemplates,
   agentMemory,
+  agentSkills,
+  workspaceSkills,
   type User,
   type UpsertUser,
   type Space,
@@ -56,6 +58,10 @@ import {
   type InsertDataTemplate,
   type AgentMemory,
   type InsertAgentMemory,
+  type AgentSkill,
+  type InsertAgentSkill,
+  type WorkspaceSkill,
+  type InsertWorkspaceSkill,
 } from "../shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, asc, lte, lt, inArray, sql } from "drizzle-orm";
@@ -166,6 +172,16 @@ export interface IStorage {
   updateMemory(id: string, memory: Partial<InsertAgentMemory>): Promise<AgentMemory | undefined>;
   deleteMemory(id: string): Promise<boolean>;
   countTodayAutoLearnedMemories(userId: string): Promise<number>;
+
+  // Agent Skills operations
+  getAllSkills(): Promise<AgentSkill[]>;
+  getSkill(id: string): Promise<AgentSkill | undefined>;
+  createSkill(skill: InsertAgentSkill): Promise<AgentSkill>;
+  getWorkspaceSkills(workspaceId: string, spaceId: string): Promise<(WorkspaceSkill & { skill: AgentSkill })[]>;
+  getSpaceWideSkills(spaceId: string): Promise<(WorkspaceSkill & { skill: AgentSkill })[]>;
+  enableSkill(data: InsertWorkspaceSkill): Promise<WorkspaceSkill>;
+  disableSkill(skillId: string, workspaceId: string | null, spaceId: string): Promise<boolean>;
+  updateSkillConfig(id: string, config: any): Promise<WorkspaceSkill | undefined>;
 }
 
 export interface HybridSearchOptions {
@@ -1253,6 +1269,98 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return Number(result?.count ?? 0);
+  }
+
+  // Agent Skills operations
+  async getAllSkills(): Promise<AgentSkill[]> {
+    return db.select().from(agentSkills).orderBy(agentSkills.category, agentSkills.name);
+  }
+
+  async getSkill(id: string): Promise<AgentSkill | undefined> {
+    const [skill] = await db.select().from(agentSkills).where(eq(agentSkills.id, id));
+    return skill;
+  }
+
+  async createSkill(skill: InsertAgentSkill): Promise<AgentSkill> {
+    const [created] = await db.insert(agentSkills).values(skill).returning();
+    return created;
+  }
+
+  async getWorkspaceSkills(workspaceId: string, spaceId: string): Promise<(WorkspaceSkill & { skill: AgentSkill })[]> {
+    // Get skills enabled for this specific workspace + space-wide skills
+    const results = await db
+      .select()
+      .from(workspaceSkills)
+      .innerJoin(agentSkills, eq(workspaceSkills.skillId, agentSkills.id))
+      .where(
+        and(
+          eq(workspaceSkills.spaceId, spaceId),
+          sql`(${workspaceSkills.workspaceId} = ${workspaceId} OR ${workspaceSkills.workspaceId} IS NULL)`
+        )
+      );
+
+    return results.map(r => ({
+      ...r.workspace_skills,
+      skill: r.agent_skills,
+    }));
+  }
+
+  async getSpaceWideSkills(spaceId: string): Promise<(WorkspaceSkill & { skill: AgentSkill })[]> {
+    const results = await db
+      .select()
+      .from(workspaceSkills)
+      .innerJoin(agentSkills, eq(workspaceSkills.skillId, agentSkills.id))
+      .where(
+        and(
+          eq(workspaceSkills.spaceId, spaceId),
+          sql`${workspaceSkills.workspaceId} IS NULL`
+        )
+      );
+
+    return results.map(r => ({
+      ...r.workspace_skills,
+      skill: r.agent_skills,
+    }));
+  }
+
+  async enableSkill(data: InsertWorkspaceSkill): Promise<WorkspaceSkill> {
+    const [created] = await db.insert(workspaceSkills).values(data).returning();
+    return created;
+  }
+
+  async disableSkill(skillId: string, workspaceId: string | null, spaceId: string): Promise<boolean> {
+    let result;
+    if (workspaceId) {
+      result = await db
+        .delete(workspaceSkills)
+        .where(
+          and(
+            eq(workspaceSkills.skillId, skillId),
+            eq(workspaceSkills.workspaceId, workspaceId),
+            eq(workspaceSkills.spaceId, spaceId)
+          )
+        );
+    } else {
+      result = await db
+        .delete(workspaceSkills)
+        .where(
+          and(
+            eq(workspaceSkills.skillId, skillId),
+            eq(workspaceSkills.spaceId, spaceId),
+            sql`${workspaceSkills.workspaceId} IS NULL`
+          )
+        );
+    }
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async updateSkillConfig(id: string, config: any): Promise<WorkspaceSkill | undefined> {
+    const [updated] = await db
+      .update(workspaceSkills)
+      .set({ config })
+      .where(eq(workspaceSkills.id, id))
+      .returning();
+    return updated;
   }
 }
 

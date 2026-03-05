@@ -958,3 +958,61 @@ export const agentMemoryRelations = relations(agentMemory, ({ one }) => ({
 
 export type InsertAgentMemory = typeof agentMemory.$inferInsert;
 export type AgentMemory = typeof agentMemory.$inferSelect;
+
+// Agent Skills table — reusable AI analysis templates (built-in + custom)
+export const agentSkills = pgTable("agent_skills", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  category: varchar("category"), // 'analysis' | 'monitoring' | 'reporting' | 'cleaning'
+  skillType: varchar("skill_type"), // 'builtin' | 'custom'
+  config: jsonb("config"), // Default parameters (thresholds, patterns)
+  promptTemplate: text("prompt_template"), // The Gemini prompt this skill uses
+  isSystem: boolean("is_system").default(false),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const agentSkillsRelations = relations(agentSkills, ({ one }) => ({
+  creator: one(users, {
+    fields: [agentSkills.createdBy],
+    references: [users.id],
+  }),
+}));
+
+export type InsertAgentSkill = typeof agentSkills.$inferInsert;
+export type AgentSkill = typeof agentSkills.$inferSelect;
+
+// Workspace Skills junction table — which skills are enabled where
+export const workspaceSkills = pgTable("workspace_skills", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  skillId: varchar("skill_id").references(() => agentSkills.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id), // NULL = space-wide
+  spaceId: varchar("space_id").references(() => spaces.id).notNull(),
+  isEnabled: boolean("is_enabled").default(true),
+  config: jsonb("config"), // Workspace-specific config overrides
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Partial unique indexes for proper scoping
+  uniqueIndex("idx_ws_skill_workspace").on(table.skillId, table.workspaceId),
+  index("idx_ws_skill_space").on(table.skillId, table.spaceId),
+]);
+
+export const workspaceSkillsRelations = relations(workspaceSkills, ({ one }) => ({
+  skill: one(agentSkills, {
+    fields: [workspaceSkills.skillId],
+    references: [agentSkills.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [workspaceSkills.workspaceId],
+    references: [workspaces.id],
+  }),
+  space: one(spaces, {
+    fields: [workspaceSkills.spaceId],
+    references: [spaces.id],
+  }),
+}));
+
+export type InsertWorkspaceSkill = typeof workspaceSkills.$inferInsert;
+export type WorkspaceSkill = typeof workspaceSkills.$inferSelect;
