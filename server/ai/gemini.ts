@@ -214,10 +214,11 @@ export interface ChatResponse {
 export async function chat(
   messages: ChatMessage[],
   context?: string,
-  spaceGoals?: string
+  spaceGoals?: string,
+  memoryContext?: string
 ): Promise<ChatResponse> {
   return rateLimiter(async () => {
-    const systemPrompt = buildChatPrompt(spaceGoals, context);
+    const systemPrompt = buildChatPrompt(spaceGoals, context, memoryContext);
     
     const contents = messages.map((msg) => ({
       role: msg.role === "assistant" ? "model" : "user",
@@ -288,17 +289,18 @@ export async function chatWithCanvas(
   canvasContext: CanvasContext,
   quickAction?: string,
   context?: string,
-  spaceGoals?: string
+  spaceGoals?: string,
+  memoryContext?: string
 ): Promise<CanvasEditResponse> {
   return rateLimiter(async () => {
     let systemPrompt: string;
     let userPrompt: string | null = null;
-    
+
     if (quickAction) {
       systemPrompt = buildCanvasEditPrompt(quickAction, canvasContext);
       userPrompt = `Apply the "${quickAction}" transformation now and return the result in JSON format with editProposals.`;
     } else {
-      systemPrompt = buildCanvasAwareChatPrompt(spaceGoals, context, canvasContext);
+      systemPrompt = buildCanvasAwareChatPrompt(spaceGoals, context, canvasContext, memoryContext);
     }
     
     const contents = messages.map((msg) => ({

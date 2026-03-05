@@ -336,17 +336,31 @@ export function buildAnalysisPrompt(type: 'screenshot' | 'data' | 'kpi', context
   return `${EXPERT_BUSINESS_ANALYST_PERSONA}\n\n${basePrompt}`;
 }
 
-export function buildChatPrompt(spaceGoals?: string, insightContext?: string): string {
+export const MEMORY_CONTEXT_PROMPT = `## Agent Memory
+The following are things you remember about this user and their data from previous interactions. Use these memories to personalize your responses and provide more relevant analysis.
+
+When referencing a memory, do so naturally — don't say "According to my memory" or "I remember that." Just use the knowledge naturally.
+
+If you learn something new and important from this conversation (a user preference, a key metric, a recurring pattern, important terminology, or a stated goal), note it briefly at the end of your response with a line like:
+💡 Learned: [what you learned]
+
+Only note genuinely new, useful information — not things already in your memory.`;
+
+export function buildChatPrompt(spaceGoals?: string, insightContext?: string, memoryContext?: string): string {
   let prompt = `${EXPERT_BUSINESS_ANALYST_PERSONA}\n\n${CHAT_CONTEXT_PROMPT}`;
-  
+
+  if (memoryContext) {
+    prompt += `\n\n${MEMORY_CONTEXT_PROMPT}\n\n${memoryContext}`;
+  }
+
   if (spaceGoals) {
     prompt += `\n\nSPACE GOALS:\n${spaceGoals}`;
   }
-  
+
   if (insightContext) {
     prompt += `\n\nINSIGHT CONTEXT:\n${insightContext}`;
   }
-  
+
   return prompt;
 }
 
@@ -427,23 +441,27 @@ export function buildCanvasEditPrompt(action: string, canvasContext: { title: st
   return prompt;
 }
 
-export function buildCanvasAwareChatPrompt(spaceGoals?: string, insightContext?: string, canvasContext?: { title: string; notes: string }): string {
+export function buildCanvasAwareChatPrompt(spaceGoals?: string, insightContext?: string, canvasContext?: { title: string; notes: string }, memoryContext?: string): string {
   let prompt = `${EXPERT_BUSINESS_ANALYST_PERSONA}\n\n${CHAT_CONTEXT_PROMPT}`;
-  
+
+  if (memoryContext) {
+    prompt += `\n\n${MEMORY_CONTEXT_PROMPT}\n\n${memoryContext}`;
+  }
+
   if (spaceGoals) {
     prompt += `\n\nSPACE GOALS:\n${spaceGoals}`;
   }
-  
+
   if (insightContext) {
     prompt += `\n\nINSIGHT CONTEXT:\n${insightContext}`;
   }
-  
+
   if (canvasContext) {
     prompt += `\n\nCURRENT CANVAS CONTENT:`;
     prompt += `\nTitle: ${canvasContext.title}`;
     prompt += `\nNotes:\n${canvasContext.notes}`;
     prompt += `\n\nYou can see the user's current canvas/document. If they ask about it or want you to help edit it, you can propose changes using structured edit proposals.`;
   }
-  
+
   return prompt;
 }

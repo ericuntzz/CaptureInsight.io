@@ -2889,6 +2889,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }
 
+      // Fetch memory context for the AI (global + space-specific)
+      let memoryContext: string | undefined;
+      const userId = req.user.claims.sub;
+      if (spaceId) {
+        try {
+          const memories = await storage.getMemoryContext(userId, spaceId);
+          if (memories.length > 0) {
+            memoryContext = memories
+              .map(m => `- [${m.category || 'general'}] ${m.content}`)
+              .join('\n');
+          }
+        } catch (memErr) {
+          console.error("Failed to fetch memory context (non-fatal):", memErr);
+        }
+      }
+
       const result = await chat({
         messages: chatMessages,
         spaceId,
@@ -2896,6 +2912,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         allSpaceIds: Array.isArray(allSpaceIds) ? allSpaceIds.filter((id: any) => id != null) : undefined,
         spaceGoals,
         additionalContext: context,
+        memoryContext,
         useRag: useRag !== false && hasValidSpaceContext,
         useHybridSearch: useHybridSearch !== false,
         useReranking: useReranking !== false,
@@ -2903,6 +2920,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         canvasContext: filteredCanvasContext,
         quickAction: quickAction,
       });
+
+      // Auto-learn: extract learned memories from the AI response
+      if (spaceId && result.response) {
+        try {
+          const learnedMatch = result.response.match(/💡\s*Learned:\s*(.+?)(?:\n|$)/g);
+          if (learnedMatch && learnedMatch.length > 0) {
+            const todayCount = await storage.countTodayAutoLearnedMemories(userId);
+            const remaining = 20 - todayCount;
+            if (remaining > 0) {
+              const entries = learnedMatch.slice(0, remaining).map(line => {
+                const content = line.replace(/💡\s*Learned:\s*/, '').trim();
+                return content;
+              }).filter(c => c.length > 0);
+
+              for (const content of entries) {
+                await storage.createMemory({
+                  userId,
+                  spaceId,
+                  category: 'insight',
+                  content,
+                  source: 'ai_learned',
+                  importance: 5,
+                  metadata: null,
+                });
+              }
+            }
+          }
+        } catch (learnErr) {
+          console.error("Failed to auto-learn memories (non-fatal):", learnErr);
+        }
+      }
+
       res.json(result);
     } catch (error) {
       console.error("Error in AI chat:", error);
@@ -4410,6 +4459,214 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting workspace rules:", error);
       res.status(500).json({ message: "Failed to delete workspace rules" });
+    }
+  });
+
+  // =========================================================================
+  // Agent Memory API Routes
+  // =========================================================================
+
+  // List memories for the authenticated user
+  app.get('/api/memory', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { spaceId, category, activeOnly } = req.query;
+      const memories = await storage.getMemories(userId, {
+        spaceId: spaceId as string | undefined,
+        category: category as string | undefined,
+        activeOnly: activeOnly === 'true',
+      });
+      res.json(memories);
+    } catch (error) {
+      console.error("Error fetching memories:", error);
+      res.status(500).json({ message: "Failed to fetch memories" });
+    }
+  });
+
+  // Get assembled memory context for AI calls (global + space-specific)
+  app.get('/api/memory/context/:spaceId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { spaceId } = req.params;
+      const memories = await storage.getMemoryContext(userId, spaceId);
+      res.json(memories);
+    } catch (error) {
+      console.error("Error fetching memory context:", error);
+      res.status(500).json({ message: "Failed to fetch memory context" });
+    }
+  });
+
+  // Create a new memory entry (manual)
+  app.post('/api/memory', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { spaceId, category, content, source, importance, metadata } = req.body;
+
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        return res.status(400).json({ message: "Content is required" });
+      }
+
+      const validCategories = ['preference', 'insight', 'pattern', 'context', 'goal'];
+      if (category && !validCategories.includes(category)) {
+        return res.status(400).json({ message: `Invalid category. Must be one of: ${validCategories.join(', ')}` });
+      }
+
+      const validSources = ['user_manual', 'ai_learned', 'system'];
+      const memorySource = source && validSources.includes(source) ? source : 'user_manual';
+
+      if (importance !== undefined && (typeof importance !== 'number' || importance < 1 || importance > 10)) {
+        return res.status(400).json({ message: "Importance must be a number between 1 and 10" });
+      }
+
+      // Validate spaceId ownership if provided
+      if (spaceId) {
+        const space = await storage.getSpace(spaceId);
+        if (!space || space.ownerId !== userId) {
+          return res.status(403).json({ message: "Forbidden: you do not own this space" });
+        }
+      }
+
+      const memory = await storage.createMemory({
+        userId,
+        spaceId: spaceId || null,
+        category: category || 'context',
+        content: content.trim(),
+        source: memorySource,
+        importance: importance ?? 5,
+        metadata: metadata || null,
+      });
+
+      res.status(201).json(memory);
+    } catch (error) {
+      console.error("Error creating memory:", error);
+      res.status(500).json({ message: "Failed to create memory" });
+    }
+  });
+
+  // AI auto-learn endpoint — creates learned memories with rate limiting
+  app.post('/api/memory/ai-learn', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { spaceId, entries } = req.body;
+
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return res.status(400).json({ message: "entries array is required" });
+      }
+
+      // Rate limit: max 20 auto-learned memories per user per day
+      const todayCount = await storage.countTodayAutoLearnedMemories(userId);
+      const MAX_DAILY_AUTO_LEARN = 20;
+      const remaining = MAX_DAILY_AUTO_LEARN - todayCount;
+
+      if (remaining <= 0) {
+        return res.status(429).json({ message: "Daily auto-learn limit reached", limit: MAX_DAILY_AUTO_LEARN });
+      }
+
+      // Validate spaceId ownership if provided
+      if (spaceId) {
+        const space = await storage.getSpace(spaceId);
+        if (!space || space.ownerId !== userId) {
+          return res.status(403).json({ message: "Forbidden: you do not own this space" });
+        }
+      }
+
+      const toCreate = entries.slice(0, remaining);
+      const created: any[] = [];
+
+      for (const entry of toCreate) {
+        if (!entry.content || typeof entry.content !== 'string') continue;
+
+        const memory = await storage.createMemory({
+          userId,
+          spaceId: spaceId || null,
+          category: entry.category || 'insight',
+          content: entry.content.trim(),
+          source: 'ai_learned',
+          importance: entry.importance ?? 5,
+          metadata: entry.metadata || null,
+        });
+        created.push(memory);
+      }
+
+      res.status(201).json({ created, count: created.length, dailyRemaining: remaining - created.length });
+    } catch (error) {
+      console.error("Error auto-learning memories:", error);
+      res.status(500).json({ message: "Failed to auto-learn memories" });
+    }
+  });
+
+  // Update a memory entry
+  app.patch('/api/memory/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+
+      // Verify ownership
+      const existing = await storage.getMemory(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Memory not found" });
+      }
+      if (existing.userId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const { content, category, importance, isActive, metadata } = req.body;
+      const updates: Partial<any> = {};
+
+      if (content !== undefined) {
+        if (typeof content !== 'string' || content.trim().length === 0) {
+          return res.status(400).json({ message: "Content cannot be empty" });
+        }
+        updates.content = content.trim();
+      }
+      if (category !== undefined) {
+        const validCategories = ['preference', 'insight', 'pattern', 'context', 'goal'];
+        if (!validCategories.includes(category)) {
+          return res.status(400).json({ message: `Invalid category` });
+        }
+        updates.category = category;
+      }
+      if (importance !== undefined) {
+        if (typeof importance !== 'number' || importance < 1 || importance > 10) {
+          return res.status(400).json({ message: "Importance must be 1-10" });
+        }
+        updates.importance = importance;
+      }
+      if (isActive !== undefined) {
+        updates.isActive = Boolean(isActive);
+      }
+      if (metadata !== undefined) {
+        updates.metadata = metadata;
+      }
+
+      const updated = await storage.updateMemory(id, updates);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating memory:", error);
+      res.status(500).json({ message: "Failed to update memory" });
+    }
+  });
+
+  // Delete a memory entry
+  app.delete('/api/memory/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+
+      // Verify ownership
+      const existing = await storage.getMemory(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Memory not found" });
+      }
+      if (existing.userId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      await storage.deleteMemory(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting memory:", error);
+      res.status(500).json({ message: "Failed to delete memory" });
     }
   });
 

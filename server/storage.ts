@@ -17,6 +17,7 @@ import {
   userSettings,
   ingestionJobs,
   dataTemplates,
+  agentMemory,
   type User,
   type UpsertUser,
   type Space,
@@ -53,6 +54,8 @@ import {
   type InsertIngestionJob,
   type DataTemplate,
   type InsertDataTemplate,
+  type AgentMemory,
+  type InsertAgentMemory,
 } from "../shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, asc, lte, lt, inArray, sql } from "drizzle-orm";
@@ -154,6 +157,15 @@ export interface IStorage {
   deleteDocumentEmbedding(entityType: string, entityId: string): Promise<boolean>;
   searchSimilarDocuments(embedding: number[], spaceId: string, limit?: number): Promise<Array<DocumentEmbedding & { similarity: number }>>;
   searchHybridDocuments(options: HybridSearchOptions): Promise<Array<DocumentEmbedding & { similarity: number; keywordScore: number; combinedScore: number }>>;
+
+  // Agent Memory operations
+  getMemories(userId: string, filters?: { spaceId?: string; category?: string; activeOnly?: boolean }): Promise<AgentMemory[]>;
+  getMemoryContext(userId: string, spaceId: string, limit?: number): Promise<AgentMemory[]>;
+  getMemory(id: string): Promise<AgentMemory | undefined>;
+  createMemory(memory: InsertAgentMemory): Promise<AgentMemory>;
+  updateMemory(id: string, memory: Partial<InsertAgentMemory>): Promise<AgentMemory | undefined>;
+  deleteMemory(id: string): Promise<boolean>;
+  countTodayAutoLearnedMemories(userId: string): Promise<number>;
 }
 
 export interface HybridSearchOptions {
@@ -1152,6 +1164,95 @@ export class DatabaseStorage implements IStorage {
       .delete(dataTemplates)
       .where(eq(dataTemplates.workspaceId, workspaceId));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // Agent Memory operations
+  async getMemories(
+    userId: string,
+    filters?: { spaceId?: string; category?: string; activeOnly?: boolean }
+  ): Promise<AgentMemory[]> {
+    const conditions = [eq(agentMemory.userId, userId)];
+    if (filters?.spaceId) {
+      conditions.push(eq(agentMemory.spaceId, filters.spaceId));
+    }
+    if (filters?.category) {
+      conditions.push(eq(agentMemory.category, filters.category));
+    }
+    if (filters?.activeOnly) {
+      conditions.push(eq(agentMemory.isActive, true));
+    }
+    return db
+      .select()
+      .from(agentMemory)
+      .where(and(...conditions))
+      .orderBy(desc(agentMemory.importance), desc(agentMemory.createdAt));
+  }
+
+  async getMemoryContext(userId: string, spaceId: string, limit: number = 20): Promise<AgentMemory[]> {
+    // Fetch global memories (spaceId IS NULL) + space-specific memories, ordered by importance
+    const results = await db
+      .select()
+      .from(agentMemory)
+      .where(
+        and(
+          eq(agentMemory.userId, userId),
+          eq(agentMemory.isActive, true),
+          sql`(${agentMemory.spaceId} IS NULL OR ${agentMemory.spaceId} = ${spaceId})`
+        )
+      )
+      .orderBy(desc(agentMemory.importance), desc(agentMemory.createdAt))
+      .limit(limit);
+
+    // Update lastAccessedAt for retrieved memories
+    if (results.length > 0) {
+      const ids = results.map(m => m.id);
+      await db
+        .update(agentMemory)
+        .set({ lastAccessedAt: new Date() })
+        .where(inArray(agentMemory.id, ids));
+    }
+
+    return results;
+  }
+
+  async getMemory(id: string): Promise<AgentMemory | undefined> {
+    const [memory] = await db.select().from(agentMemory).where(eq(agentMemory.id, id));
+    return memory;
+  }
+
+  async createMemory(memory: InsertAgentMemory): Promise<AgentMemory> {
+    const [created] = await db.insert(agentMemory).values(memory).returning();
+    return created;
+  }
+
+  async updateMemory(id: string, data: Partial<InsertAgentMemory>): Promise<AgentMemory | undefined> {
+    const [updated] = await db
+      .update(agentMemory)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(agentMemory.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteMemory(id: string): Promise<boolean> {
+    const result = await db.delete(agentMemory).where(eq(agentMemory.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async countTodayAutoLearnedMemories(userId: string): Promise<number> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(agentMemory)
+      .where(
+        and(
+          eq(agentMemory.userId, userId),
+          eq(agentMemory.source, 'ai_learned'),
+          sql`${agentMemory.createdAt} >= ${startOfDay}`
+        )
+      );
+    return Number(result?.count ?? 0);
   }
 }
 

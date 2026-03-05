@@ -920,3 +920,41 @@ export const contactQuestions = pgTable("contact_questions", {
 
 export type InsertContactQuestion = typeof contactQuestions.$inferInsert;
 export type ContactQuestion = typeof contactQuestions.$inferSelect;
+
+// ============================================================================
+// Agent Features: Memory, Skills, Scheduled Jobs
+// ============================================================================
+
+// Agent Memory table — persistent AI memory per user with optional Space scoping
+export const agentMemory = pgTable("agent_memory", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  spaceId: varchar("space_id").references(() => spaces.id), // NULL = global user memory
+  category: varchar("category"), // 'preference' | 'insight' | 'pattern' | 'context' | 'goal'
+  content: text("content").notNull(),
+  source: varchar("source"), // 'user_manual' | 'ai_learned' | 'system'
+  isActive: boolean("is_active").default(true),
+  importance: integer("importance").default(5), // 1-10 scale for retrieval prioritization
+  metadata: jsonb("metadata"), // Flexible: tags, related entities, etc.
+  lastAccessedAt: timestamp("last_accessed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_agent_memory_user").on(table.userId),
+  index("idx_agent_memory_space").on(table.spaceId),
+  index("idx_agent_memory_category").on(table.category),
+]);
+
+export const agentMemoryRelations = relations(agentMemory, ({ one }) => ({
+  user: one(users, {
+    fields: [agentMemory.userId],
+    references: [users.id],
+  }),
+  space: one(spaces, {
+    fields: [agentMemory.spaceId],
+    references: [spaces.id],
+  }),
+}));
+
+export type InsertAgentMemory = typeof agentMemory.$inferInsert;
+export type AgentMemory = typeof agentMemory.$inferSelect;
