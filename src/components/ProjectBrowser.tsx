@@ -68,8 +68,8 @@ interface ProjectBrowserProps {
       schedule?: { frequency: string; time: string };
     }
   ) => void;
-  activeView?: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory';
-  onViewChange?: (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory') => void;
+  activeView?: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory' | 'scheduled';
+  onViewChange?: (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory' | 'scheduled') => void;
   onBackToCapture?: () => void;
   externalCollapseControl?: boolean;
   onCollapseChange?: (collapsed: boolean) => void;
@@ -90,6 +90,7 @@ interface ProjectBrowserProps {
   onNewlyCreatedWorkspaceHandled?: () => void;
   onNavigateToRules?: () => void;
   onNavigateToMemory?: () => void;
+  onNavigateToScheduled?: () => void;
 }
 
 export function ProjectBrowser({ 
@@ -124,6 +125,7 @@ export function ProjectBrowser({
   onNewlyCreatedWorkspaceHandled,
   onNavigateToRules,
   onNavigateToMemory,
+  onNavigateToScheduled,
 }: ProjectBrowserProps) {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set(Array.isArray(projects) ? projects.map(p => p.id) : []));
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -523,6 +525,40 @@ export function ProjectBrowser({
           {isCollapsed && (
             <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
               Memory
+            </TooltipContent>
+          )}
+        </Tooltip>
+
+        {/* Scheduled Jobs Button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onNavigateToScheduled}
+              className={`w-full h-10 flex items-center rounded-lg transition-all mb-2 group px-3 ${
+                activeView === 'scheduled'
+                  ? 'bg-gradient-to-r from-[#FF6B35] to-[#FFA07A] text-white'
+                  : 'text-[#9CA3AF] hover:bg-[rgba(255,107,53,0.1)] hover:text-white'
+              }`}
+            >
+              <Clock className={`w-4 h-4 flex-shrink-0 ${activeView !== 'scheduled' && isCollapsed ? 'group-hover:text-[#FF6B35]' : ''}`} />
+              <AnimatePresence>
+                {!isCollapsed && (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-sm whitespace-nowrap overflow-hidden ml-3"
+                  >
+                    Scheduled
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          </TooltipTrigger>
+          {isCollapsed && (
+            <TooltipContent side="right" className="bg-[#2D3B4E] border-[rgba(255,107,53,0.3)] text-white">
+              Scheduled Jobs
             </TooltipContent>
           )}
         </Tooltip>

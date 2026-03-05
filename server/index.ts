@@ -3,6 +3,7 @@ import cors from "cors";
 import { registerRoutes } from "./routes";
 import { startBackgroundProcessor } from "./ai/backgroundProcessor";
 import { seedBuiltinSkills } from "./ai/skillsLibrary";
+import { startJobScheduler } from "./ai/jobScheduler";
 
 const app = express();
 
@@ -33,5 +34,8 @@ app.use(express.urlencoded({ extended: true }));
 
     // Seed built-in skills (idempotent)
     seedBuiltinSkills().catch(err => console.error('[Skills] Seeding failed:', err));
+
+    // Start scheduled job scheduler
+    startJobScheduler();
   });
 })();

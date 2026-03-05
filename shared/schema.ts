@@ -1016,3 +1016,75 @@ export const workspaceSkillsRelations = relations(workspaceSkills, ({ one }) => 
 
 export type InsertWorkspaceSkill = typeof workspaceSkills.$inferInsert;
 export type WorkspaceSkill = typeof workspaceSkills.$inferSelect;
+
+// ─── Scheduled Jobs ───────────────────────────────────────────────────
+
+export const scheduledJobs = pgTable("scheduled_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  spaceId: varchar("space_id").references(() => spaces.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  skillId: varchar("skill_id").references(() => agentSkills.id).notNull(),
+  cronExpression: varchar("cron_expression").notNull(), // e.g. "0 9 * * 1" (every Monday 9am)
+  timezone: varchar("timezone").default('UTC'),
+  isEnabled: boolean("is_enabled").default(true),
+  config: jsonb("config"), // Override skill config for this job
+  lastRunAt: timestamp("last_run_at"),
+  nextRunAt: timestamp("next_run_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_scheduled_jobs_user").on(table.userId),
+  index("idx_scheduled_jobs_space").on(table.spaceId),
+  index("idx_scheduled_jobs_next_run").on(table.nextRunAt),
+]);
+
+export const scheduledJobsRelations = relations(scheduledJobs, ({ one, many }) => ({
+  user: one(users, {
+    fields: [scheduledJobs.userId],
+    references: [users.id],
+  }),
+  space: one(spaces, {
+    fields: [scheduledJobs.spaceId],
+    references: [spaces.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [scheduledJobs.workspaceId],
+    references: [workspaces.id],
+  }),
+  skill: one(agentSkills, {
+    fields: [scheduledJobs.skillId],
+    references: [agentSkills.id],
+  }),
+  runs: many(jobRunHistory),
+}));
+
+export type InsertScheduledJob = typeof scheduledJobs.$inferInsert;
+export type ScheduledJob = typeof scheduledJobs.$inferSelect;
+
+// Job execution history
+export const jobRunHistory = pgTable("job_run_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => scheduledJobs.id, { onDelete: 'cascade' }).notNull(),
+  status: varchar("status").notNull(), // 'running' | 'success' | 'failed'
+  startedAt: timestamp("started_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  result: text("result"), // Skill output
+  error: text("error"),
+  durationMs: integer("duration_ms"),
+}, (table) => [
+  index("idx_job_run_job").on(table.jobId),
+  index("idx_job_run_status").on(table.status),
+]);
+
+export const jobRunHistoryRelations = relations(jobRunHistory, ({ one }) => ({
+  job: one(scheduledJobs, {
+    fields: [jobRunHistory.jobId],
+    references: [scheduledJobs.id],
+  }),
+}));
+
+export type InsertJobRunHistory = typeof jobRunHistory.$inferInsert;
+export type JobRunHistory = typeof jobRunHistory.$inferSelect;

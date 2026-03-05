@@ -20,6 +20,8 @@ import {
   agentMemory,
   agentSkills,
   workspaceSkills,
+  scheduledJobs,
+  jobRunHistory,
   type User,
   type UpsertUser,
   type Space,
@@ -62,6 +64,10 @@ import {
   type InsertAgentSkill,
   type WorkspaceSkill,
   type InsertWorkspaceSkill,
+  type ScheduledJob,
+  type InsertScheduledJob,
+  type JobRunHistory,
+  type InsertJobRunHistory,
 } from "../shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, asc, lte, lt, inArray, sql } from "drizzle-orm";
@@ -182,6 +188,19 @@ export interface IStorage {
   enableSkill(data: InsertWorkspaceSkill): Promise<WorkspaceSkill>;
   disableSkill(skillId: string, workspaceId: string | null, spaceId: string): Promise<boolean>;
   updateSkillConfig(id: string, config: any): Promise<WorkspaceSkill | undefined>;
+
+  // Scheduled Jobs operations
+  getScheduledJobs(userId: string, spaceId?: string): Promise<(ScheduledJob & { skill: AgentSkill })[]>;
+  getScheduledJob(id: string): Promise<ScheduledJob | undefined>;
+  createScheduledJob(job: InsertScheduledJob): Promise<ScheduledJob>;
+  updateScheduledJob(id: string, job: Partial<InsertScheduledJob>): Promise<ScheduledJob | undefined>;
+  deleteScheduledJob(id: string): Promise<boolean>;
+  getDueJobs(now: Date): Promise<(ScheduledJob & { skill: AgentSkill })[]>;
+
+  // Job Run History operations
+  getJobRuns(jobId: string, limit?: number): Promise<JobRunHistory[]>;
+  createJobRun(run: InsertJobRunHistory): Promise<JobRunHistory>;
+  updateJobRun(id: string, run: Partial<InsertJobRunHistory>): Promise<JobRunHistory | undefined>;
 }
 
 export interface HybridSearchOptions {
@@ -1359,6 +1378,90 @@ export class DatabaseStorage implements IStorage {
       .update(workspaceSkills)
       .set({ config })
       .where(eq(workspaceSkills.id, id))
+      .returning();
+    return updated;
+  }
+
+  // ─── Scheduled Jobs ───────────────────────────────────────────────
+
+  async getScheduledJobs(userId: string, spaceId?: string): Promise<(ScheduledJob & { skill: AgentSkill })[]> {
+    const conditions = [eq(scheduledJobs.userId, userId)];
+    if (spaceId) conditions.push(eq(scheduledJobs.spaceId, spaceId));
+
+    const rows = await db
+      .select()
+      .from(scheduledJobs)
+      .innerJoin(agentSkills, eq(scheduledJobs.skillId, agentSkills.id))
+      .where(and(...conditions))
+      .orderBy(desc(scheduledJobs.createdAt));
+
+    return rows.map((r) => ({ ...r.scheduled_jobs, skill: r.agent_skills }));
+  }
+
+  async getScheduledJob(id: string): Promise<ScheduledJob | undefined> {
+    const [job] = await db
+      .select()
+      .from(scheduledJobs)
+      .where(eq(scheduledJobs.id, id))
+      .limit(1);
+    return job;
+  }
+
+  async createScheduledJob(job: InsertScheduledJob): Promise<ScheduledJob> {
+    const [created] = await db.insert(scheduledJobs).values(job).returning();
+    return created;
+  }
+
+  async updateScheduledJob(id: string, job: Partial<InsertScheduledJob>): Promise<ScheduledJob | undefined> {
+    const [updated] = await db
+      .update(scheduledJobs)
+      .set({ ...job, updatedAt: new Date() })
+      .where(eq(scheduledJobs.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteScheduledJob(id: string): Promise<boolean> {
+    const result = await db.delete(scheduledJobs).where(eq(scheduledJobs.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getDueJobs(now: Date): Promise<(ScheduledJob & { skill: AgentSkill })[]> {
+    const rows = await db
+      .select()
+      .from(scheduledJobs)
+      .innerJoin(agentSkills, eq(scheduledJobs.skillId, agentSkills.id))
+      .where(
+        and(
+          eq(scheduledJobs.isEnabled, true),
+          lte(scheduledJobs.nextRunAt, now)
+        )
+      );
+
+    return rows.map((r) => ({ ...r.scheduled_jobs, skill: r.agent_skills }));
+  }
+
+  // ─── Job Run History ──────────────────────────────────────────────
+
+  async getJobRuns(jobId: string, limit = 20): Promise<JobRunHistory[]> {
+    return db
+      .select()
+      .from(jobRunHistory)
+      .where(eq(jobRunHistory.jobId, jobId))
+      .orderBy(desc(jobRunHistory.startedAt))
+      .limit(limit);
+  }
+
+  async createJobRun(run: InsertJobRunHistory): Promise<JobRunHistory> {
+    const [created] = await db.insert(jobRunHistory).values(run).returning();
+    return created;
+  }
+
+  async updateJobRun(id: string, run: Partial<InsertJobRunHistory>): Promise<JobRunHistory | undefined> {
+    const [updated] = await db
+      .update(jobRunHistory)
+      .set(run)
+      .where(eq(jobRunHistory.id, id))
       .returning();
     return updated;
   }

@@ -23,6 +23,7 @@ import { isGoogleSheetsUrl, parseUploadedFile, MAX_FILE_SIZE_BYTES, MAX_CSV_SIZE
 import { triggerDataCleaning } from "./ai/dataCleaning";
 import * as templateService from "./ai/templateService";
 import { serverEncryption } from "./encryption";
+import { computeNextRun } from "./ai/jobScheduler";
 import { db } from "./db";
 import { userEncryptionKeys, serverEncryptionKeys, users, aiFeedback, chatMessages, contactQuestions } from "../shared/schema";
 import { eq } from "drizzle-orm";
@@ -4873,6 +4874,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting memory:", error);
       res.status(500).json({ message: "Failed to delete memory" });
+    }
+  });
+
+  // =========================================================================
+  // Scheduled Jobs API Routes
+  // =========================================================================
+
+  // List scheduled jobs for the authenticated user
+  app.get('/api/scheduled-jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { spaceId } = req.query;
+      const jobs = await storage.getScheduledJobs(userId, spaceId as string | undefined);
+      res.json(jobs);
+    } catch (error) {
+      console.error("Error fetching scheduled jobs:", error);
+      res.status(500).json({ message: "Failed to fetch scheduled jobs" });
+    }
+  });
+
+  // Get a single scheduled job
+  app.get('/api/scheduled-jobs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const job = await storage.getScheduledJob(req.params.id);
+      if (!job) return res.status(404).json({ message: "Job not found" });
+      if (job.userId !== req.user.claims.sub) return res.status(403).json({ message: "Forbidden" });
+      res.json(job);
+    } catch (error) {
+      console.error("Error fetching scheduled job:", error);
+      res.status(500).json({ message: "Failed to fetch scheduled job" });
+    }
+  });
+
+  // Create a scheduled job
+  app.post('/api/scheduled-jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { name, description, spaceId, workspaceId, skillId, cronExpression, timezone, config } = req.body;
+
+      if (!name || !spaceId || !skillId || !cronExpression) {
+        return res.status(400).json({ message: "name, spaceId, skillId, and cronExpression are required" });
+      }
+
+      // Validate skill exists
+      const skill = await storage.getSkill(skillId);
+      if (!skill) return res.status(404).json({ message: "Skill not found" });
+
+      // Compute next run time
+      const nextRunAt = computeNextRun(cronExpression, timezone || 'UTC');
+      if (!nextRunAt) {
+        return res.status(400).json({ message: "Invalid cron expression" });
+      }
+
+      const job = await storage.createScheduledJob({
+        name,
+        description,
+        userId,
+        spaceId,
+        workspaceId: workspaceId || null,
+        skillId,
+        cronExpression,
+        timezone: timezone || 'UTC',
+        config: config || null,
+        nextRunAt,
+      });
+
+      res.status(201).json(job);
+    } catch (error) {
+      console.error("Error creating scheduled job:", error);
+      res.status(500).json({ message: "Failed to create scheduled job" });
+    }
+  });
+
+  // Update a scheduled job
+  app.patch('/api/scheduled-jobs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const existing = await storage.getScheduledJob(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Job not found" });
+      if (existing.userId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+      const updates: any = { ...req.body };
+
+      // If cron expression changed, recompute nextRunAt
+      if (updates.cronExpression) {
+        const nextRunAt = computeNextRun(updates.cronExpression, updates.timezone || existing.timezone || 'UTC');
+        if (!nextRunAt) {
+          return res.status(400).json({ message: "Invalid cron expression" });
+        }
+        updates.nextRunAt = nextRunAt;
+      }
+
+      const updated = await storage.updateScheduledJob(req.params.id, updates);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating scheduled job:", error);
+      res.status(500).json({ message: "Failed to update scheduled job" });
+    }
+  });
+
+  // Delete a scheduled job
+  app.delete('/api/scheduled-jobs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const existing = await storage.getScheduledJob(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Job not found" });
+      if (existing.userId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+      await storage.deleteScheduledJob(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting scheduled job:", error);
+      res.status(500).json({ message: "Failed to delete scheduled job" });
+    }
+  });
+
+  // Get run history for a job
+  app.get('/api/scheduled-jobs/:id/runs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const existing = await storage.getScheduledJob(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Job not found" });
+      if (existing.userId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+      const limit = parseInt(req.query.limit as string) || 20;
+      const runs = await storage.getJobRuns(req.params.id, limit);
+      res.json(runs);
+    } catch (error) {
+      console.error("Error fetching job runs:", error);
+      res.status(500).json({ message: "Failed to fetch job runs" });
     }
   });
 

@@ -9,6 +9,7 @@ export const ROUTES = {
   WORKSPACE: '/workspace',
   RULES: '/rules',
   MEMORY: '/memory',
+  SCHEDULED: '/scheduled',
   
   // Data management deep links
   DATA_SPACE: '/data/:spaceId',
@@ -52,6 +53,7 @@ export const buildRoute = {
   workspace: () => ROUTES.WORKSPACE,
   rules: () => ROUTES.RULES,
   memory: () => ROUTES.MEMORY,
+  scheduled: () => ROUTES.SCHEDULED,
   workspaceInsight: (insightId: string) => `/workspace/${insightId}`,
   aiChat: () => ROUTES.AI_CHAT,
   aiChatMessage: (messageId: string) => `/ai-assistant#message-${messageId}`,
@@ -72,6 +74,7 @@ export const parseRoute = {
   isWorkspace: (pathname: string) => pathname.startsWith('/workspace'),
   isRules: (pathname: string) => pathname.startsWith('/rules'),
   isMemory: (pathname: string) => pathname.startsWith('/memory'),
+  isScheduled: (pathname: string) => pathname.startsWith('/scheduled'),
   isAIChat: (pathname: string) => pathname.startsWith('/ai-assistant'),
   isTags: (pathname: string) => pathname.startsWith('/tags'),
   isSearch: (pathname: string) => pathname.startsWith('/search'),
@@ -116,12 +119,13 @@ export const parseRoute = {
 };
 
 // Get current view from pathname
-export const getCurrentView = (pathname: string): 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory' => {
+export const getCurrentView = (pathname: string): 'capture' | 'data' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory' | 'scheduled' => {
   if (parseRoute.isData(pathname)) return 'data';
   if (parseRoute.isChangeLogs(pathname)) return 'changelogs';
   if (parseRoute.isInsights(pathname)) return 'insights';
   if (parseRoute.isWorkspace(pathname)) return 'workspace';
   if (parseRoute.isRules(pathname)) return 'rules';
   if (parseRoute.isMemory(pathname)) return 'memory';
+  if (parseRoute.isScheduled(pathname)) return 'scheduled';
   return 'capture';
 };
