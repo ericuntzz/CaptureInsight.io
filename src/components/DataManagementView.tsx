@@ -251,7 +251,7 @@ export function DataManagementView({
 
   // Handle view changes - most views open locally, workspace bubbles up to top level
   const handleViewChange = (view: 'data' | 'ai' | 'changelogs' | 'insights' | 'workspace' | 'rules' | 'memory' | 'scheduled') => {
-    if (view === 'workspace' || view === 'rules' || view === 'memory') {
+    if (view === 'workspace' || view === 'rules' || view === 'memory' || view === 'scheduled') {
       // These are top-level views, bubble up to App.tsx
       onTopLevelViewChange?.(view);
     } else {
@@ -287,6 +287,8 @@ export function DataManagementView({
           user={user}
           onNavigateToSettings={onNavigateToSettings}
           onLogout={onLogout}
+          onNavigateToMemory={() => onTopLevelViewChange?.('memory')}
+          onNavigateToScheduled={() => onTopLevelViewChange?.('scheduled')}
         />
 
         {/* Main Content */}
